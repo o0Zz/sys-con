@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <vector>
 
-#define CONFIG_PATH     "sdmc:/config/sys-con/"
+#define CONFIG_PATH     "/config/sys-con/"
 #define CONFIG_FULLPATH CONFIG_PATH "config.ini"
 
 namespace syscon::config

@@ -5,9 +5,7 @@
 #include "logger.h"
 #include <cstring>
 #include <cstdlib>
-#include <stratosphere.hpp>
-#include <stratosphere/util/util_ini.hpp>
-
+#include "ini.h"
 namespace syscon::config
 {
     namespace
@@ -258,6 +256,7 @@ namespace syscon::config
             std::string sectionStr = convertToLowercase(section);
             std::string nameStr = convertToLowercase(name);
 
+            // syscon::logger::LogTrace("Parsing global config line: %s, %s, %s (expect: %s)", section, name, value, ini_data->ini_section.c_str());
             if (ini_data->ini_section != sectionStr)
                 return 1; // Not the section we are looking for (return success to continue parsing)
 
@@ -367,27 +366,9 @@ namespace syscon::config
             return 1; // Success
         }
 
-        Result ReadFromConfig(const char *path, ams::util::ini::Handler h, void *config)
+        Result ReadFromConfig(const char *path, ini_handler h, void *config)
         {
-            ams::fs::FileHandle file;
-
-            Result rc = ams::fs::OpenFile(std::addressof(file), path, ams::fs::OpenMode_Read).GetValue();
-            if (R_FAILED(rc))
-            {
-                syscon::logger::LogError("Unable to open configuration file: '%s' !", path);
-                return rc;
-            }
-            ON_SCOPE_EXIT { ams::fs::CloseFile(file); };
-
-            /* Parse the config. */
-            rc = ams::util::ini::ParseFile(file, config, h);
-            if (R_FAILED(rc))
-            {
-                syscon::logger::LogError("Failed to parse configuration file: '%s' !", path);
-                return rc;
-            }
-
-            return 0;
+            return ini_parse(path, h, config);
         }
     } // namespace
 
@@ -406,16 +387,23 @@ namespace syscon::config
 
     Result AddControllerToConfig(const char *path, std::string section, std::string profile)
     {
-        s64 fileOffset = 0;
+
         std::stringstream ss;
-        ams::fs::FileHandle file;
 
         /* Get the current time. */
-        ams::time::PosixTime time;
-        ams::time::StandardUserSystemClock::GetCurrentTime(&time);
-        ams::time::CalendarTime calendar = ams::time::impl::util::ToCalendarTimeInUtc(time);
+        time_t time(0);
+        struct tm timeinfo;
+        localtime_r(&time, &timeinfo);
+
+        FsFileSystem *fs = fsdevGetDeviceFileSystem("sdmc");
+        if (fs == nullptr)
+            return false;
 
         /* Open the config file. */
+        /*
+        s64 fileOffset = 0;
+        ams::fs::FileHandle file;
+
         Result rc = ams::fs::OpenFile(std::addressof(file), path, ams::fs::OpenMode_Write | ams::fs::OpenMode_AllowAppend).GetValue();
         if (R_FAILED(rc))
         {
@@ -425,9 +413,8 @@ namespace syscon::config
 
         ON_SCOPE_EXIT { ams::fs::CloseFile(file); };
 
-        /* Write the config. */
         ss << std::endl;
-        ss << "[" << section << "] ;Automatically added on " << static_cast<int>(calendar.year) << "-" << static_cast<int>(calendar.month) << "-" << static_cast<int>(calendar.day) << " " << static_cast<int>(calendar.hour) << ":" << static_cast<int>(calendar.minute) << ":" << static_cast<int>(calendar.second) << "UTC" << std::endl;
+        ss << "[" << section << "] ;Automatically added on " << timeinfo.tm_year << "-" << timeinfo.tm_mon << "-" << timeinfo.tm_mday << " " << timeinfo.tm_hour << ":" << timeinfo.tm_min << ":" << timeinfo.tm_sec << "UTC" << std::endl;
         if (profile != "")
         {
             ss << "profile=" << profile << std::endl;
@@ -460,7 +447,7 @@ namespace syscon::config
         {
             syscon::logger::LogError("Failed to write configuration file: '%s' !", path);
             return rc;
-        }
+        }*/
 
         return 0;
     }

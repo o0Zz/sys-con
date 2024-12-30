@@ -1,6 +1,3 @@
-[submodule "lib/Atmosphere-libs"]
-	path = lib/Atmosphere-libs
-	url = https://github.com/Atmosphere-NX/Atmosphere-libs.git
 [submodule "lib/libnx"]
 	path = lib/libnx
 	url = https://github.com/switchbrew/libnx.git

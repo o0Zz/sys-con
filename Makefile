@@ -10,7 +10,7 @@ ATMOSPHERE_VERSION	?= 1.7.x
 SOURCE_DIR			:= source
 OUT_DIR				:= out
 DIST_DIR			:= dist
-OUT_ZIP				:= sys-con-$(GIT_TAG)$(GIT_TAG_COMMIT_COUNT)-ATMOSPHERE-$(ATMOSPHERE_VERSION).zip
+OUT_ZIP				:= sys-con-$(GIT_TAG)$(GIT_TAG_COMMIT_COUNT).zip
 
 all: build
 	rm -rf $(OUT_DIR)
@@ -24,7 +24,7 @@ all: build
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
 
 build:
-	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE_VERSION=$(ATMOSPHERE_VERSION)
+	$(MAKE) -C $(SOURCE_DIR)
 
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean
@@ -39,18 +39,5 @@ mrproper: clean
 dist: clean all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .
 
-atmosphere_1.5.x-1.6.x:
-	cd lib/Atmosphere-libs && \
-	git reset --hard && \
-	git checkout a55e74aec3ff24112c981e8e2f677113df045b4c && \
-	sed -i 's/Order != Order/false/' libvapours/include/vapours/util/arch/arm64/util_atomic.hpp && \
-	sed -i 's/TransferMode != TransferMode/false/' libstratosphere/include/stratosphere/sf/sf_buffers.hpp
-	
-atmosphere_1.7.x-1.8.x:
-	cd lib/Atmosphere-libs && \
-	git reset --hard && \
-	git checkout 989fb7be0c68bf229fe6789428b6c448b6de142a && \
-	sed -i 's/static_assert/\/\/static_assert/' libstratosphere/source/ldr/ldr_pm_api.os.horizon.cpp
-	
-distclean: mrproper atmosphere_$(ATMOSPHERE_VERSION) all
+distclean: mrproper all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .

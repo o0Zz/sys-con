@@ -1,6 +1,5 @@
 #include "switch.h"
 #include "logger.h"
-#include <stratosphere.hpp>
 
 #include "usb_module.h"
 #include "controller_handler.h"
@@ -8,200 +7,132 @@
 #include "psc_module.h"
 #include "version.h"
 #include "SwitchHDLHandler.h"
+#include "SwitchUtils.h"
 
-// libstratosphere variables
-namespace ams
+// Size of the inner heap (adjust as necessary).
+#define INNER_HEAP_SIZE 0x40000
+
+extern "C"
 {
-    namespace syscon
+    // Sysmodules should not use applet*.
+    u32 __nx_applet_type = AppletType_None;
+
+    // Sysmodules will normally only want to use one FS session.
+    u32 __nx_fs_num_sessions = 1;
+
+    // Newlib heap configuration function (makes malloc/free work).
+    void __libnx_initheap(void)
     {
+        static u8 inner_heap[INNER_HEAP_SIZE];
+        extern void *fake_heap_start;
+        extern void *fake_heap_end;
 
-        namespace
-        {
+        // Configure the newlib heap.
+        fake_heap_start = inner_heap;
+        fake_heap_end = inner_heap + sizeof(inner_heap);
+    }
+}
 
-            alignas(0x40) constinit u8 g_heap_memory[512_KB];
-            constinit lmem::HeapHandle g_heap_handle;
-            constinit bool g_heap_initialized;
-            constinit os::SdkMutex g_heap_init_mutex;
+alignas(0x1000) constinit u8 g_hdls_buffer[0x8000];
+void *workmem = g_hdls_buffer;
+size_t workmem_size = sizeof(g_hdls_buffer);
 
-            lmem::HeapHandle GetHeapHandle()
-            {
-                if (AMS_UNLIKELY(!g_heap_initialized))
-                {
-                    std::scoped_lock lk(g_heap_init_mutex);
+extern "C" void __appInit(void)
+{
+    R_ABORT_UNLESS(smInitialize());
 
-                    if (AMS_LIKELY(!g_heap_initialized))
-                    {
-                        g_heap_handle = lmem::CreateExpHeap(g_heap_memory, sizeof(g_heap_memory), lmem::CreateOption_ThreadSafe);
-                        g_heap_initialized = true;
-                    }
-                }
+    R_ABORT_UNLESS(fsInitialize());
 
-                return g_heap_handle;
-            }
+    // R_ABORT_UNLESS(usbHsInitialize());
+    R_ABORT_UNLESS(pscmInitialize());
+    R_ABORT_UNLESS(setsysInitialize());
 
-            void *Allocate(size_t size)
-            {
-                return lmem::AllocateFromExpHeap(GetHeapHandle(), size);
-            }
+    // Initialize system firmware version
+    SetSysFirmwareVersion fw;
+    R_ABORT_UNLESS(setsysGetFirmwareVersion(&fw));
+    hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
 
-            void *AllocateWithAlign(size_t size, size_t align)
-            {
-                return lmem::AllocateFromExpHeap(GetHeapHandle(), size, align);
-            }
-
-            void Deallocate(void *p, size_t size)
-            {
-                AMS_UNUSED(size);
-                return lmem::FreeToExpHeap(GetHeapHandle(), p);
-            }
-
-        } // namespace
-
-    } // namespace syscon
-
-    namespace init
+    R_ABORT_UNLESS(hiddbgInitialize());
+    /*if (hosversionAtLeast(7, 0, 0))
     {
-        alignas(0x1000) constinit u8 g_hdls_buffer[64_KB];
+        workmem = aligned_alloc(0x1000, workmem_size);
+        if (!workmem)
+            diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_HID));
 
-        void InitializeSystemModuleBeforeConstructors(void)
-        {
-            R_ABORT_UNLESS(sm::Initialize());
+        R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), workmem, workmem_size));
+    }*/
 
-            fs::InitializeForSystem();
-            fs::SetAllocator(syscon::Allocate, syscon::Deallocate);
-            fs::SetEnabledAutoAbort(false);
+    // smExit();
 
-            R_ABORT_UNLESS(usbHsInitialize());
-            R_ABORT_UNLESS(pscmInitialize());
-            R_ABORT_UNLESS(setsysInitialize());
+    R_ABORT_UNLESS(fsdevMountSdmc());
+}
 
-            // Initialize system firmware version
-            SetSysFirmwareVersion fw;
-            R_ABORT_UNLESS(setsysGetFirmwareVersion(&fw));
-            hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
+extern "C" void __appExit(void)
+{
+    if (hosversionAtLeast(7, 0, 0))
+        hiddbgReleaseHdlsWorkBuffer(SwitchHDLHandler::GetHdlsSessionId());
 
-            R_ABORT_UNLESS(hiddbgInitialize());
-            if (hosversionAtLeast(7, 0, 0))
-                R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), g_hdls_buffer, sizeof(g_hdls_buffer)));
+    hiddbgExit();
+    usbHsExit();
+    pscmExit();
 
-            ams::time::Initialize();
+    fsdevUnmountAll();
+    fsExit();
+    free(workmem);
+}
 
-            R_ABORT_UNLESS(fs::MountSdCard("sdmc"));
-        }
+int main(int argc, char *argv[])
+{
+    ::syscon::logger::Initialize(CONFIG_PATH "log.log");
 
-        void FinalizeSystemModule()
-        {
-            if (hosversionAtLeast(7, 0, 0))
-                hiddbgReleaseHdlsWorkBuffer(SwitchHDLHandler::GetHdlsSessionId());
+    u32 version = hosversionGet();
 
-            hiddbgExit();
-            usbHsExit();
-            pscmExit();
-        }
+    ::syscon::logger::LogInfo("-----------------------------------------------------");
+    ::syscon::logger::LogInfo("SYS-CON started %s+%d-%s (Build date: %s %s)", ::syscon::version::syscon_tag, ::syscon::version::syscon_commit_count, ::syscon::version::syscon_git_hash, __DATE__, __TIME__);
+    ::syscon::logger::LogInfo("OS version: %d.%d.%d", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version));
 
-        void Startup()
-        {
-            /* ... */
-        }
-    } // namespace init
+    ::syscon::logger::LogDebug("Initializing configuration ...");
 
-    void Main()
+    ::syscon::config::GlobalConfig globalConfig;
+    ::syscon::config::LoadGlobalConfig(&globalConfig);
+
+    while (1)
     {
-        ::syscon::logger::Initialize(CONFIG_PATH "log.log");
+        svcSleepThread(1e+8L);
+    }
+    /*
+    ::syscon::logger::SetLogLevel(globalConfig.log_level);
 
-        u32 version = hosversionGet();
+    ::syscon::logger::LogDebug("Initializing controllers ...");
+    ::syscon::controllers::Initialize();
 
-        ::syscon::logger::LogInfo("-----------------------------------------------------");
-        ::syscon::logger::LogInfo("SYS-CON started %s+%d-%s (Build date: %s %s)", ::syscon::version::syscon_tag, ::syscon::version::syscon_commit_count, ::syscon::version::syscon_git_hash, __DATE__, __TIME__);
-        ::syscon::logger::LogInfo("OS version: %d.%d.%d (Built with Atmosphere %s)", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version), ::syscon::version::atmosphere_version);
+    // Reduce polling frequency when we use debug or trace to avoid spamming the logs
+    if (globalConfig.log_level == LOG_LEVEL_TRACE && globalConfig.polling_frequency_ms < 500)
+        globalConfig.polling_frequency_ms = 500;
 
-        ::syscon::logger::LogDebug("Initializing configuration ...");
+    if (globalConfig.log_level == LOG_LEVEL_DEBUG && globalConfig.polling_frequency_ms < 100)
+        globalConfig.polling_frequency_ms = 100;
 
-        ::syscon::config::GlobalConfig globalConfig;
-        ::syscon::config::LoadGlobalConfig(&globalConfig);
+    ::syscon::logger::LogDebug("Polling frequency: %d ms", globalConfig.polling_frequency_ms);
+    ::syscon::controllers::SetPollingParameters(globalConfig.polling_frequency_ms, globalConfig.polling_thread_priority);
 
-        ::syscon::logger::SetLogLevel(globalConfig.log_level);
+    ::syscon::logger::LogDebug("Initializing USB stack ...");
+    ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
 
-        ::syscon::logger::LogDebug("Initializing controllers ...");
-        ::syscon::controllers::Initialize();
+    ::syscon::logger::LogDebug("Initializing power supply managment ...");
+    ::syscon::psc::Initialize();
 
-        // Reduce polling frequency when we use debug or trace to avoid spamming the logs
-        if (globalConfig.log_level == LOG_LEVEL_TRACE && globalConfig.polling_frequency_ms < 500)
-            globalConfig.polling_frequency_ms = 500;
+    ::syscon::logger::LogDebug("Initializing signal ...");
 
-        if (globalConfig.log_level == LOG_LEVEL_DEBUG && globalConfig.polling_frequency_ms < 100)
-            globalConfig.polling_frequency_ms = 100;
-
-        ::syscon::logger::LogDebug("Polling frequency: %d ms", globalConfig.polling_frequency_ms);
-        ::syscon::controllers::SetPollingParameters(globalConfig.polling_frequency_ms, globalConfig.polling_thread_priority);
-
-        ::syscon::logger::LogDebug("Initializing USB stack ...");
-        ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
-
-        ::syscon::logger::LogDebug("Initializing power supply managment ...");
-        ::syscon::psc::Initialize();
-
-        while ((::syscon::psc::IsRunning()))
-        {
-            svcSleepThread(1e+8L);
-        }
-
-        ::syscon::logger::LogDebug("Shutting down sys-con ...");
-        ::syscon::psc::Exit();
-        ::syscon::usb::Exit();
-        ::syscon::controllers::Exit();
-        ::syscon::logger::Exit();
+    while ((::syscon::psc::IsRunning()))
+    {
+        svcSleepThread(1e+8L);
     }
 
-} // namespace ams
-
-void *operator new(size_t size)
-{
-    return ams::syscon::Allocate(size);
-}
-
-void *operator new(size_t size, const std::nothrow_t &)
-{
-    return ams::syscon::Allocate(size);
-}
-
-void operator delete(void *p)
-{
-    return ams::syscon::Deallocate(p, 0);
-}
-
-void operator delete(void *p, size_t size)
-{
-    return ams::syscon::Deallocate(p, size);
-}
-
-void *operator new[](size_t size)
-{
-    return ams::syscon::Allocate(size);
-}
-
-void *operator new[](size_t size, const std::nothrow_t &)
-{
-    return ams::syscon::Allocate(size);
-}
-
-void operator delete[](void *p)
-{
-    return ams::syscon::Deallocate(p, 0);
-}
-
-void operator delete[](void *p, size_t size)
-{
-    return ams::syscon::Deallocate(p, size);
-}
-
-void *operator new(size_t size, std::align_val_t align)
-{
-    return ams::syscon::AllocateWithAlign(size, static_cast<size_t>(align));
-}
-
-void operator delete(void *p, std::align_val_t align)
-{
-    AMS_UNUSED(align);
-    return ams::syscon::Deallocate(p, 0);
+    ::syscon::logger::LogDebug("Shutting down sys-con ...");
+    ::syscon::psc::Exit();
+    ::syscon::usb::Exit();
+    ::syscon::controllers::Exit();
+    ::syscon::logger::Exit();
+    */
 }
