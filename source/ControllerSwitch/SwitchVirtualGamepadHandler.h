@@ -13,7 +13,7 @@ protected:
     s32 m_polling_thread_priority;
     s32 m_read_input_timeout_us;
 
-    alignas(0x1000) u8 thread_stack[0x1000];
+    alignas(0x1000) u8 thread_stack[0x2000];
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
 
