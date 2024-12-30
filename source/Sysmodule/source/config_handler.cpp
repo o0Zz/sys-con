@@ -5,7 +5,13 @@
 #include "logger.h"
 #include <cstring>
 #include <cstdlib>
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+#include <chrono>
+#include <iomanip>
 #include "ini.h"
+
 namespace syscon::config
 {
     namespace
@@ -380,74 +386,69 @@ namespace syscon::config
 
         Result rc = ReadFromConfig(CONFIG_FULLPATH, ParseGlobalConfigLine, &cfg);
         if (R_FAILED(rc))
+        {
+            syscon::logger::LogError("Failed to load global config: '%s' (Error: 0x%08X) !", CONFIG_FULLPATH, rc);
             return rc;
+        }
 
         return 0;
     }
 
-    Result AddControllerToConfig(const char *path, std::string section, std::string profile)
+    Result AddControllerToConfig(const std::string &path, const std::string &section, const std::string &profile)
     {
-
         std::stringstream ss;
 
-        /* Get the current time. */
-        time_t time(0);
-        struct tm timeinfo;
-        localtime_r(&time, &timeinfo);
+        // Get the current time.
+        auto now = std::chrono::system_clock::now();
+        auto timeT = std::chrono::system_clock::to_time_t(now);
+        auto timeinfo = *std::localtime(&timeT);
 
-        FsFileSystem *fs = fsdevGetDeviceFileSystem("sdmc");
-        if (fs == nullptr)
-            return false;
-
-        /* Open the config file. */
-        /*
-        s64 fileOffset = 0;
-        ams::fs::FileHandle file;
-
-        Result rc = ams::fs::OpenFile(std::addressof(file), path, ams::fs::OpenMode_Write | ams::fs::OpenMode_AllowAppend).GetValue();
-        if (R_FAILED(rc))
+        // Check if the file exists and is accessible.
+        if (!std::filesystem::exists(path))
         {
-            syscon::logger::LogError("Unable to open configuration file: '%s' !", path);
-            return rc;
+            syscon::logger::LogError("Error: Configuration file does not exist: %s", path.c_str());
+            return -1; // Replace with appropriate error code.
         }
 
-        ON_SCOPE_EXIT { ams::fs::CloseFile(file); };
-
-        ss << std::endl;
-        ss << "[" << section << "] ;Automatically added on " << timeinfo.tm_year << "-" << timeinfo.tm_mon << "-" << timeinfo.tm_mday << " " << timeinfo.tm_hour << ":" << timeinfo.tm_min << ":" << timeinfo.tm_sec << "UTC" << std::endl;
-        if (profile != "")
+        // Open the file for appending.
+        std::ofstream configFile(path, std::ios::app);
+        if (!configFile.is_open())
         {
-            ss << "profile=" << profile << std::endl;
+            syscon::logger::LogError("Error: Unable to open configuration file: %s", path.c_str());
+            return -1; // Replace with appropriate error code.
+        }
+
+        // Write the new section and profile data.
+        ss << "\n";
+        ss << "[" << section << "] ; Automatically added on " << std::put_time(&timeinfo, "%Y-%m-%d %H:%M:%S UTC") << "\n";
+
+        if (!profile.empty())
+        {
+            ss << "profile=" << profile << "\n";
         }
         else
         {
-            ss << "b=1" << std::endl;
-            ss << "a=2" << std::endl;
-            ss << "x=3" << std::endl;
-            ss << "y=4" << std::endl;
-            ss << "l=5" << std::endl;
-            ss << "r=6" << std::endl;
-            ss << "zl=7" << std::endl;
-            ss << "zr=8" << std::endl;
-            ss << "minus=9" << std::endl;
-            ss << "plus=10" << std::endl;
-            ss << "capture=11" << std::endl;
-            ss << "home=12" << std::endl;
+            ss << "b=1\n"
+               << "a=2\n"
+               << "x=3\n"
+               << "y=4\n"
+               << "l=5\n"
+               << "r=6\n"
+               << "zl=7\n"
+               << "zr=8\n"
+               << "minus=9\n"
+               << "plus=10\n"
+               << "capture=11\n"
+               << "home=12\n";
         }
 
-        rc = ams::fs::GetFileSize(&fileOffset, file).GetValue();
-        if (R_FAILED(rc))
-        {
-            syscon::logger::LogError("Failed to get file size of configuration file: '%s' !", path);
-            return rc;
-        }
+        configFile << ss.str();
 
-        rc = ams::fs::WriteFile(file, fileOffset, ss.str().c_str(), ss.str().length(), ams::fs::WriteOption::Flush).GetValue();
-        if (R_FAILED(rc))
+        if (configFile.fail())
         {
-            syscon::logger::LogError("Failed to write configuration file: '%s' !", path);
-            return rc;
-        }*/
+            syscon::logger::LogError("Error: Failed to write to configuration file: %s", path.c_str());
+            return -1;
+        }
 
         return 0;
     }

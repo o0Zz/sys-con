@@ -7,10 +7,17 @@
 #include "psc_module.h"
 #include "version.h"
 #include "SwitchHDLHandler.h"
-#include "SwitchUtils.h"
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x40000
+
+#define R_ABORT_UNLESS(rc)             \
+    {                                  \
+        if (R_FAILED(rc)) [[unlikely]] \
+        {                              \
+            diagAbortWithResult(rc);   \
+        }                              \
+    }
 
 extern "C"
 {

@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <sys/stat.h>
 #include <mutex>
-#include "SwitchUtils.h"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -64,7 +63,7 @@ namespace syscon::logger
 
         std::lock_guard<std::mutex> printLock(sLogMutex);
 
-        u64 current_time_ms = SwitchUtils::GetCurrentTimeMs();
+        u64 current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02li:%02li:%02li.%03li|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)((uint64_t)threadGetSelf()));
         std::vsnprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), fmt, vl);
 
@@ -79,7 +78,7 @@ namespace syscon::logger
 
         std::lock_guard<std::mutex> printLock(sLogMutex);
 
-        u64 current_time_ms = SwitchUtils::GetCurrentTimeMs();
+        u64 current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02li:%02li:%02li.%03li|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)((uint64_t)threadGetSelf()));
 
         size_t start_offset = strlen(sLogBuffer);
