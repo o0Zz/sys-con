@@ -48,28 +48,29 @@ extern "C" void __appInit(void)
 {
     R_ABORT_UNLESS(smInitialize());
 
-    R_ABORT_UNLESS(fsInitialize());
-
-    // R_ABORT_UNLESS(usbHsInitialize());
-    R_ABORT_UNLESS(pscmInitialize());
-    R_ABORT_UNLESS(setsysInitialize());
-
     // Initialize system firmware version
+    R_ABORT_UNLESS(setsysInitialize());
     SetSysFirmwareVersion fw;
     R_ABORT_UNLESS(setsysGetFirmwareVersion(&fw));
     hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
+    setsysExit();
 
     R_ABORT_UNLESS(hiddbgInitialize());
-    /*if (hosversionAtLeast(7, 0, 0))
+    if (hosversionAtLeast(7, 0, 0))
     {
-        workmem = aligned_alloc(0x1000, workmem_size);
+        /*workmem = aligned_alloc(0x1000, workmem_size);
         if (!workmem)
             diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_HID));
+        */
 
         R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), workmem, workmem_size));
-    }*/
+    }
 
-    // smExit();
+    R_ABORT_UNLESS(usbHsInitialize());
+    R_ABORT_UNLESS(pscmInitialize());
+    R_ABORT_UNLESS(fsInitialize());
+
+    smExit();
 
     R_ABORT_UNLESS(fsdevMountSdmc());
 }
@@ -103,11 +104,6 @@ int main(int argc, char *argv[])
     ::syscon::config::GlobalConfig globalConfig;
     ::syscon::config::LoadGlobalConfig(&globalConfig);
 
-    while (1)
-    {
-        svcSleepThread(1e+8L);
-    }
-    /*
     ::syscon::logger::SetLogLevel(globalConfig.log_level);
 
     ::syscon::logger::LogDebug("Initializing controllers ...");
@@ -141,5 +137,4 @@ int main(int argc, char *argv[])
     ::syscon::usb::Exit();
     ::syscon::controllers::Exit();
     ::syscon::logger::Exit();
-    */
 }
