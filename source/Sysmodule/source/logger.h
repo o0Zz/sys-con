@@ -1,4 +1,5 @@
 #pragma once
+#include "switch.h"
 #include <cstdarg>
 #include <string>
 #include "ILogger.h"
@@ -13,7 +14,7 @@
 
 namespace syscon::logger
 {
-    Result Initialize(const char *logPath);
+    Result Initialize(const std::string &logPath);
     void Exit();
 
     void SetLogLevel(int level);
