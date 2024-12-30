@@ -23,7 +23,7 @@ namespace syscon::usb
         void UsbInterfaceChangeThreadFunc(void *arg);
 
         alignas(0x1000) u8 usb_event_thread_stack[0x4000];
-        alignas(0x1000) u8 usb_interface_change_thread_stack[0x2000];
+        alignas(0x1000) u8 usb_interface_change_thread_stack[0x4000];
 
         Thread g_usb_event_thread;
         Thread g_usb_interface_change_thread;
@@ -177,7 +177,7 @@ namespace syscon::usb
                     for (int i = 0; i < total_entries; i++)
                         interfaceIDsPlugged.push_back(interfaces[i].inf.ID);
 
-                    controllers::RemoveIfNotPlugged(interfaceIDsPlugged);
+                    controllers::RemoveAllNonPlugged(interfaceIDsPlugged);
                 }
 
             } while (is_usb_interface_change_thread_running);

@@ -46,7 +46,7 @@ namespace syscon::controllers
         return rc;
     }
 
-    void RemoveIfNotPlugged(std::vector<s32> interfaceIDsPlugged)
+    void RemoveAllNonPlugged(std::vector<s32> interfaceIDsPlugged)
     {
         std::lock_guard<std::mutex> scoped_lock(controllerMutex);
         for (auto it = controllerHandlers.begin(); it != controllerHandlers.end(); it++)
