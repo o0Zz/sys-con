@@ -57,7 +57,7 @@ namespace syscon::psc
 
     Result Initialize()
     {
-        Result rc = pscmGetPmModule(&pscModule, PscPmModuleId(0xBD), dependencies, sizeof(dependencies) / sizeof(uint32_t), true);
+        Result rc = pscmGetPmModule(&pscModule, PscPmModuleId(0x7E), dependencies, sizeof(dependencies) / sizeof(uint32_t), true);
         if (R_FAILED(rc))
             return rc;
 

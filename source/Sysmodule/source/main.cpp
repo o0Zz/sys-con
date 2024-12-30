@@ -9,7 +9,7 @@
 #include "SwitchHDLHandler.h"
 
 // Size of the inner heap (adjust as necessary).
-#define INNER_HEAP_SIZE 0x40000
+#define INNER_HEAP_SIZE 0x80000 // 512 KiB
 
 #define R_ABORT_UNLESS(rc)             \
     {                                  \
@@ -40,7 +40,7 @@ extern "C"
     }
 }
 
-alignas(0x1000) constinit u8 g_hdls_buffer[0x8000];
+alignas(0x1000) constinit u8 g_hdls_buffer[0x10000]; // 64 KiB
 void *workmem = g_hdls_buffer;
 size_t workmem_size = sizeof(g_hdls_buffer);
 
@@ -63,7 +63,7 @@ extern "C" void __appInit(void)
             diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_HID));
         */
 
-        R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), workmem, workmem_size));
+        R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
     }
 
     R_ABORT_UNLESS(usbHsInitialize());
@@ -124,8 +124,6 @@ int main(int argc, char *argv[])
 
     ::syscon::logger::LogDebug("Initializing power supply managment ...");
     ::syscon::psc::Initialize();
-
-    ::syscon::logger::LogDebug("Initializing signal ...");
 
     while ((::syscon::psc::IsRunning()))
     {
