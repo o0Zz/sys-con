@@ -6,13 +6,13 @@ static std::recursive_mutex usbMutex;
 SwitchUSBLock::SwitchUSBLock(bool scoped) : m_scoped(scoped)
 {
     if (m_scoped)
-        usbMutex.lock();
+        lock();
 }
 
 SwitchUSBLock::~SwitchUSBLock()
 {
     if (m_scoped)
-        usbMutex.unlock();
+        unlock();
 }
 
 void SwitchUSBLock::lock()

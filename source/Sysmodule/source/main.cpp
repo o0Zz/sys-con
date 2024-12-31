@@ -40,9 +40,7 @@ extern "C"
     }
 }
 
-alignas(0x1000) constinit u8 g_hdls_buffer[0x10000]; // 64 KiB
-void *workmem = g_hdls_buffer;
-size_t workmem_size = sizeof(g_hdls_buffer);
+alignas(0x1000) constinit u8 g_hdls_buffer[0x8000]; // 32 KiB
 
 extern "C" void __appInit(void)
 {
@@ -57,14 +55,7 @@ extern "C" void __appInit(void)
 
     R_ABORT_UNLESS(hiddbgInitialize());
     if (hosversionAtLeast(7, 0, 0))
-    {
-        /*workmem = aligned_alloc(0x1000, workmem_size);
-        if (!workmem)
-            diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_InitFail_HID));
-        */
-
         R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
-    }
 
     R_ABORT_UNLESS(usbHsInitialize());
     R_ABORT_UNLESS(pscmInitialize());
@@ -77,16 +68,16 @@ extern "C" void __appInit(void)
 
 extern "C" void __appExit(void)
 {
+    usbHsExit();
+    pscmExit();
+
     if (hosversionAtLeast(7, 0, 0))
         hiddbgReleaseHdlsWorkBuffer(SwitchHDLHandler::GetHdlsSessionId());
 
     hiddbgExit();
-    usbHsExit();
-    pscmExit();
 
     fsdevUnmountAll();
     fsExit();
-    free(workmem);
 }
 
 int main(int argc, char *argv[])
@@ -94,7 +85,6 @@ int main(int argc, char *argv[])
     ::syscon::logger::Initialize(CONFIG_PATH "log.log");
 
     u32 version = hosversionGet();
-
     ::syscon::logger::LogInfo("-----------------------------------------------------");
     ::syscon::logger::LogInfo("SYS-CON started %s+%d-%s (Build date: %s %s)", ::syscon::version::syscon_tag, ::syscon::version::syscon_commit_count, ::syscon::version::syscon_git_hash, __DATE__, __TIME__);
     ::syscon::logger::LogInfo("OS version: %d.%d.%d", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version));

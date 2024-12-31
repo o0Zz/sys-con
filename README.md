@@ -48,6 +48,7 @@ Reboot the Nintendo Switch.
 - [x] Configurable polling frequency
 - [x] Configurable controller color using #RGBA
 - [ ] Rumble
+- [ ] HID keyboard / mouse support
 
 ## Supported controller
 - [x] All PC Controllers
