@@ -11,6 +11,7 @@
 FTP_URL=ftp://192.168.10.238:5000
 
 #Below variable need to stay unchanged, they are correct whatever the developer
+ELF_FILE=./source/Sysmodule/sys-con.elf
 NSP_FILE=./out/atmosphere/contents/690000000000000D/exefs.nsp
 DST_NSP_FILE=atmosphere/contents/690000000000000D/exefs.nsp
 NRO_FILE=./out/switch/sys-con.nro
@@ -24,6 +25,7 @@ usage () {
   echo "       $0 sd upload"
   echo "       $0 sd logs"
   echo "       $0 build"
+  echo "       $0 stacktrace"
   exit 1
 }
 
@@ -86,4 +88,19 @@ if [ "$1" == "build" ]; then
 	exit 0
 fi
 
+if [ "$1" == "stacktrace" ]; then
+    echo "PC: XXXXXXX value ?"
+    read pc_value
+	
+    echo "Backtrace - Start Address: XXXXXXX value ?"
+    read backtrace_value
+
+    # Perform arithmetic subtraction correctly
+    ret=$(printf "0x%X\n" $((0x$pc_value - 0x$backtrace_value)))
+	echo "$ret"
+	
+    # Use the computed address in addr2line
+    /opt/devkitpro/devkitA64/bin/aarch64-none-elf-addr2line.exe -e "$ELF_FILE" -f -p -C -a "$ret"
+    exit 0
+fi
 usage
