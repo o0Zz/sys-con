@@ -114,8 +114,8 @@ public:
     uint8_t buttonsPin[ControllerButton::COUNT][MAX_PIN_BY_BUTTONS]{0};
     ControllerAnalogConfig buttonsAnalog[ControllerButton::COUNT]{0};
 
-    ControllerButton simulateHome[2]{ControllerButton::NONE};
-    ControllerButton simulateCapture[2]{ControllerButton::NONE};
+    // Simulate combos for any button: simulateCombos[button][2]
+    ControllerButton simulateCombos[ControllerButton::COUNT][2]{{ControllerButton::NONE, ControllerButton::NONE}};
 
     RGBAColor bodyColor{0, 0, 0, 255};
     RGBAColor buttonsColor{0, 0, 0, 255};

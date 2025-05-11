@@ -321,10 +321,16 @@ namespace syscon::config
                 ini_data->controller_config->outputMaxPacketSize = atoi(value);
             else if (nameStr == "controller_type")
                 ini_data->controller_config->controllerType = stringToControllerType(value);
-            else if (nameStr == "simulate_home")
-                parseHotKey(value, ini_data->controller_config->simulateHome);
-            else if (nameStr == "simulate_capture")
-                parseHotKey(value, ini_data->controller_config->simulateCapture);
+            // Generic simulate_<button> support
+            else if (nameStr.rfind("simulate_", 0) == 0 && nameStr.length() > 9) // starts with simulate_
+            {
+                std::string btnName = nameStr.substr(9); // after simulate_
+                ControllerButton btn = stringToButton(btnName.c_str());
+                if (btn != ControllerButton::NONE && btn < ControllerButton::COUNT)
+                    parseHotKey(value, ini_data->controller_config->simulateCombos[btn]);
+                else
+                    syscon::logger::LogError("Unknown simulate_ button: %s", btnName.c_str());
+            }
             else if (nameStr == "deadzone_x")
                 ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_X] = atoi(value);
             else if (nameStr == "deadzone_y")
