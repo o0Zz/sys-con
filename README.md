@@ -1,14 +1,24 @@
-# Sys-con
+# Sys-con-simulate
 
-#### Connect any USB controller to your Nintendo Switch ! 
-***Support any controller***: PC controllers, Wheels, Dualshock 3, Dualshock 4, Dualsense (PS5), XBOX, XBOX360, XBOXONE, ...
+This fork of sys-con extends the original functionality for button simulation in the `config.ini` file. 
+
+In this fork, you can now use the button simulation feature for **any button** by using `simulate_<BUTTON/BUTTONS>`. 
+
+For example:
+```
+simulate_L=minus+plus
+simulate_A=L+R
+simulate_rstick_click=ZL
+```
 
 ## Description
 Sys-con is a Nintendo Switch module that adds support for all HID and XID joysticks and gamepads to the Nintendo Switch.
 Only **USB** connection is supported (For Bluetooth connection prefer to use ndeadly's [MissionControl](https://github.com/ndeadly/MissionControl))
+#### Connect any USB controller to your Nintendo Switch ! 
+***Support any controller***: PC controllers, Wheels, Dualshock 3, Dualshock 4, Dualsense (PS5), XBOX, XBOX360, XBOXONE, ...
 
 ## Installation
-Download the latest zip from the [releases page](https://github.com/o0zz/sys-con/releases). Extract it to your SD card root folder and boot/reboot your switch.
+Download the latest zip from the [releases page](https://github.com/leofrachet11/sys-con-simulate/releases). Extract it to your SD card root folder and boot/reboot your switch.
 
 ## Configuration
 sys-con comes with a configuration folder located in `/config/sys-con/`. It contains configuration for controllers (Button mappings, sticks configuration, triggers configuration, deadzones...).
@@ -56,8 +66,8 @@ Reboot the Nintendo Switch.
 - [x] All Xbox Controllers
 - [x] Wheels
 
-A complete list of tested controller is available 
-[here](https://github.com/o0Zz/sys-con/blob/master/doc/TestedControllers.md)
+A complete list of tested controllers is available 
+[here](https://github.com/leofrachet11/sys-con-simulate/blob/master/doc/TestedControllers.md)
 
 ## Configure a controller
 When a new controller is connected, sys-con tries to determine the best profile for this new controller.
@@ -161,8 +171,7 @@ dpad_left=
 dpad_right=
 capture=
 home=
-simulate_home=
-simulate_capture=
+simulate_<BUTTON/BUTTONS>=
 ```
 
 List of possible values:
@@ -205,15 +214,12 @@ All these values are in percentages
 By default, the **HOME** and **CAPTURE** can be triggered by pressing `Minus + DPAD_UP` and `Minus + DPAD_DOWN`, respectively. Minus button is often mapped to the select button.
 
 ## Troubleshooting
-For common issues a troubleshooting guide is available: [Troubleshooting](https://github.com/o0Zz/sys-con/blob/master/doc/Troubleshooting.md)
-
-## Contribution
-All contributions are welcome, you can be a simple user or developer, if you did some mapping work in the config.ini or if you have any feedback, feel free to share it in [Discussions](https://github.com/o0Zz/sys-con/discussions) or submit a [Pull request](https://github.com/o0Zz/sys-con/pulls)
+For common issues a troubleshooting guide is available: [Troubleshooting](https://github.com/leofrachet11/sys-con-simulate/blob/master/doc/Troubleshooting.md)
 
 ## Building (For developers)
 
 Don't download the project as ZIP as it will not copy submodules properly, prefer a git clone:
-`git clone --recurse-submodules -j8 https://github.com/o0Zz/sys-con.git`
+`git clone --recurse-submodules -j8 https://github.com/leofrachet11/sys-con-simulate.git`
 
 Like all other switch projects, you will need [devkitA64](https://switchbrew.org/wiki/Setting_up_Development_Environment) set up on your system.
 
@@ -280,11 +286,3 @@ For an in-depth explanation of how sys-con works, see [here](source).
 
 ### Debug the application
 In order to debug the applicaiton, you can directly refer to the logs available there: `/config/sys-con/log.txt`.
-
-## Credits
-**Texita** For his contribution in controllers testings and mappings
-
-## Support
-If you want to support this work 
-
-[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/o0Zzz)
