@@ -39,8 +39,21 @@ This error occur when two drivers try to acquire the controller.
 Most of the time, this issue occured when you plug an official switch controller and the switch itself try to open it.
 To fix the problem:
 
-1. Edit the `/config/sys-con/config.ini` and change `discovery_mode=0` to `discovery_mode=1`
+1. Edit the `/config/sys-con/config.ini` and change `discovery_mode=0` to `discovery_mode=2`
 2. Reboot the switch.
+
+(This should solve your issue, but it will only detect Xbox controllers and any controllers listed in `discovery_vidpid=`)
+
+## I got error: "Failed to initialize controller: Error: 0x6B ..."
+This error happens when your USB device is not an HID controller. 
+For example, it can occur if you plug in a USB audio device instead of a controller.
+This is because Orizon OS’s USB filter is not powerful enough to handle filter-out some peripherals correctly.
+To fix it:
+
+1. Edit /config/sys-con/config.ini and change `discovery_mode=0` to `discovery_mode=1`
+2. Reboot the Switch.
+
+(This should solve your issue, but it will only detect Xbox controllers and any controllers listed in `discovery_vidpid=`)
 
 ## My controller don't have Home or Capture button, how to simulate home or capture button ?
 By default, all controllers are configured to simulate home and capture with following binding: Minus+DPAD_UP for capture and Minus+DPAD_DOWN for home.
