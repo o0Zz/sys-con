@@ -43,3 +43,4 @@
 | BipBop 2.4g usb wireless | Yes | - | - |
 | Dazz Double Shock Fighter USB 2.0 | Yes | DInput mode | - |
 | Buffalo iBuffalo Classic USB | Yes | - | https://www.amazon.com/Buffalo-iBuffalo-Classic-USB-Gamepad/dp/B002B9XB0E |
+| L-TEK Dance Pad PRO (DDR pad) | Yes | - | - |
