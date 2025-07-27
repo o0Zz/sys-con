@@ -6,8 +6,13 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
 endif
 
+THIS_MAKEFILE := $(abspath $(lastword $(MAKEFILE_LIST)))
+CURRENT_DIRECTORY := $(abspath $(dir $(THIS_MAKEFILE)))
+
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
+
+include $(CURRENT_DIRECTORY)/../../lib/Atmosphere-libs/config/templates/stratosphere.mk
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -54,12 +59,12 @@ CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
 
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 
-CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++23
+CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++23 -fconcepts-diagnostics-depth=99
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lnx -lhiddatainterpreter
+LIBS	:= -lnx -lhiddatainterpreter -lstratosphere
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -107,10 +112,12 @@ export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
 export HFILES_BIN	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+			$(foreach dir,$(AMS_LIBDIRS),-I$(dir)/include) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 			-I$(CURDIR)/$(BUILD)
 
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
+			$(foreach dir,$(AMS_LIBDIRS),-L$(dir)/$(ATMOSPHERE_LIBRARY_DIR))
 
 ifeq ($(strip $(CONFIG_JSON)),)
 	jsons := $(wildcard *.json)

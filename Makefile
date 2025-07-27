@@ -24,7 +24,7 @@ all: build
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
 
 build:
-	$(MAKE) -C $(SOURCE_DIR)
+	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE_VERSION=$(ATMOSPHERE_VERSION)
 
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean
@@ -38,6 +38,12 @@ mrproper: clean
 
 dist: clean all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .
-
-distclean: mrproper all
+	
+atmosphere_1.7.x-1.8.x:
+	cd lib/Atmosphere-libs && \
+	git reset --hard && \
+	git checkout 989fb7be0c68bf229fe6789428b6c448b6de142a && \
+	sed -i 's/static_assert/\/\/static_assert/' libstratosphere/source/ldr/ldr_pm_api.os.horizon.cpp
+	
+distclean: mrproper  atmosphere_$(ATMOSPHERE_VERSION) all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .

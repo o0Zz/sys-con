@@ -1,5 +1,6 @@
 #include "switch.h"
 #include "logger.h"
+#include <stratosphere.hpp>
 
 #include "usb_module.h"
 #include "controller_handler.h"
@@ -7,10 +8,11 @@
 #include "psc_module.h"
 #include "version.h"
 #include "SwitchHDLHandler.h"
+#include "SwitchMITMHandler.h"
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x80000 // 512 KiB
-
+/*
 #define R_ABORT_UNLESS(rc)             \
     {                                  \
         if (R_FAILED(rc)) [[unlikely]] \
@@ -18,7 +20,7 @@
             diagAbortWithResult(rc);   \
         }                              \
     }
-
+*/
 alignas(0x1000) constinit u8 g_hdls_buffer[0x8000]; // 32 KiB
 
 extern "C"
@@ -103,12 +105,16 @@ int main(int argc, char *argv[])
     ::syscon::logger::LogDebug("Initializing power supply managment ...");
     ::syscon::psc::Initialize();
 
+    ::syscon::logger::LogDebug("MITM ...");
+    ams::syscon::hid::mitm::InitializeHidMitm();
+
     while ((::syscon::psc::IsRunning()))
     {
         svcSleepThread(1e+8L);
     }
 
     ::syscon::logger::LogDebug("Shutting down sys-con ...");
+    ams::syscon::hid::mitm::FinalizeHidMitm();
     ::syscon::psc::Exit();
     ::syscon::usb::Exit();
     ::syscon::controllers::Exit();

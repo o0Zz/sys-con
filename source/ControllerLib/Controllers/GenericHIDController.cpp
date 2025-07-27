@@ -3,6 +3,10 @@
 #include "HIDJoystick.h"
 #include <string.h>
 
+#define USB_DT_REPORT              0x22
+#define USB_REQUEST_GET_DESCRIPTOR 0x06
+#define USB_REQUEST_SET_IDLE       0x0A
+
 // https://www.usb.org/sites/default/files/documents/hid1_11.pdf  p55
 
 GenericHIDController::GenericHIDController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)

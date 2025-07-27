@@ -1,8 +1,8 @@
 #pragma once
 
-#include "switch.h"
 #include "IController.h"
 #include "SwitchVirtualGamepadHandler.h"
+#include <switch.h>
 
 // HDLS stands for "HID (Human Interface Devices) Device List Setting".
 //  It's a part of the Nintendo Switch's HID (Human Interface Devices) system module, which is responsible for handling input from controllers and
@@ -35,6 +35,13 @@ private:
     Result Detach(uint16_t input_idx);
     Result Attach(uint16_t input_idx);
 
+    // Separately init and close the HDL state
+    Result InitHdlState();
+    Result UninitHdlState();
+
+    // Fills out the HDL state with the specified button data and passes it to HID
+    Result UpdateHdlState(const NormalizedButtonData &data, uint16_t input_idx);
+
 public:
     // Initialize the class with specified controller
     SwitchHDLHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
@@ -49,14 +56,7 @@ public:
     // This will be called periodically by the output threads
     virtual Result UpdateOutput() override;
 
-    // Separately init and close the HDL state
-    Result InitHdlState();
-    Result UninitHdlState();
-
     bool IsVirtualDeviceAttached(uint16_t input_idx);
-
-    // Fills out the HDL state with the specified button data and passes it to HID
-    Result UpdateHdlState(const NormalizedButtonData &data, uint16_t input_idx);
 
     static HiddbgHdlsSessionId &GetHdlsSessionId();
 };

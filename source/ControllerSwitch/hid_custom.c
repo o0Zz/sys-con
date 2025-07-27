@@ -5,7 +5,8 @@
 
 Mutex shmem_mutex;
 
-static Result _customHidCreateAppletResource(Service *srv, Service *out_iappletresource) {
+static Result _customHidCreateAppletResource(Service *srv, Service *out_iappletresource)
+{
     u64 AppletResourceUserId = appletGetAppletResourceUserId();
 
     return serviceDispatchIn(srv, 0, AppletResourceUserId,
@@ -14,13 +15,14 @@ static Result _customHidCreateAppletResource(Service *srv, Service *out_iappletr
                              .out_objects = out_iappletresource, );
 }
 
-static Result _customHidGetSharedMemoryHandle(Service *srv, Handle *handle_out) {
+static Result _customHidGetSharedMemoryHandle(Service *srv, Handle *handle_out)
+{
     return serviceDispatch(srv, 0,
                            .out_handle_attrs = {SfOutHandleAttr_HipcCopy},
                            .out_handles = handle_out, );
 }
 
-void customHidSetup(Service* hid_service, Service* out_iappletresource, SharedMemory* out_real_shmem, SharedMemory* out_fake_shmem)
+void customHidSetup(Service *hid_service, Service *out_iappletresource, SharedMemory *out_real_shmem, SharedMemory *out_fake_shmem)
 {
     Result rc;
     rc = _customHidCreateAppletResource(hid_service, out_iappletresource); // Executes the original ipc
@@ -40,10 +42,9 @@ void customHidSetup(Service* hid_service, Service* out_iappletresource, SharedMe
 
     shmemCreate(out_fake_shmem, sizeof(HidSharedMemory), Perm_Rw, Perm_R);
     shmemMap(out_fake_shmem);
-
 }
 
-void customHidExit(Service* iappletresource, SharedMemory* real_shmem, SharedMemory* fake_shmem) 
+void customHidExit(Service *iappletresource, SharedMemory *real_shmem, SharedMemory *fake_shmem)
 {
     mutexLock(&shmem_mutex);
     shmemUnmap(real_shmem);

@@ -3,10 +3,6 @@
 #include <cstdint>
 #include <cstddef>
 
-#define USB_DT_REPORT              0x22
-#define USB_REQUEST_GET_DESCRIPTOR 0x06
-#define USB_REQUEST_SET_IDLE       0x0A
-
 class IUSBEndpoint
 {
 public:
