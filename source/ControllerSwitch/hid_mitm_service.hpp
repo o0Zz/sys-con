@@ -10,7 +10,7 @@
 // Documentation: https://switchbrew.org/wiki/HID_services
 
 #define AMS_HID_MITM_INTERFACE_INFO(C, H) \
-    AMS_SF_METHOD_INFO(C, H, 0, Result, CreateAppletResource, (sf::SharedPointer<ams::syscon::hid::mitm::HidMitmAppletResource> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, applet_resource_user_id))
+    AMS_SF_METHOD_INFO(C, H, 0, Result, CreateAppletResource, (sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, applet_resource_user_id))
 
 AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494443)
 
@@ -26,10 +26,12 @@ namespace ams::syscon::hid::mitm
         s32 m_right_stick_x;
         s32 m_right_stick_y;
         std::mutex m_lock;
-        sf::SharedPointer<HidMitmAppletResource> m_applet_resource;
 
     public:
-        HidMitmService(sm::MitmProcessInfo &client_info, std::shared_ptr<::Service> &&s);
+        using MitmServiceImplBase::MitmServiceImplBase;
+
+    public:
+        HidMitmService(std::shared_ptr<::Service> &&s, sm::MitmProcessInfo &client_info);
 
         static bool ShouldMitm(const sm::MitmProcessInfo &client_info);
 
@@ -39,7 +41,7 @@ namespace ams::syscon::hid::mitm
         Result SetInterceptionEnabled(bool enabled);
 
         // Service interface methods
-        Result CreateAppletResource(sf::SharedPointer<ams::syscon::hid::mitm::HidMitmAppletResource> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
+        Result CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
 
         // HID service forwarding methods
         /* ams::Result ActivateDebugPad(ams::nn::applet::AppletResourceUserId aruid);

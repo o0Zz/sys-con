@@ -3,6 +3,9 @@
 #include <stratosphere.hpp>
 #include "hid_custom.h"
 
+// https://github.com/Slluxx/switch-sys-tweak/blob/develop/src/ns_srvget_mitm_service.hpp
+//
+
 extern "C" Mutex shmem_mutex;
 static std::unordered_map<u64, std::pair<HidSharedMemory *, HidSharedMemory *>> sharedmems;
 
@@ -34,7 +37,7 @@ namespace ams::syscon::hid::mitm
     }
 
     // HidMitmService implementation
-    HidMitmService::HidMitmService(sm::MitmProcessInfo &client_info, std::shared_ptr<::Service> &&s)
+    HidMitmService::HidMitmService(std::shared_ptr<::Service> &&s, sm::MitmProcessInfo &client_info)
         : sf::MitmServiceImplBase(std::forward<std::shared_ptr<::Service>>(s), client_info),
           m_interception_enabled(false),
           m_injected_buttons(0),
@@ -45,10 +48,9 @@ namespace ams::syscon::hid::mitm
           m_lock(),
           m_applet_resource(nullptr)
     {
-        /* Constructor body */
     }
 
-    Result HidMitmService::CreateAppletResource(sf::SharedPointer<ams::syscon::hid::mitm::HidMitmAppletResource> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {
         ::Service out_iappletresource;
         ::SharedMemory real_shmem, fake_shmem;
@@ -56,6 +58,17 @@ namespace ams::syscon::hid::mitm
         // This needs to be the first ipc being done since it relies on stuff that libstrato left for us. TODO: Do this properly
         customHidSetup(this->m_forward_service.get(), &out_iappletresource, &real_shmem, &fake_shmem);
 
+        ams::sf::SharedPointer<IHidMitmAppletResourceInterface> intfInterface = ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>();
+        HidMitmAppletResource *tmp = ((HidMitmAppletResource *)intfInterface.Get());
+
+        tmp->m_pid = applet_resource_user_id.GetValue().value;
+        tmp->m_fake_shared_memory = fake_shmem;
+        tmp->m_original_shared_memory = real_shmem;
+        tmp->m_appletresource_handle = out_iappletresource;
+        add_shmem(tmp->m_pid, &tmp->m_original_shared_memory, &tmp->m_fake_shared_memory);
+
+        // out = intf;
+        out.SetValue(intfInterface);
         return 0;
     }
 

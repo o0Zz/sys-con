@@ -2,11 +2,7 @@
 #include "hid_mitm_service.hpp"
 #include <stratosphere.hpp>
 
-/*#include "SwitchMITMHandler.h"
-
-
-*/
-// #include <stratosphere/sf.hpp>
+// Based on https://github.com/ndeadly/MissionControl/blob/master/mc_mitm/source/btm_mitm/btm_mitm_service.hpp
 
 namespace ams::syscon::hid::mitm
 {
@@ -49,11 +45,10 @@ namespace ams::syscon::hid::mitm
 
             switch (port_index)
             {
-                /*case PortIndex_Mitm:
-                    return this->AcceptMitmImpl(server, ams::sf::CreateSharedObjectEmplaced<IHidMitmInterface, HidMitmService>(client_info, std::move(fsrv)), fsrv);
-                */
-                default:
-                    return ~0; // Invalid port index
+                case PortIndex_Mitm:
+                    return this->AcceptMitmImpl(server, sf::CreateSharedObjectEmplaced<IHidMitmInterface, HidMitmService>(decltype(fsrv)(fsrv), client_info), fsrv);
+
+                    AMS_UNREACHABLE_DEFAULT_CASE();
             }
         }
 

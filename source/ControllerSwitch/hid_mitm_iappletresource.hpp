@@ -56,13 +56,15 @@ HOW MITM works:
 #define AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 0, Result, GetSharedMemoryHandle, (ams::sf::OutCopyHandle out), (out))
 
-// AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmAppletResourceInterface, AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO, 0x48494442)
 AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmAppletResourceInterface, AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO, 0x48494442)
 
 namespace ams::syscon::hid::mitm
 {
-    class HidMitmAppletResource
+    class HidMitmAppletResource : public sf::IServiceObject
     {
+    public:
+        using Interface = IHidMitmAppletResourceInterface;
+
     public:
         ::SharedMemory m_original_shared_memory;
         ::SharedMemory m_fake_shared_memory;
