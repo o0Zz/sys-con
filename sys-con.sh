@@ -9,6 +9,8 @@
 
 # IP of your switch on your network:
 FTP_URL=ftp://192.168.10.238:5000
+FTP_USER=
+FTP_PASS=
 
 #Below variable need to stay unchanged, they are correct whatever the developer
 ELF_FILE=./source/Sysmodule/sys-con.elf
@@ -54,13 +56,13 @@ display_logs () {
 if [ "$1" == "ftp" ]; then
     if [ "$2" == "upload" ]; then
         echo "FTP upload"
-        curl -T $NSP_FILE "$FTP_URL/$DST_NSP_FILE"  || exit 1
-        curl -T $NRO_FILE "$FTP_URL/$DST_NRO_FILE"  || exit 1
+        curl -u "$FTP_USER:$FTP_PASS" -T $NSP_FILE "$FTP_URL/$DST_NSP_FILE"  || exit 1
+        curl -u "$FTP_USER:$FTP_PASS" -T $NRO_FILE "$FTP_URL/$DST_NRO_FILE"  || exit 1
         exit 0
     fi
 	
 	if [ "$2" == "logs" ]; then
-        curl "$FTP_URL/$LOG_FILE" -o ./log.txt || exit 1
+        curl -u "$FTP_USER:$FTP_PASS" "$FTP_URL/$LOG_FILE" -o ./log.txt || exit 1
         display_logs
 		exit 0
     fi
