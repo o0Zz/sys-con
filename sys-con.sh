@@ -1,10 +1,11 @@
 #!/bin/bash
 #
 # This script is used to simplify nintendo switch developement
-# You need homebrew ftpd installed
-# Boot the switch, enter in ftpd, use this script to do basic actions:
+# You need sys-ftpd installed
+# Boot the switch, use this script to do basic actions:
 # "ftp upload" to upload the binary (You just built) directly to the switch
 # "ftp logs" to display the logs
+# "ftp crash" to provide details about last fatal report crash
 # Same commands are available with "sd", usefull when the nintendo switch crash on boot (You plug the sdcard to your laptop and debug from there)
 
 # IP of your switch on your network:
@@ -19,13 +20,16 @@ DST_NSP_FILE=atmosphere/contents/690000000000000D/exefs.nsp
 NRO_FILE=./out/switch/sys-con.nro
 DST_NRO_FILE=switch/sys-con.nro
 LOG_FILE=config/sys-con/log.txt
+REPORT_FOLDER=atmosphere/fatal_errors
 
 usage () {
   echo "Usage: "
   echo "       $0 ftp upload"
   echo "       $0 ftp logs"
+  echo "       $0 ftp crash"
   echo "       $0 sd upload"
   echo "       $0 sd logs"
+  echo "       $0 sd crash"
   echo "       $0 build"
   echo "       $0 stacktrace"
   exit 1
@@ -53,6 +57,13 @@ display_logs () {
     echo "---- END ----"
 }
 
+display_fatalerror () {
+	if [ ! -f "AFE_Parser.exe" ]; then
+		curl -L -o AFE_Parser.exe https://github.com/o0Zz/AFE_Parser/releases/download/v1.3/AFE_Parser.exe
+	fi
+	./AFE_Parser.exe -report fatal_error.bin -elf $ELF_FILE
+}
+
 if [ "$1" == "ftp" ]; then
     if [ "$2" == "upload" ]; then
         echo "FTP upload"
@@ -64,6 +75,21 @@ if [ "$1" == "ftp" ]; then
 	if [ "$2" == "logs" ]; then
         curl -u "$FTP_USER:$FTP_PASS" "$FTP_URL/$LOG_FILE" -o ./log.txt || exit 1
         display_logs
+		exit 0
+    fi
+	
+	if [ "$2" == "crash" ]; then
+        echo "Retrieving report file list..."
+        # List all .bin files in the crash report folder
+        first_file=$(curl -s -u "$FTP_USER:$FTP_PASS" "$FTP_URL/$REPORT_FOLDER/" | grep -Eo '[^ ]+\.bin' | head -n 1)
+        echo "Retrieving report file: $first_file"
+        curl -u "$FTP_USER:$FTP_PASS" "$FTP_URL/$REPORT_FOLDER/$first_file" -o ./fatal_error.bin || exit 1
+
+        display_fatalerror
+
+        echo "Deleting remote crash report..."
+        curl -s -u "$FTP_USER:$FTP_PASS" -Q "DELE $REPORT_FOLDER/$first_file" "$FTP_URL" >/dev/null 2>&1
+
 		exit 0
     fi
 fi
@@ -80,6 +106,19 @@ if [ "$1" == "sd" ]; then
 	if [ "$2" == "logs" ]; then
         cp  /d/$LOG_FILE ./log.txt || exit 1
         display_logs
+		exit 0
+    fi
+	
+	if [ "$2" == "crash" ]; then
+        first_file=$(ls /d/$REPORT_FOLDER/*.bin 2>/dev/null | head -n 1)
+		echo "Retriving report file: '$first_file'"
+		cp "$first_file" ./fatal_error.bin
+		
+		display_fatalerror
+		
+		echo "Deleting crash reports..."
+		rm "/d/$REPORT_FOLDER/*.bin"
+		
 		exit 0
     fi
 fi
