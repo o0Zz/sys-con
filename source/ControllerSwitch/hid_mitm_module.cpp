@@ -56,10 +56,8 @@ namespace ams::syscon::hid::mitm
             }
         }
 
-        alignas(ams::os::MemoryPageSize) u8 g_mitm_thread_stack[HidMitmModule::StackSize];
-
-        // Thread for running the MITM service
-        ams::os::ThreadType g_mitm_thread;
+        alignas(0x1000) u8 g_mitm_thread_stack[0x1000];
+        Thread g_mitm_thread;
 
         // Flag to track initialization
         bool g_initialized = false;
@@ -99,16 +97,17 @@ namespace ams::syscon::hid::mitm
         }
 
         // Create and start the MITM thread
-        R_ABORT_UNLESS(ams::os::CreateThread(std::addressof(g_mitm_thread),
-                                             HidMitmModule::ThreadFunction,
-                                             nullptr,
-                                             g_mitm_thread_stack,
-                                             HidMitmModule::StackSize,
-                                             HidMitmModule::ThreadPriority));
+        Result rc = threadCreate(&g_mitm_thread, &HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), 0x2C, -2);
+        if (R_FAILED(rc))
+            return;
 
         ::syscon::logger::LogDebug("HidMitmModule Thread created !");
-        ams::os::SetThreadNamePointer(std::addressof(g_mitm_thread), "HidMitmThread");
-        ams::os::StartThread(std::addressof(g_mitm_thread));
+
+        rc = threadStart(&g_mitm_thread);
+        if (R_FAILED(rc))
+            return;
+
+        ::syscon::logger::LogDebug("HidMitmModule Thread started !");
 
         g_initialized = true;
     }
@@ -121,8 +120,8 @@ namespace ams::syscon::hid::mitm
         }
 
         // Wait for the thread to finish and clean up
-        ams::os::WaitThread(std::addressof(g_mitm_thread));
-        ams::os::DestroyThread(std::addressof(g_mitm_thread));
+        // ams::os::WaitThread(std::addressof(g_mitm_thread));
+        // ams::os::DestroyThread(std::addressof(g_mitm_thread));
 
         g_initialized = false;
     }

@@ -59,7 +59,7 @@ display_logs () {
 
 display_fatalerror () {
 	if [ ! -f "AFE_Parser.exe" ]; then
-		curl -L -o AFE_Parser.exe https://github.com/o0Zz/AFE_Parser/releases/download/v1.3/AFE_Parser.exe
+		curl -L -o AFE_Parser.exe https://github.com/o0Zz/AFE_Parser/releases/download/v1.3.1/AFE_Parser.exe
 	fi
 	./AFE_Parser.exe -report fatal_error.bin -elf $ELF_FILE
 }
@@ -87,9 +87,11 @@ if [ "$1" == "ftp" ]; then
 
         display_fatalerror
 
-        echo "Deleting remote crash report..."
-        curl -s -u "$FTP_USER:$FTP_PASS" -Q "DELE $REPORT_FOLDER/$first_file" "$FTP_URL" >/dev/null 2>&1
-
+        if [ -n "$first_file" ]; then
+            echo "Deleting remote crash report..."
+            curl -s -u "$FTP_USER:$FTP_PASS" -Q "DELE $REPORT_FOLDER/$first_file" "$FTP_URL" >/dev/null 2>&1
+        fi
+        
 		exit 0
     fi
 fi
@@ -115,10 +117,12 @@ if [ "$1" == "sd" ]; then
 		cp "$first_file" ./fatal_error.bin
 		
 		display_fatalerror
-		
-		echo "Deleting crash reports..."
-		rm "/d/$REPORT_FOLDER/*.bin"
-		
+        
+        if [ -n "$first_file" ]; then
+            echo "Deleting crash reports..."
+            rm /d/$REPORT_FOLDER/*.bin
+        fi
+
 		exit 0
     fi
 fi
