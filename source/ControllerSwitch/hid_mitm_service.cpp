@@ -1,32 +1,13 @@
 #include "hid_mitm_service.hpp"
 #include "hid_shared_memory.hpp"
+#include "SwitchLogger.h"
 #include <stratosphere.hpp>
 #include "hid_custom.h"
 
 // https://github.com/Slluxx/switch-sys-tweak/blob/develop/src/ns_srvget_mitm_service.hpp
 //
 
-extern "C" Mutex shmem_mutex;
-static std::unordered_map<u64, std::pair<HidSharedMemory *, HidSharedMemory *>> sharedmems;
-
-void add_shmem(u64 pid, SharedMemory *real_shmem, SharedMemory *fake_shmem)
-{
-    mutexLock(&shmem_mutex);
-    HidSharedMemory *real_mapped = (HidSharedMemory *)shmemGetAddr(real_shmem);
-    HidSharedMemory *fake_mapped = (HidSharedMemory *)shmemGetAddr(fake_shmem);
-    sharedmems[pid] = std::pair<HidSharedMemory *, HidSharedMemory *>(real_mapped, fake_mapped);
-    mutexUnlock(&shmem_mutex);
-}
-
-void del_shmem(u64 pid)
-{
-    mutexLock(&shmem_mutex);
-    if (sharedmems.find(pid) != sharedmems.end())
-    {
-        sharedmems.erase(pid);
-    }
-    mutexUnlock(&shmem_mutex);
-}
+void add_shmem(u64 pid, SharedMemory *real_shmem, SharedMemory *fake_shmem);
 
 namespace ams::syscon::hid::mitm
 {
@@ -45,13 +26,13 @@ namespace ams::syscon::hid::mitm
           m_left_stick_y(0),
           m_right_stick_x(0),
           m_right_stick_y(0),
-          m_lock(),
-          m_applet_resource(nullptr)
+          m_lock()
     {
     }
 
     Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {
+        ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
         ::Service out_iappletresource;
         ::SharedMemory real_shmem, fake_shmem;
 
@@ -81,7 +62,8 @@ namespace ams::syscon::hid::mitm
     Result HidMitmService::InjectButton(u64 button_mask, bool is_pressed)
     {
         std::scoped_lock lk(m_lock);
-
+        (void)button_mask;
+        (void)is_pressed;
         /*if (is_pressed)
         {
             m_injected_buttons |= button_mask;

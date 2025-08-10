@@ -1,6 +1,7 @@
 #include "switch.h"
 #include "controller_handler.h"
 #include "SwitchHDLHandler.h"
+#include "SwitchMITMHandler.h"
 #include "SwitchUSBInterface.h"
 #include <algorithm>
 #include <functional>
@@ -28,7 +29,7 @@ namespace syscon::controllers
 
     Result Insert(std::unique_ptr<IController> &&controllerPtr)
     {
-        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler = std::make_unique<SwitchHDLHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler = std::make_unique<SwitchMITMHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
 
         Result rc = switchHandler->Initialize();
         if (R_SUCCEEDED(rc))

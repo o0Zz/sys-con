@@ -8,7 +8,7 @@
 #include <fstream>
 #include <filesystem>
 #include <chrono>
-
+#include <stratosphere.hpp>
 namespace syscon::config
 {
     namespace
@@ -386,10 +386,33 @@ namespace syscon::config
             return 1; // Success
         }
 
+#ifdef ATMOSPHERE_OS_HORIZON
+
+        char ini_buffer[32 * 1024]; // 32 KiB buffer for the INI file
+        int ReadFromConfig(const char *path, ini_handler h, void *config)
+        {
+            ams::fs::FileHandle file;
+
+            Result rc = ams::fs::OpenFile(std::addressof(file), path, ams::fs::OpenMode_Read).GetValue();
+            if (R_FAILED(rc))
+            {
+                syscon::logger::LogError("Unable to open configuration file: '%s' !", path);
+                return rc;
+            }
+            ON_SCOPE_EXIT { ams::fs::CloseFile(file); };
+
+            /* Parse the config. */
+            ams::fs::ReadFile(file, 0, ini_buffer, sizeof(ini_buffer));
+
+            return ini_parse_string(ini_buffer, h, config);
+        }
+#else
         int ReadFromConfig(const char *path, ini_handler h, void *config)
         {
             return ini_parse(path, h, config);
         }
+#endif
+
     } // namespace
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config)

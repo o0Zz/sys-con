@@ -1,6 +1,7 @@
 #include "hid_mitm_module.hpp"
 #include "hid_mitm_service.hpp"
 #include <stratosphere.hpp>
+#include "SwitchLogger.h"
 
 // Based on https://github.com/ndeadly/MissionControl/blob/master/mc_mitm/source/btm_mitm/btm_mitm_service.hpp
 
@@ -41,13 +42,16 @@ namespace ams::syscon::hid::mitm
             /* Acknowledge the mitm session. */
             std::shared_ptr<::Service> fsrv;
             ams::sm::MitmProcessInfo client_info;
+            ::syscon::logger::LogDebug("ServerManager::OnNeedsToAccept AcknowledgeMitmSession: %d...", port_index);
             server->AcknowledgeMitmSession(std::addressof(fsrv), std::addressof(client_info));
 
             switch (port_index)
             {
                 case PortIndex_Mitm:
+                {
+                    ::syscon::logger::LogDebug("ServerManager::OnNeedsToAccept AcceptMitmImpl...");
                     return this->AcceptMitmImpl(server, sf::CreateSharedObjectEmplaced<IHidMitmInterface, HidMitmService>(decltype(fsrv)(fsrv), client_info), fsrv);
-
+                }
                     AMS_UNREACHABLE_DEFAULT_CASE();
             }
         }
@@ -63,6 +67,7 @@ namespace ams::syscon::hid::mitm
 
     void HidMitmModule::ThreadFunction(void *arg)
     {
+        (void)arg;
         /* Wait until initialization is complete. */
         // ams::mitm::WaitInitialized();
 
@@ -75,16 +80,19 @@ namespace ams::syscon::hid::mitm
         ams::sm::ServiceName service_name = HidMitmServiceName;
         R_ABORT_UNLESS(ams::sm::mitm::InstallMitm(std::addressof(mitm_port_handle), HidMitmServiceName.value));
         */
-
-        // Register our MITM service with the server managerP
+        ::syscon::logger::LogDebug("HidMitmModule Thread started");
+        // Register our MITM service with the server manager
         R_ABORT_UNLESS(g_server_manager.RegisterMitmServer<HidMitmService>(PortIndex_Mitm, HidMitmServiceName));
 
+        ::syscon::logger::LogDebug("HidMitmModule LoopProcess ...");
         // Process service requests in a loop
         g_server_manager.LoopProcess();
     }
 
     void InitializeHidMitm()
     {
+        ::syscon::logger::LogDebug("HidMitmModule Initializing ...");
+
         if (g_initialized)
         {
             return;
@@ -98,6 +106,7 @@ namespace ams::syscon::hid::mitm
                                              HidMitmModule::StackSize,
                                              HidMitmModule::ThreadPriority));
 
+        ::syscon::logger::LogDebug("HidMitmModule Thread created !");
         ams::os::SetThreadNamePointer(std::addressof(g_mitm_thread), "HidMitmThread");
         ams::os::StartThread(std::addressof(g_mitm_thread));
 

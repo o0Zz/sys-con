@@ -76,7 +76,8 @@ namespace ams::syscon::hid::mitm
         ~HidMitmAppletResource();
 
         Result GetSharedMemoryHandle(ams::sf::OutCopyHandle out);
-        void InjectInputData(u64 button_mask, s32 left_stick_x, s32 left_stick_y, s32 right_stick_x, s32 right_stick_y);
+        // void InjectInputData(u64 button_mask, s32 left_stick_x, s32 left_stick_y, s32 right_stick_x, s32 right_stick_y);
+        int apply_fake_gamepad(HidSharedMemory *tmp_shmem_mem);
 
     private:
         void WriteToNpadLifo(NpadLifo &lifo, const void *state_data, size_t state_size);

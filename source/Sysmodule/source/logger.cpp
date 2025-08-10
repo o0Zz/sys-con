@@ -6,6 +6,9 @@
 #include <fstream>
 #include <filesystem>
 #include <iostream>
+#include <stratosphere.hpp>
+#include <stratosphere/fs/fs_filesystem.hpp>
+#include <stratosphere/fs/fs_file.hpp>
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)
 
@@ -19,6 +22,45 @@ namespace syscon::logger
 
     const char klogLevelStr[LOG_LEVEL_COUNT] = {'T', 'D', 'P', 'I', 'W', 'E'};
 
+#ifdef ATMOSPHERE_OS_HORIZON
+
+    void Initialize(const std::string &log)
+    {
+        std::scoped_lock printLock(sLogMutex);
+        s64 fileOffset = 0;
+        ams::fs::FileHandle file;
+
+        sLogPath = std::filesystem::path(log);
+        std::filesystem::path basePath = sLogPath.parent_path();
+        ams::fs::CreateDirectory(basePath.c_str());
+
+        // Check if the log file is too big, if so, delete it.
+        if (R_SUCCEEDED(ams::fs::OpenFile(std::addressof(file), sLogPath.c_str(), ams::fs::OpenMode_Read)))
+        {
+            ams::fs::GetFileSize(&fileOffset, file);
+            ams::fs::CloseFile(file);
+        }
+        if (fileOffset >= LOG_FILE_SIZE_MAX)
+            ams::fs::DeleteFile(sLogPath.c_str());
+
+        // Create the log file if it doesn't exist (Or previously deleted)
+        ams::fs::CreateFile(sLogPath.c_str(), 0);
+    }
+
+    void LogWriteToFile(const char *logBuffer)
+    {
+        s64 fileOffset;
+        ams::fs::FileHandle file;
+
+        ams::fs::OpenFile(std::addressof(file), sLogPath.c_str(), ams::fs::OpenMode_Write | ams::fs::OpenMode_AllowAppend);
+        ON_SCOPE_EXIT { ams::fs::CloseFile(file); };
+
+        ams::fs::GetFileSize(&fileOffset, file);
+
+        ams::fs::WriteFile(file, fileOffset, logBuffer, strlen(logBuffer), ams::fs::WriteOption::Flush);
+        ams::fs::WriteFile(file, fileOffset + strlen(logBuffer), "\n", 1, ams::fs::WriteOption::Flush);
+    }
+#else
     void Initialize(const std::string &log)
     {
         std::lock_guard<std::mutex> printLock(sLogMutex);
@@ -40,11 +82,6 @@ namespace syscon::logger
         }
     }
 
-    void SetLogLevel(int level)
-    {
-        slogLevel = level;
-    }
-
     void LogWriteToFile(const char *logBuffer)
     {
         std::ofstream logFile(sLogPath, std::ios::app);
@@ -52,6 +89,12 @@ namespace syscon::logger
             return;
 
         logFile << logBuffer << "\n";
+    }
+#endif
+
+    void SetLogLevel(int level)
+    {
+        slogLevel = level;
     }
 
     void Log(int lvl, const char *fmt, ::std::va_list vl)

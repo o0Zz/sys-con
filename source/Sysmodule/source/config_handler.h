@@ -9,7 +9,12 @@
 #include <vector>
 #include <stdlib.h>
 
-#define CONFIG_PATH     "/config/sys-con/"
+#ifdef ATMOSPHERE_OS_HORIZON
+    #define CONFIG_PATH "sdmc:/config/sys-con/"
+#else
+    #define CONFIG_PATH "/config/sys-con/"
+#endif
+
 #define CONFIG_FULLPATH CONFIG_PATH "config.ini"
 
 namespace syscon::config

@@ -47,6 +47,7 @@ void SwitchMITMHandler::Exit()
 
 bool SwitchMITMHandler::IsVirtualDeviceAttached(uint16_t input_idx)
 {
+    (void)input_idx;
     return true; // m_controllerData[input_idx].m_hdlHandle.handle != 0;
 }
 
