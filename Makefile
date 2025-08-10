@@ -6,7 +6,7 @@ ifeq ($(GIT_TAG_COMMIT_COUNT),+0)
 	GIT_TAG_COMMIT_COUNT := 
 endif
 
-ATMOSPHERE_VERSION	?= 1.7.x
+ATMOSPHERE_VERSION	?= 1.9.x
 SOURCE_DIR			:= source
 OUT_DIR				:= out
 DIST_DIR			:= dist
@@ -39,11 +39,9 @@ mrproper: clean
 dist: clean all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .
 	
-atmosphere_1.7.x-1.8.x:
+atmosphere_1.9.x:
 	cd lib/Atmosphere-libs && \
-	git reset --hard && \
-	git checkout 989fb7be0c68bf229fe6789428b6c448b6de142a && \
-	sed -i 's/static_assert/\/\/static_assert/' libstratosphere/source/ldr/ldr_pm_api.os.horizon.cpp
-	
+	git reset --hard 
+
 distclean: mrproper  atmosphere_$(ATMOSPHERE_VERSION) all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .
