@@ -202,3 +202,11 @@ namespace syscon::logger
     }
 
 } // namespace syscon::logger
+
+void LogAMS(const char *fmt, ...)
+{
+    ::std::va_list vl;
+    va_start(vl, fmt);
+    syscon::logger::Log(LOG_LEVEL_WARNING, fmt, vl);
+    va_end(vl);
+}

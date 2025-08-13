@@ -93,6 +93,7 @@ namespace ams
         ::syscon::psc::Initialize();
 
         ::syscon::logger::LogDebug("MITM ...");
+
         ams::syscon::hid::mitm::InitializeHidMitm();
 
         while ((::syscon::psc::IsRunning()))

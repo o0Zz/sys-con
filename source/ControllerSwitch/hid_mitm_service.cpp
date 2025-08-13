@@ -28,7 +28,25 @@ namespace ams::syscon::hid::mitm
           m_right_stick_y(0),
           m_lock()
     {
+        ::syscon::logger::LogDebug("HidMitmService creation for PID: 0x%016" PRIx64, client_info.program_id.value);
     }
+    /*Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, u64 pid, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    {
+        (void)pid;
+        (void)applet_resource_user_id;
+        (void)out;
+        ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
+        return 0;
+    }
+*/
+    /*Result HidMitmService::CreateAppletResource(u64 pid, ams::sf::ClientAppletResourceUserId applet_resource_user_id, sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out)
+    {
+        (void)pid;
+        (void)applet_resource_user_id;
+        (void)out;
+        ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
+        return 0;
+    }*/
 
     Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {
@@ -55,271 +73,35 @@ namespace ams::syscon::hid::mitm
 
     bool HidMitmService::ShouldMitm(const sm::MitmProcessInfo &client_info)
     {
-        // We want to MITM all applications that use HID, except the HID system module itself
-        return client_info.program_id != ncm::SystemProgramId::Hid;
-    }
+        // Ignore this PID at boot to avoid to crash to system immediately
+        u64 boot_pid_list[] = {
+            0x420000000000000E, // System module
+            0x0100000000000045,
+            0x0100000000000023,
+            0x010000000000000d,
+            0x420000000007e51a,
+            0x010000000000100c,
+            0x0100000000001000,
+            // 0x010000000000100d, // Gallery
+        };
 
-    Result HidMitmService::InjectButton(u64 button_mask, bool is_pressed)
-    {
-        std::scoped_lock lk(m_lock);
-        (void)button_mask;
-        (void)is_pressed;
-        /*if (is_pressed)
+        for (const u64 &boot_pid : boot_pid_list)
         {
-            m_injected_buttons |= button_mask;
-        }
-        else
-        {
-            m_injected_buttons &= ~button_mask;
-        }
-
-        // Inject input immediately if we have an applet resource
-        if (m_applet_resource && m_interception_enabled)
-        {
-            m_applet_resource->InjectInputData(m_injected_buttons, m_left_stick_x, m_left_stick_y, m_right_stick_x, m_right_stick_y);
-        }
-        */
-        R_SUCCEED();
-    }
-
-    Result HidMitmService::InjectStick(u32 stick_id, s32 x, s32 y)
-    {
-        std::scoped_lock lk(m_lock);
-
-        if (stick_id == 0)
-        { // Left stick
-            m_left_stick_x = x;
-            m_left_stick_y = y;
-        }
-        else if (stick_id == 1)
-        { // Right stick
-            m_right_stick_x = x;
-            m_right_stick_y = y;
+            if (client_info.program_id.value == boot_pid)
+            {
+                ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (Boot) ? (no)", client_info.program_id.value);
+                return false; // Ignore these PIDs at boot
+            }
         }
 
-        // Inject input immediately if we have an applet resource
-        /*if (m_applet_resource && m_interception_enabled)
+        if (IsSystemProgramId(client_info.program_id))
         {
-            m_applet_resource->InjectInputData(m_injected_buttons, m_left_stick_x, m_left_stick_y, m_right_stick_x, m_right_stick_y);
-        }*/
+            ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (System) ? (no)", client_info.program_id.value);
+            return false; // Do not MITM the HID system module itself
+        }
 
-        R_SUCCEED();
-    }
-
-    Result HidMitmService::SetInterceptionEnabled(bool enabled)
-    {
-        std::scoped_lock lk(m_lock);
-        m_interception_enabled = enabled;
-        R_SUCCEED();
-    }
-
-    // Forward other methods to the real HID service
-    /*  Result HidMitmService::ActivateDebugPad(nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 1, aruid));
-      }
-
-      Result HidMitmService::ActivateTouchScreen(nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 2, aruid));
-      }
-
-      Result HidMitmService::ActivateMouse(nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 3, aruid));
-      }
-
-      Result HidMitmService::ActivateKeyboard(nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 4, aruid));
-      }
-
-      Result HidMitmService::ActivateXpad(u32 basic_xpad_id, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 basic_xpad_id;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {basic_xpad_id, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 11, in));
-      }
-
-      Result HidMitmService::ActivateJoyXpad(u32 joy_xpad_id)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 21, joy_xpad_id));
-      }
-
-      Result HidMitmService::ActivateSixAxisSensor(u32 sixaxis_sensor_handle, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 sixaxis_sensor_handle;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {sixaxis_sensor_handle, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 31, in));
-      }
-
-      Result HidMitmService::ActivateJoySixAxisSensor(u32 joy_sixaxis_sensor_handle)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 40, joy_sixaxis_sensor_handle));
-      }
-
-      Result HidMitmService::StartSixAxisSensor(u32 sixaxis_sensor_handle, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 sixaxis_sensor_handle;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {sixaxis_sensor_handle, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 50, in));
-      }
-
-      Result HidMitmService::StopSixAxisSensor(u32 sixaxis_sensor_handle, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 sixaxis_sensor_handle;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {sixaxis_sensor_handle, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 51, in));
-      }
-
-      Result HidMitmService::ActivateGesture(u32 basic_gesture_id, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 basic_gesture_id;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {basic_gesture_id, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 66, in));
-      }
-
-      Result HidMitmService::SetSupportedNpadStyleSet(u32 supported_styleset, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 supported_styleset;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {supported_styleset, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 100, in));
-      }
-
-      Result HidMitmService::GetSupportedNpadStyleSet(sf::Out<u32> out, nn::applet::AppletResourceUserId aruid)
-      {
-          u32 supported_styleset;
-          R_TRY(serviceDispatchInOut(this->forward_service.get(), 101, aruid, supported_styleset));
-          out.SetValue(supported_styleset);
-          R_SUCCEED();
-      }
-
-      Result HidMitmService::SetSupportedNpadIdType(sf::InArray<u8> supported_ids, nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 102, aruid,
-                                     .buffer_attrs = {SfBufferAttr_HipcPointer | SfBufferAttr_In},
-                                     .buffers = {{supported_ids.GetPointer(), supported_ids.GetSize()}}, ));
-      }
-
-      Result HidMitmService::ActivateNpad(nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 103, aruid));
-      }
-
-      Result HidMitmService::DeactivateNpad(nn::applet::AppletResourceUserId aruid)
-      {
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 104, aruid));
-      }
-
-      Result HidMitmService::AcquireNpadStyleSetUpdateEventHandle(sf::Out<sf::CopyHandle> out, u32 npad_id, nn::applet::AppletResourceUserId aruid, u64 unknown)
-      {
-          const struct
-          {
-              u32 npad_id;
-              nn::applet::AppletResourceUserId aruid;
-              u64 unknown;
-          } in = {npad_id, aruid, unknown};
-
-          Handle event_handle;
-          R_TRY(serviceDispatchIn(this->forward_service.get(), 106, in,
-                                  .out_handle_attrs = {SfOutHandleAttr_HipcCopy},
-                                  .out_handles = &event_handle, ));
-
-          out.SetValue(event_handle);
-          R_SUCCEED();
-      }
-
-      Result HidMitmService::DisconnectNpad(u32 npad_id, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 npad_id;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {npad_id, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 107, in));
-      }
-
-      Result HidMitmService::GetPlayerLedPattern(sf::Out<u64> out, u32 npad_id)
-      {
-          u64 pattern;
-          R_TRY(serviceDispatchInOut(this->forward_service.get(), 108, npad_id, pattern));
-          out.SetValue(pattern);
-          R_SUCCEED();
-      }
-
-      Result HidMitmService::ActivateNpadWithRevision(s32 revision, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              s32 revision;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {revision, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 109, in));
-      }
-
-      Result HidMitmService::SetNpadJoyHoldType(u64 hold_type, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u64 hold_type;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {hold_type, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 120, in));
-      }
-
-      Result HidMitmService::GetNpadJoyHoldType(sf::Out<u64> out, nn::applet::AppletResourceUserId aruid)
-      {
-          u64 hold_type;
-          R_TRY(serviceDispatchInOut(this->forward_service.get(), 121, aruid, hold_type));
-          out.SetValue(hold_type);
-          R_SUCCEED();
-      }
-
-      Result HidMitmService::GetVibrationDeviceInfo(sf::Out<u64> out, u32 vibration_device_handle)
-      {
-          u64 info;
-          R_TRY(serviceDispatchInOut(this->forward_service.get(), 200, vibration_device_handle, info));
-          out.SetValue(info);
-          R_SUCCEED();
-      }
-
-      Result HidMitmService::SendVibrationValue(u32 vibration_device_handle, u64 vibration_value, nn::applet::AppletResourceUserId aruid)
-      {
-          const struct
-          {
-              u32 vibration_device_handle;
-              u64 vibration_value;
-              nn::applet::AppletResourceUserId aruid;
-          } in = {vibration_device_handle, vibration_value, aruid};
-          R_RETURN(serviceDispatchIn(this->forward_service.get(), 201, in));
-      }
-  */
-    void HidMitmService::InjectInputToSharedMemory()
-    {
-        std::scoped_lock lk(m_lock);
-
-        /*if (m_applet_resource && m_interception_enabled)
-        {
-            m_applet_resource->InjectInputData(m_injected_buttons, m_left_stick_x, m_left_stick_y, m_right_stick_x, m_right_stick_y);
-        }*/
+        ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " ? (yes)", client_info.program_id.value);
+        return true;
     }
 
 } // namespace ams::syscon::hid::mitm

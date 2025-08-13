@@ -2,6 +2,7 @@
 #include "hid_mitm_service.hpp"
 #include <stratosphere.hpp>
 #include "SwitchLogger.h"
+#include "hid_custom.h"
 
 // Based on https://github.com/ndeadly/MissionControl/blob/master/mc_mitm/source/btm_mitm/btm_mitm_service.hpp
 
@@ -22,10 +23,10 @@ namespace ams::syscon::hid::mitm
 
         struct ServerOptions
         {
-            static constexpr size_t PointerBufferSize = sf::hipc::DefaultServerManagerOptions::PointerBufferSize;
-            static constexpr size_t MaxDomains = sf::hipc::DefaultServerManagerOptions::MaxDomains;
-            static constexpr size_t MaxDomainObjects = sf::hipc::DefaultServerManagerOptions::MaxDomainObjects;
-            static constexpr bool CanDeferInvokeRequest = sf::hipc::DefaultServerManagerOptions::CanDeferInvokeRequest;
+            static constexpr size_t PointerBufferSize = 0x1000;
+            static constexpr size_t MaxDomains = 0;
+            static constexpr size_t MaxDomainObjects = 0;
+            static constexpr bool CanDeferInvokeRequest = false;
             static constexpr bool CanManageMitmServers = true;
         };
 
@@ -50,7 +51,14 @@ namespace ams::syscon::hid::mitm
                 case PortIndex_Mitm:
                 {
                     ::syscon::logger::LogDebug("ServerManager::OnNeedsToAccept AcceptMitmImpl...");
-                    return this->AcceptMitmImpl(server, sf::CreateSharedObjectEmplaced<IHidMitmInterface, HidMitmService>(decltype(fsrv)(fsrv), client_info), fsrv);
+                    Result ret = this->AcceptMitmImpl(server, sf::CreateSharedObjectEmplaced<IHidMitmInterface, HidMitmService>(decltype(fsrv)(fsrv), client_info), fsrv);
+                    if (R_FAILED(ret))
+                    {
+                        ::syscon::logger::LogError("ServerManager::OnNeedsToAccept AcceptMitmImpl failed: %d", ret);
+                        return ret;
+                    }
+                    ::syscon::logger::LogDebug("ServerManager::OnNeedsToAccept AcceptMitmImpl done.");
+                    R_SUCCEED();
                 }
                     AMS_UNREACHABLE_DEFAULT_CASE();
             }
@@ -96,8 +104,10 @@ namespace ams::syscon::hid::mitm
             return;
         }
 
+        customHidInitialize();
+
         // Create and start the MITM thread
-        Result rc = threadCreate(&g_mitm_thread, &HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), 0x2C, -2);
+        Result rc = threadCreate(&g_mitm_thread, &HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), 44, -2);
         if (R_FAILED(rc))
             return;
 
