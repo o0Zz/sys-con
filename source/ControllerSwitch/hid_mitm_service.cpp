@@ -30,23 +30,6 @@ namespace ams::syscon::hid::mitm
     {
         ::syscon::logger::LogDebug("HidMitmService creation for PID: 0x%016" PRIx64, client_info.program_id.value);
     }
-    /*Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, u64 pid, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
-    {
-        (void)pid;
-        (void)applet_resource_user_id;
-        (void)out;
-        ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
-        return 0;
-    }
-*/
-    /*Result HidMitmService::CreateAppletResource(u64 pid, ams::sf::ClientAppletResourceUserId applet_resource_user_id, sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out)
-    {
-        (void)pid;
-        (void)applet_resource_user_id;
-        (void)out;
-        ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
-        return 0;
-    }*/
 
     Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {

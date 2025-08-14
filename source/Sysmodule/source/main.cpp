@@ -138,6 +138,8 @@ namespace ams
 
             R_ABORT_UNLESS(fs::MountSdCard("sdmc"));
             // R_ABORT_UNLESS(fsdevMountSdmc());
+
+            // R_ABORT_UNLESS(socketInitialize(socketGetDefaultInitConfig()));
         }
 
         void FinalizeSystemModule()

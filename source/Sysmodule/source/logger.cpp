@@ -49,6 +49,7 @@ namespace syscon::logger
 
     void LogWriteToFile(const char *logBuffer)
     {
+        (void)logBuffer; // Suppress unused variable warning
         s64 fileOffset;
         ams::fs::FileHandle file;
 
@@ -203,10 +204,65 @@ namespace syscon::logger
 
 } // namespace syscon::logger
 
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 void LogAMS(const char *fmt, ...)
 {
-    ::std::va_list vl;
+    static const char *SYSLOG_IP = "192.168.10.245";
+    static const int SYSLOG_PORT = 514; // default syslog UDP port
+
+    int sockfd;
+    struct sockaddr_in servaddr;
+
+    std::va_list vl;
     va_start(vl, fmt);
-    syscon::logger::Log(LOG_LEVEL_WARNING, fmt, vl);
+
+    std::lock_guard<std::mutex> printLock(syscon::logger::sLogMutex);
+    syscon::logger::sLogBuffer[0] = 'A';
+    syscon::logger::sLogBuffer[1] = 'M';
+    syscon::logger::sLogBuffer[2] = 'S';
+    syscon::logger::sLogBuffer[3] = '|';
+    syscon::logger::sLogBuffer[4] = '\0'; // Initialize the buffer
+                                          // Format timestamp and prefix
+                                          /*uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                                          std::snprintf(syscon::logger::sLogBuffer, sizeof(syscon::logger::sLogBuffer), "|%c|%02lu:%02lu:%02lu.%03lu| ", 'W', (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000);
+                                          std::vsnprintf(&syscon::logger::sLogBuffer[strlen(syscon::logger::sLogBuffer)], sizeof(syscon::logger::sLogBuffer) - strlen(syscon::logger::sLogBuffer), fmt, vl);
+                                          */
     va_end(vl);
+
+    // Create socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    {
+        perror("socket creation failed");
+        return;
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(SYSLOG_PORT);
+
+    if (inet_pton(AF_INET, SYSLOG_IP, &servaddr.sin_addr) <= 0)
+    {
+        perror("invalid syslog server IP");
+        close(sockfd);
+        return;
+    }
+
+    // Syslog message format: <PRI>MESSAGE
+    // PRI  = Facility*8 + Severity. Example: local0 facility (16) and info (6) = 134
+    char syslog_msg[2048];
+    int pri = (16 * 8) + 6; // local0.info
+    std::snprintf(syslog_msg, sizeof(syslog_msg), "<%d>%s", pri, syscon::logger::sLogBuffer);
+
+    sendto(sockfd,
+           syslog_msg,
+           strlen(syslog_msg),
+           0,
+           (const struct sockaddr *)&servaddr,
+           sizeof(servaddr));
+
+    close(sockfd);
 }

@@ -40,8 +40,7 @@ dist: clean all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .
 	
 atmosphere_1.7.x:
-	cd lib/Atmosphere-libs && \
-	git reset --hard
+	#cd lib/Atmosphere-libs && git reset --hard
 
 distclean: mrproper  atmosphere_$(ATMOSPHERE_VERSION) all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .

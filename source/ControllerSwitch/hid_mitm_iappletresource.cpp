@@ -5,6 +5,42 @@
 extern "C" Mutex shmem_mutex;
 // PID, Original first, fake second
 static std::unordered_map<u64, std::pair<HidSharedMemory *, HidSharedMemory *>> sharedmems;
+/*
+struct HidSharedMemory
+{
+    u8 header[0x400];
+    u8 touchscreen[0x3000];
+    u8 mouse[0x400];
+    u8 keyboard[0x400];
+    u8 reserved1[0x400];
+    u32 npad_count;
+    u8 reserved2[0x4];
+    NpadInternalState npad[10];
+    u8 reserved3[0x1000];
+    u8 gesture[0x800];
+    u8 console_six_axis_sensor[0x400];
+    u8 debug_pad[0x400];
+    u8 reserved4[0x2000];
+};
+*/
+
+void shmem_copy(HidSharedMemory *source, HidSharedMemory *dest)
+{
+
+    // Apparently unused
+    memcpy(dest, source, sizeof(HidSharedMemory));
+    /*
+        memcpy(&dest->touchscreen, &source->touchscreen, sizeof(source->touchscreen) - sizeof(source->touchscreen.padding));
+        memcpy(&dest->mouse, &source->mouse, sizeof(source->mouse) - sizeof(source->mouse.padding));
+        memcpy(&dest->keyboard, &source->keyboard, sizeof(source->keyboard) - sizeof(source->keyboard.padding));
+        for (int i = 0; i < 10; i++)
+        {
+            // Only copy used gamepads
+            if (dest->controllers[i].misc.deviceType != 0 || source->controllers[i].misc.deviceType != 0)
+                memcpy(&dest->controllers[i], &source->controllers[i], sizeof(source->controllers[i]) - sizeof(source->controllers[i].unk_2)); // unk_2 is apparently unused and is huge
+        }
+                */
+}
 
 void add_shmem(u64 pid, SharedMemory *real_shmem, SharedMemory *fake_shmem)
 {
@@ -14,6 +50,8 @@ void add_shmem(u64 pid, SharedMemory *real_shmem, SharedMemory *fake_shmem)
     HidSharedMemory *real_mapped = (HidSharedMemory *)shmemGetAddr(real_shmem);
     HidSharedMemory *fake_mapped = (HidSharedMemory *)shmemGetAddr(fake_shmem);
     sharedmems[pid] = std::pair<HidSharedMemory *, HidSharedMemory *>(real_mapped, fake_mapped);
+
+    shmem_copy(real_mapped, fake_mapped);
     mutexUnlock(&shmem_mutex);
 }
 
@@ -28,6 +66,7 @@ void del_shmem(u64 pid)
     }
     mutexUnlock(&shmem_mutex);
 }
+
 namespace ams::syscon::hid::mitm
 {
     HidMitmAppletResource::HidMitmAppletResource()

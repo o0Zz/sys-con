@@ -6,9 +6,6 @@ namespace ams::syscon::hid::mitm
 
     class HidMitmModule
     {
-    public:
-        static constexpr size_t StackSize = 0x8000;
-        static constexpr int ThreadPriority = 43;
 
     public:
         static void ThreadFunction(void *arg);
