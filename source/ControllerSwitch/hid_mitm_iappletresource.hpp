@@ -1,7 +1,6 @@
 #pragma once
 #include <vapours.hpp>
 #include <stratosphere.hpp>
-#include "hid_shared_memory.hpp"
 #include <switch.h>
 /*
 HOW MITM works:
@@ -56,7 +55,7 @@ HOW MITM works:
 #define AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 0, Result, GetSharedMemoryHandle, (ams::sf::OutCopyHandle out), (out))
 
-AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmAppletResourceInterface, AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO, 0x48494442)
+AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmAppletResourceInterface, AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO, 0x48494542)
 
 namespace ams::syscon::hid::mitm
 {
@@ -76,11 +75,9 @@ namespace ams::syscon::hid::mitm
         ~HidMitmAppletResource();
 
         Result GetSharedMemoryHandle(ams::sf::OutCopyHandle out);
-        // void InjectInputData(u64 button_mask, s32 left_stick_x, s32 left_stick_y, s32 right_stick_x, s32 right_stick_y);
         int apply_fake_gamepad(HidSharedMemory *tmp_shmem_mem);
 
     private:
-        void WriteToNpadLifo(NpadLifo &lifo, const void *state_data, size_t state_size);
         u64 GetCurrentTimestamp();
     };
     static_assert(IsIHidMitmAppletResourceInterface<HidMitmAppletResource>);

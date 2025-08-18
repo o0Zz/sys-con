@@ -1,6 +1,5 @@
 #pragma once
 
-#include "hid_shared_memory.hpp"
 #include "hid_mitm_iappletresource.hpp"
 #include <stratosphere.hpp>
 

@@ -1,5 +1,4 @@
 #include "hid_mitm_service.hpp"
-#include "hid_shared_memory.hpp"
 #include "SwitchLogger.h"
 #include <stratosphere.hpp>
 #include "hid_custom.h"
@@ -7,7 +6,7 @@
 // https://github.com/Slluxx/switch-sys-tweak/blob/develop/src/ns_srvget_mitm_service.hpp
 //
 
-void add_shmem(u64 pid, SharedMemory *real_shmem, SharedMemory *fake_shmem);
+void add_shmem(u64 pid, ::SharedMemory *real_shmem, ::SharedMemory *fake_shmem);
 
 namespace ams::syscon::hid::mitm
 {

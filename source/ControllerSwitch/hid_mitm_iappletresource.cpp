@@ -4,7 +4,7 @@
 
 extern "C" Mutex shmem_mutex;
 // PID, Original first, fake second
-static std::unordered_map<u64, std::pair<HidSharedMemory *, HidSharedMemory *>> sharedmems;
+static std::unordered_map<u64, std::pair<::HidSharedMemory *, ::HidSharedMemory *>> sharedmems;
 /*
 struct HidSharedMemory
 {
@@ -24,10 +24,11 @@ struct HidSharedMemory
 };
 */
 
-void shmem_copy(HidSharedMemory *source, HidSharedMemory *dest)
+void shmem_copy(::HidSharedMemory *source, ::HidSharedMemory *dest)
 {
 
     // Apparently unused
+    ::syscon::logger::LogDebug("shmem_copy...");
     memcpy(dest, source, sizeof(HidSharedMemory));
     /*
         memcpy(&dest->touchscreen, &source->touchscreen, sizeof(source->touchscreen) - sizeof(source->touchscreen.padding));
@@ -42,13 +43,16 @@ void shmem_copy(HidSharedMemory *source, HidSharedMemory *dest)
                 */
 }
 
-void add_shmem(u64 pid, SharedMemory *real_shmem, SharedMemory *fake_shmem)
+void add_shmem(u64 pid, ::SharedMemory *real_shmem, ::SharedMemory *fake_shmem)
 {
     ::syscon::logger::LogDebug("add_shmem...");
 
     mutexLock(&shmem_mutex);
     HidSharedMemory *real_mapped = (HidSharedMemory *)shmemGetAddr(real_shmem);
     HidSharedMemory *fake_mapped = (HidSharedMemory *)shmemGetAddr(fake_shmem);
+
+    ::syscon::logger::LogDebug("add_shmem fake memory handle created: Handle: %016" PRIx64 ", Addr: %016" PRIx64 " ...", fake_shmem->handle, fake_mapped);
+
     sharedmems[pid] = std::pair<HidSharedMemory *, HidSharedMemory *>(real_mapped, fake_mapped);
 
     shmem_copy(real_mapped, fake_mapped);
@@ -79,14 +83,15 @@ namespace ams::syscon::hid::mitm
 
     Result HidMitmAppletResource::GetSharedMemoryHandle(ams::sf::OutCopyHandle out)
     {
-        ::syscon::logger::LogDebug("HidMitmAppletResource::GetSharedMemoryHandle...");
+        ::syscon::logger::LogDebug("HidMitmAppletResource::GetSharedMemoryHandle: %016" PRIx64 "...", m_fake_shared_memory.handle);
         out.SetValue(m_fake_shared_memory.handle, true /*managed*/);
         R_SUCCEED();
     }
 
     int HidMitmAppletResource::apply_fake_gamepad(HidSharedMemory *tmp_shmem_mem)
     {
-        // Looking for a free controller
+        (void)tmp_shmem_mem;
+        /*// Looking for a free controller
         int gamepad;
 
         for (gamepad = 0; gamepad < 8; gamepad++) // 8player
@@ -117,7 +122,7 @@ namespace ams::syscon::hid::mitm
         tmp_shmem_mem->npad[gamepad].full_key_lifo.full_key[0].analog_stick_r_y = 0;     // Centered
         tmp_shmem_mem->npad[gamepad].full_key_lifo.full_key[0].attributes = 0;           // No attributes
         tmp_shmem_mem->npad[gamepad].full_key_lifo.full_key[0].reserved = 0;             // Reserved
-
+        */
         return 0;
     }
 

@@ -74,24 +74,11 @@ namespace ams::syscon::hid::mitm
     void HidMitmModule::ThreadFunction(void *arg)
     {
         (void)arg;
-        /* Wait until initialization is complete. */
-        // ams::mitm::WaitInitialized();
 
-        // Wait for the real HID service to become available
-
-        // R_ABORT_UNLESS(ams::sm::WaitService(HidMitmServiceName));
-
-        // Install our MITM service
-        /*Handle mitm_port_handle;
-        ams::sm::ServiceName service_name = HidMitmServiceName;
-        R_ABORT_UNLESS(ams::sm::mitm::InstallMitm(std::addressof(mitm_port_handle), HidMitmServiceName.value));
-        */
-        ::syscon::logger::LogDebug("HidMitmModule Thread started");
-        // Register our MITM service with the server manager
+        ::syscon::logger::LogDebug("HidMitmModule Thread running (Registering)...");
         R_ABORT_UNLESS(g_server_manager.RegisterMitmServer<HidMitmService>(PortIndex_Mitm, HidMitmServiceName));
 
         ::syscon::logger::LogDebug("HidMitmModule LoopProcess ...");
-        // Process service requests in a loop
         g_server_manager.LoopProcess();
     }
 

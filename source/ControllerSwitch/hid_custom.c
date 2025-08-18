@@ -40,7 +40,7 @@ void customHidSetup(Service *hid_service, Service *out_iappletresource, SharedMe
     if (R_FAILED(rc))
         fatalThrow(rc);
 
-    shmemCreate(out_fake_shmem, sizeof(HidSharedMemory), Perm_Rw, Perm_R);
+    shmemCreate(out_fake_shmem, 0x40000, Perm_Rw, Perm_R); // sizeof(HidSharedMemory)
     shmemMap(out_fake_shmem);
 }
 
