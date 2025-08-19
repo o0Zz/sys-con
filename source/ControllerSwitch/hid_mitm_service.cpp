@@ -33,20 +33,18 @@ namespace ams::syscon::hid::mitm
     Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {
         ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
-        ::Service out_iappletresource;
-        ::SharedMemory real_shmem, fake_shmem;
+
+        auto intfInterface = ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>();
+
+        // HidMitmAppletResource *tmp = ((HidMitmAppletResource *));
 
         // This needs to be the first ipc being done since it relies on stuff that libstrato left for us. TODO: Do this properly
-        customHidSetup(this->m_forward_service.get(), &out_iappletresource, &real_shmem, &fake_shmem);
+        customHidSetup(this->m_forward_service.get(), &intfInterface.GetImpl().m_appletresource_handle, &intfInterface.GetImpl().m_original_shared_memory, &intfInterface.GetImpl().m_fake_shared_memory);
 
-        ams::sf::SharedPointer<IHidMitmAppletResourceInterface> intfInterface = ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>();
-        HidMitmAppletResource *tmp = ((HidMitmAppletResource *)intfInterface.Get());
+        //::syscon::logger::LogDebug("HidMitmService::CreateAppletResource: AppletResource: %p,  Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p...", intfInterface.GetImpl(), intfInterface.GetImpl().m_fake_shared_memory.handle, intfInterface.GetImpl().m_fake_shared_memory.size, intfInterface.GetImpl().m_fake_shared_memory.perm, intfInterface.GetImpl().m_fake_shared_memory.map_addr);
 
-        tmp->m_pid = applet_resource_user_id.GetValue().value;
-        tmp->m_fake_shared_memory = fake_shmem;
-        tmp->m_original_shared_memory = real_shmem;
-        tmp->m_appletresource_handle = out_iappletresource;
-        add_shmem(tmp->m_pid, &tmp->m_original_shared_memory, &tmp->m_fake_shared_memory);
+        intfInterface.GetImpl().m_pid = applet_resource_user_id.GetValue().value;
+        add_shmem(intfInterface.GetImpl().m_pid, &intfInterface.GetImpl().m_original_shared_memory, &intfInterface.GetImpl().m_fake_shared_memory);
 
         // out = intf;
         out.SetValue(intfInterface);

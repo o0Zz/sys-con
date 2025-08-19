@@ -83,7 +83,7 @@ namespace ams::syscon::hid::mitm
 
     Result HidMitmAppletResource::GetSharedMemoryHandle(ams::sf::OutCopyHandle out)
     {
-        ::syscon::logger::LogDebug("HidMitmAppletResource::GetSharedMemoryHandle: %016" PRIx64 "...", m_fake_shared_memory.handle);
+        ::syscon::logger::LogDebug("HidMitmAppletResource::GetSharedMemoryHandle: AppletResource: %p, Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p...", this, m_fake_shared_memory.handle, m_fake_shared_memory.size, m_fake_shared_memory.perm, m_fake_shared_memory.map_addr);
         out.SetValue(m_fake_shared_memory.handle, true /*managed*/);
         R_SUCCEED();
     }

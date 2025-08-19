@@ -37,13 +37,13 @@ namespace syscon::psc
                             case PscPmState_ReadyAwaken:
                                 ::syscon::logger::LogDebug("Power management: Awake");
                                 break;
-                            case PscPmState_ReadySleep:
-                                ::syscon::logger::LogDebug("Power management: Sleep");
-                                controllers::Clear();
-                                break;
                             case PscPmState_ReadyShutdown:
                                 ::syscon::logger::LogDebug("Power management: Shutdown");
                                 is_psc_thread_running = false; // Exit thread
+                                [[fallthrough]];
+                            case PscPmState_ReadySleep:
+                                ::syscon::logger::LogDebug("Power management: Sleep");
+                                controllers::Clear();
                                 break;
                             default:
                                 break;
