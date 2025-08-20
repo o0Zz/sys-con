@@ -3,7 +3,6 @@
 #include "switch.h"
 #include "IController.h"
 #include "SwitchVirtualGamepadHandler.h"
-#include "hid_mitm_iappletresource.hpp"
 #include "hid_mitm_module.hpp"
 
 #include <memory>

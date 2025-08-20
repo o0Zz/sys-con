@@ -2,7 +2,6 @@
 #include "hid_mitm_service.hpp"
 #include <stratosphere.hpp>
 #include "SwitchLogger.h"
-#include "hid_custom.h"
 
 // Based on https://github.com/ndeadly/MissionControl/blob/master/mc_mitm/source/btm_mitm/btm_mitm_service.hpp
 
@@ -43,6 +42,7 @@ namespace ams::syscon::hid::mitm
             /* Acknowledge the mitm session. */
             std::shared_ptr<::Service> fsrv;
             ams::sm::MitmProcessInfo client_info;
+
             ::syscon::logger::LogDebug("ServerManager::OnNeedsToAccept AcknowledgeMitmSession: %d...", port_index);
             server->AcknowledgeMitmSession(std::addressof(fsrv), std::addressof(client_info));
 
@@ -67,7 +67,6 @@ namespace ams::syscon::hid::mitm
         alignas(ams::os::ThreadStackAlignment) constinit u8 g_mitm_thread_stack[0x1000];
         ams::os::ThreadType g_mitm_thread;
 
-        // Flag to track initialization
         bool g_initialized = false;
     } // namespace
 
@@ -88,10 +87,9 @@ namespace ams::syscon::hid::mitm
 
         if (g_initialized)
         {
+            ::syscon::logger::LogWarning("HidMitmModule already initialized, skipping.");
             return;
         }
-
-        customHidInitialize();
 
         // Create and start the MITM thread
         R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, 0x1000, 20));
@@ -109,6 +107,7 @@ namespace ams::syscon::hid::mitm
     {
         if (!g_initialized)
         {
+            ::syscon::logger::LogWarning("HidMitmModule not initialized, skipping finalization.");
             return;
         }
 

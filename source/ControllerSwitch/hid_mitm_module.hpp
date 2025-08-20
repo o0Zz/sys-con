@@ -11,6 +11,7 @@ namespace ams::syscon::hid::mitm
         static void ThreadFunction(void *arg);
     };
 
+    
     void InitializeHidMitm();
     void FinalizeHidMitm();
 

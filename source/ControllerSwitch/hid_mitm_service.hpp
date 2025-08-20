@@ -1,30 +1,43 @@
 #pragma once
 
-#include "hid_mitm_iappletresource.hpp"
 #include <stratosphere.hpp>
-
-#include <mutex>
-#include <memory>
+#include "SwitchMITMManager.h"
 
 // Documentation: https://switchbrew.org/wiki/HID_services
+
+#define AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO(C, H) \
+    AMS_SF_METHOD_INFO(C, H, 0, Result, GetSharedMemoryHandle, (ams::sf::OutCopyHandle out), (out))
+
+AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmAppletResourceInterface, AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO, 0x48494542)
 
 #define AMS_HID_MITM_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 0, Result, CreateAppletResource, (sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, applet_resource_user_id))
 
-AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494444 /* Interface ID for debug, can be anything */)
+AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494444)
 
 namespace ams::syscon::hid::mitm
 {
+    class HidMitmAppletResource : public sf::IServiceObject
+    {
+    public:
+        using Interface = IHidMitmAppletResourceInterface;
+
+    public:
+        HidMitmAppletResource(std::shared_ptr<HidSharedMemoryEntry> entry) : m_shared_memory_entry(std::move(entry)) {}
+        virtual ~HidMitmAppletResource() = default;
+
+        Result GetSharedMemoryHandle(ams::sf::OutCopyHandle out)
+        {
+            out.SetValue(m_shared_memory_entry->GetSharedMemoryHandle().handle, true /*managed*/);
+            R_SUCCEED();
+        }
+
+    private:
+        std::shared_ptr<HidSharedMemoryEntry> m_shared_memory_entry;
+    };
+
     class HidMitmService : public sf::MitmServiceImplBase
     {
-    private:
-        bool m_interception_enabled;
-        u64 m_injected_buttons;
-        s32 m_left_stick_x;
-        s32 m_left_stick_y;
-        s32 m_right_stick_x;
-        s32 m_right_stick_y;
-        std::mutex m_lock;
 
     public:
         using MitmServiceImplBase::MitmServiceImplBase;
@@ -39,5 +52,6 @@ namespace ams::syscon::hid::mitm
     };
 
     static_assert(IsIHidMitmInterface<HidMitmService>);
+    static_assert(IsIHidMitmAppletResourceInterface<HidMitmAppletResource>);
 
 } // namespace ams::syscon::hid::mitm
