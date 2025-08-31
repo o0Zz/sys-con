@@ -13,7 +13,7 @@ class HidSharedMemoryEntry
     friend class HidSharedMemoryManager;
 
 public:
-    HidSharedMemoryEntry(::Service *hid_service, u64 processId);
+    HidSharedMemoryEntry(::Service *hid_service, u64 processId, u64 programId);
     ~HidSharedMemoryEntry();
 
     const ::SharedMemory &GetSharedMemoryHandle() const;
@@ -23,12 +23,14 @@ public:
     inline void *GetFakeAddr();
 
     inline u64 GetProcessId() const;
+    inline u64 GetProgramId() const;
 
 protected:
     void Copy();
 
 private:
     u64 m_process_id;
+    u64 m_program_id;
     ::Result m_status;
 
     ::Service m_appletresource;
@@ -49,6 +51,10 @@ public:
 
     static HidSharedMemoryManager &GetHidSharedMemoryManager();
 
+
+    std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId);
+    std::shared_ptr<HidSharedMemoryEntry> Get(u64 processId, u64 programId);
+
     int Add(const std::shared_ptr<HidSharedMemoryEntry> &entry);
 
     int Start();
@@ -58,6 +64,7 @@ private:
     void OnRun();
 
     void RunGarbageCollector();
+    void DumpLogMemory();
 
     alignas(0x1000) u8 m_thread_stack[0x4000];
 

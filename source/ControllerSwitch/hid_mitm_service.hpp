@@ -18,12 +18,12 @@ namespace ams::syscon::hid::mitm
         using Interface = IHidMitmAppletResourceInterface;
 
     public:
-        HidMitmAppletResource(std::shared_ptr<HidSharedMemoryEntry> entry) : m_shared_memory_entry(std::move(entry)) {}
+        HidMitmAppletResource(std::shared_ptr<HidSharedMemoryEntry> entry) : m_shared_memory_entry(entry) {}
         virtual ~HidMitmAppletResource() = default;
 
         Result GetSharedMemoryHandle(ams::sf::OutCopyHandle out)
         {
-            out.SetValue(m_shared_memory_entry->GetSharedMemoryHandle().handle, true /*managed*/);
+            out.SetValue(m_shared_memory_entry->GetSharedMemoryHandle().handle, false /*AMS need to manage it ?*/);
             R_SUCCEED();
         }
 

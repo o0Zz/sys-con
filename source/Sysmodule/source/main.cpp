@@ -93,11 +93,8 @@ namespace ams
         ::syscon::logger::LogDebug("Initializing power supply managment ...");
         ::syscon::psc::Initialize();
 
-        ::syscon::logger::LogDebug("MITM ...");
-
+        ::syscon::logger::LogDebug("Initializing MITM ...");
         HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
-        ::syscon::logger::LogDebug("HidSharedMemoryManager started");
-
         ams::syscon::hid::mitm::InitializeHidMitm();
 
         while ((::syscon::psc::IsRunning()))

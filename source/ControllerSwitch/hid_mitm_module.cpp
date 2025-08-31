@@ -57,7 +57,6 @@ namespace ams::syscon::hid::mitm
                         ::syscon::logger::LogError("ServerManager::OnNeedsToAccept AcceptMitmImpl failed: %d", ret);
                         return ret;
                     }
-                    ::syscon::logger::LogDebug("ServerManager::OnNeedsToAccept AcceptMitmImpl done.");
                     R_SUCCEED();
                 }
                     AMS_UNREACHABLE_DEFAULT_CASE();
@@ -74,7 +73,7 @@ namespace ams::syscon::hid::mitm
     {
         (void)arg;
 
-        ::syscon::logger::LogDebug("HidMitmModule Thread running (Registering)...");
+        ::syscon::logger::LogDebug("HidMitmModule RegisterMitmServer ...");
         R_ABORT_UNLESS(g_server_manager.RegisterMitmServer<HidMitmService>(PortIndex_Mitm, HidMitmServiceName));
 
         ::syscon::logger::LogDebug("HidMitmModule LoopProcess ...");
@@ -94,10 +93,8 @@ namespace ams::syscon::hid::mitm
         // Create and start the MITM thread
         R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, 0x1000, 20));
 
-        ::syscon::logger::LogDebug("HidMitmModule Thread created !");
         ams::os::SetThreadNamePointer(&g_mitm_thread, "HidMitmThread");
 
-        ::syscon::logger::LogDebug("HidMitmModule Thread started !");
         ams::os::StartThread(&g_mitm_thread);
 
         g_initialized = true;

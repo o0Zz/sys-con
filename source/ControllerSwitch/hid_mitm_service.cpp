@@ -24,8 +24,7 @@ namespace ams::syscon::hid::mitm
     {
         ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
 
-        std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(this->m_forward_service.get(), applet_resource_user_id.GetValue().value);
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Add(entry);
+        std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(this->m_forward_service.get(), applet_resource_user_id.GetValue().value, m_client_info.program_id.value);
 
         out.SetValue(ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>(entry));
 

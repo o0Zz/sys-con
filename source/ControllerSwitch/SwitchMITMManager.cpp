@@ -34,32 +34,44 @@ static Result _HidGetSharedMemoryHandle(Service *srv, Handle *handle_out)
                            .out_handles = handle_out, );
 }
 
-HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId)
-    : m_process_id(processId)
+HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId, u64 programId)
+    : m_process_id(processId), m_program_id(programId)
 {
     Handle sharedMemHandle;
 
     m_status = _HidCreateAppletResource(hid_service, &m_appletresource); // Executes the original ipc
     if (R_FAILED(m_status))
+    {
+        ::syscon::logger::LogError("HidSharedMemoryEntry failed to create applet resource (Process id: 0x%016" PRIx64 ")", m_process_id);
         return;
+    }
 
     m_status = _HidGetSharedMemoryHandle(&m_appletresource, &sharedMemHandle);
     if (R_FAILED(m_status))
+    {
+        ::syscon::logger::LogError("HidSharedMemoryEntry failed to get shared memory handle (Process id: 0x%016" PRIx64 ")", m_process_id);
         return;
+    }
 
     shmemLoadRemote(&m_real_shared_memory, sharedMemHandle, HID_SHARED_MEMORY_SIZE, Perm_R);
     m_status = shmemMap(&m_real_shared_memory);
     if (R_FAILED(m_status))
+    {
+        ::syscon::logger::LogError("HidSharedMemoryEntry failed to map real shared memory (MITM ...Process id: 0x%016" PRIx64 ")", m_process_id);
         return;
+    }
 
     shmemCreate(&m_fake_shared_memory, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R); // sizeof(HidSharedMemory)
     m_status = shmemMap(&m_fake_shared_memory);
     if (R_FAILED(m_status))
+    {
+        ::syscon::logger::LogError("HidSharedMemoryEntry failed to map fake shared memory (Process id: 0x%016" PRIx64 ")", m_process_id);
         return;
+    }
 
-    ::syscon::logger::LogDebug("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ")", m_process_id);
-    ::syscon::logger::LogDebug("Fake memory => Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p", m_fake_shared_memory.handle, m_fake_shared_memory.size, m_fake_shared_memory.perm, GetFakeAddr());
-    ::syscon::logger::LogDebug("Real memory => Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p", m_real_shared_memory.handle, m_real_shared_memory.size, m_real_shared_memory.perm, GetRealAddr());
+    ::syscon::logger::LogDebug("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", RealAddr: %p, FakeAddr: %p)", m_process_id, GetRealAddr(), GetFakeAddr());
+    //::syscon::logger::LogDebug("Fake memory => Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p", m_fake_shared_memory.handle, m_fake_shared_memory.size, m_fake_shared_memory.perm, GetFakeAddr());
+    //::syscon::logger::LogDebug("Real memory => Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p", m_real_shared_memory.handle, m_real_shared_memory.size, m_real_shared_memory.perm, GetRealAddr());
 }
 
 HidSharedMemoryEntry::~HidSharedMemoryEntry()
@@ -95,6 +107,11 @@ u64 HidSharedMemoryEntry::GetProcessId() const
     return m_process_id;
 }
 
+u64 HidSharedMemoryEntry::GetProgramId() const
+{
+    return m_program_id;
+}
+
 /************************************************************
               HidSharedMemoryManager
 ************************************************************/
@@ -122,8 +139,25 @@ HidSharedMemoryManager &HidSharedMemoryManager::GetHidSharedMemoryManager()
     return g_HidSharedMemoryManager;
 }
 
+std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
+{
+    std::shared_ptr<HidSharedMemoryEntry> entry = Get(processId, programId);
+    if (entry != nullptr)
+    {
+        ::syscon::logger::LogDebug("HidSharedMemoryManager::CreateIfNotExists entry already exists (Process id: 0x%016" PRIx64 ", Program id: 0x%016" PRIx64 ")", processId, programId);
+        return entry;
+    }
+
+    entry = std::make_shared<HidSharedMemoryEntry>(hid_service, processId, programId);
+    Add(entry);
+
+    return entry;
+}
+
 int HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &entry)
 {
+    ::syscon::logger::LogDebug("HidSharedMemoryManager Adding entry: %p for process id: 0x%016" PRIx64, entry.get(), entry->GetProcessId());
+
     if (R_FAILED(entry->m_status))
     {
         ::syscon::logger::LogError("HidSharedMemoryManager::Add failed to create HidSharedMemoryEntry: %d", entry->m_status);
@@ -134,38 +168,65 @@ int HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &ent
         Everytime we add a new entry, we run garbage collector
         in order to remove any entries for processes that are no longer running
     */
-    RunGarbageCollector();
-
-    ::syscon::logger::LogDebug("HidSharedMemoryManager::Add new entry: %p", entry.get());
+    // RunGarbageCollector();
 
     m_mutex.lock();
     m_sharedmemory_entry_list.push_back(entry);
     m_mutex.unlock();
 
+    DumpLogMemory();
+
     return 0;
+}
+
+std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::Get(u64 processId, u64 programId)
+{
+    m_mutex.lock();
+    for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); it++)
+    {
+        if (processId == (*it)->GetProcessId() && programId == (*it)->GetProgramId())
+        {
+            m_mutex.unlock();
+            return *it;
+        }
+    }
+    m_mutex.unlock();
+
+    return nullptr;
 }
 
 void HidSharedMemoryManager::RunGarbageCollector()
 {
-    ::syscon::logger::LogDebug("HidSharedMemoryManager Run garbage collector: Remove all processes that are no longer running (Total entry: %d)", m_sharedmemory_entry_list.size());
-
     m_mutex.lock();
     for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end();)
     {
         u64 pid_out = 0;
 
-        Result ret = pmdmntGetProcessId(&pid_out, (*it)->GetProcessId());
-        if (R_FAILED(ret))
-        {
-            ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it ! (Ret: 0x%08X - Mod:%d - Desc:%d)", (*it)->GetProcessId(), ret, R_MODULE(ret), R_DESCRIPTION(ret));
-            it = m_sharedmemory_entry_list.erase(it);
-        }
-        else
+        Result ret = pmdmntGetProcessId(&pid_out, (*it)->GetProgramId());
+        if (R_SUCCEEDED(ret) && pid_out == (*it)->GetProcessId())
         {
             it++;
+            continue;
         }
+
+        ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it ! (Ret: 0x%08X - Mod:%d - Desc:%d)", (*it)->GetProcessId(), ret, R_MODULE(ret), R_DESCRIPTION(ret));
+        it = m_sharedmemory_entry_list.erase(it);
     }
     m_mutex.unlock();
+}
+
+void HidSharedMemoryManager::DumpLogMemory()
+{
+    ::syscon::logger::LogDebug("_____________________________________________________________________________________");
+    ::syscon::logger::LogDebug("|     Program ID     |     Process ID     |      FakeAddr      |      RealAddr      |");
+    m_mutex.lock();
+    for (const auto &entry : m_sharedmemory_entry_list)
+    {
+        ::syscon::logger::LogDebug("| 0x%016" PRIx64 " | 0x%016" PRIx64 " | 0x%016" PRIx64 " | 0x%016" PRIx64 " |",
+                                   entry->GetProgramId(), entry->GetProcessId(), entry->GetFakeAddr(), entry->GetRealAddr());
+    }
+    m_mutex.unlock();
+    ::syscon::logger::LogDebug("_____________________________________________________________________________________");
 }
 
 int HidSharedMemoryManager::Start()
@@ -206,7 +267,7 @@ void HidSharedMemoryManager::Stop()
 
 void HidSharedMemoryManager::OnRun()
 {
-    ::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun started...");
+    ::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun running...");
 
     while (m_running)
     {
@@ -216,7 +277,7 @@ void HidSharedMemoryManager::OnRun()
         for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
         {
             memcpy(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-            svcSleepThread(-1);
+            // Apply diff here
             memcpy((*it)->GetFakeAddr(), &tmp_shmem_mem, HID_SHARED_MEMORY_SIZE);
         }
         m_mutex.unlock();
