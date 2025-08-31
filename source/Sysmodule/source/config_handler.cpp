@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <chrono>
 #include <stratosphere.hpp>
+
 namespace syscon::config
 {
     namespace

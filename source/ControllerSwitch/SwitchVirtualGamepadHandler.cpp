@@ -29,7 +29,7 @@ void SwitchVirtualGamepadHandler::Exit()
     m_controller->Exit();
 }
 
-void SwitchVirtualGamepadHandler::onRun()
+void SwitchVirtualGamepadHandler::OnRun()
 {
     Result rc;
     ::syscon::logger::LogDebug("SwitchVirtualGamepadHandler InputThread running ...");
@@ -73,7 +73,7 @@ void SwitchVirtualGamepadHandler::onRun()
 
 void SwitchVirtualGamepadHandlerThreadFunc(void *handler)
 {
-    static_cast<SwitchVirtualGamepadHandler *>(handler)->onRun();
+    static_cast<SwitchVirtualGamepadHandler *>(handler)->OnRun();
 }
 
 Result SwitchVirtualGamepadHandler::InitThread()

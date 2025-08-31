@@ -14,14 +14,17 @@
 
 namespace syscon::logger
 {
-    static std::mutex sLogMutex;
+    namespace
+    {
+        // Mutex to protect log writing
+        static std::mutex sLogMutex;
 
-    static char sLogBuffer[1024];
-    static std::filesystem::path sLogPath;
-    static int slogLevel = LOG_LEVEL_TRACE;
+        static char sLogBuffer[1024];
+        static std::filesystem::path sLogPath;
+        static int slogLevel = LOG_LEVEL_TRACE;
 
-    const char klogLevelStr[LOG_LEVEL_COUNT] = {'T', 'D', 'P', 'I', 'W', 'E'};
-
+        const char klogLevelStr[LOG_LEVEL_COUNT] = {'T', 'D', 'P', 'I', 'W', 'E'};
+    } // namespace
 #ifdef ATMOSPHERE_OS_HORIZON
 
     void Initialize(const std::string &log)
@@ -49,7 +52,6 @@ namespace syscon::logger
 
     void LogWriteToFile(const char *logBuffer)
     {
-        (void)logBuffer; // Suppress unused variable warning
         s64 fileOffset;
         ams::fs::FileHandle file;
 
@@ -95,6 +97,7 @@ namespace syscon::logger
 
     void SetLogLevel(int level)
     {
+        // This function is not thread safe, should be called only once at the start of the program
         slogLevel = level;
     }
 

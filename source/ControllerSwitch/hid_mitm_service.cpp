@@ -17,15 +17,15 @@ namespace ams::syscon::hid::mitm
     HidMitmService::HidMitmService(std::shared_ptr<::Service> &&s, sm::MitmProcessInfo &client_info)
         : sf::MitmServiceImplBase(std::forward<std::shared_ptr<::Service>>(s), client_info)
     {
-        ::syscon::logger::LogDebug("HidMitmService creation for PID: 0x%016" PRIx64, client_info.program_id.value);
+        ::syscon::logger::LogDebug("HidMitmService creation for program id: 0x%016" PRIx64, client_info.program_id.value);
     }
 
     Result HidMitmService::CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {
         ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
 
-        std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(this->m_forward_service.get());
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Add(applet_resource_user_id.GetValue().value, entry);
+        std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(this->m_forward_service.get(), applet_resource_user_id.GetValue().value);
+        HidSharedMemoryManager::GetHidSharedMemoryManager().Add(entry);
 
         out.SetValue(ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>(entry));
 
@@ -36,14 +36,10 @@ namespace ams::syscon::hid::mitm
     {
         // Ignore this PID at boot to avoid to crash to system immediately
         u64 boot_pid_list[] = {
-            0x420000000000000E, // System module
-            0x0100000000000045,
-            0x0100000000000023,
-            0x010000000000000d,
-            0x420000000007e51a,
-            0x010000000000100c,
-            0x0100000000001000,
-            // 0x010000000000100d, // Gallery
+            0x420000000000000E, // sys-ftpd
+            //  0x420000000007e51a, // nx-ovlloader //After wakeup only this one is available we need to hook it
+
+            //  0x010000000000100d, // PhotoViewer / Gallery
         };
 
         for (const u64 &boot_pid : boot_pid_list)
@@ -58,7 +54,7 @@ namespace ams::syscon::hid::mitm
         if (IsSystemProgramId(client_info.program_id))
         {
             ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (System) ? (no)", client_info.program_id.value);
-            return false; // Do not MITM the HID system module itself
+            return false; // Do not MITM the system modules
         }
 
         ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " ? (yes)", client_info.program_id.value);

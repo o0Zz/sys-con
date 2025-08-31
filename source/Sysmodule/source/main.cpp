@@ -9,6 +9,7 @@
 #include "version.h"
 #include "SwitchHDLHandler.h"
 #include "SwitchMITMHandler.h"
+#include "SwitchMITMManager.h"
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x80000 // 512 KiB
@@ -94,6 +95,9 @@ namespace ams
 
         ::syscon::logger::LogDebug("MITM ...");
 
+        HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
+        ::syscon::logger::LogDebug("HidSharedMemoryManager started");
+
         ams::syscon::hid::mitm::InitializeHidMitm();
 
         while ((::syscon::psc::IsRunning()))
@@ -102,6 +106,9 @@ namespace ams
         }
 
         ::syscon::logger::LogDebug("Shutting down sys-con ...");
+
+        HidSharedMemoryManager::GetHidSharedMemoryManager().Stop();
+
         ams::syscon::hid::mitm::FinalizeHidMitm();
         ::syscon::psc::Exit();
         ::syscon::usb::Exit();
@@ -124,6 +131,7 @@ namespace ams
 
             R_ABORT_UNLESS(usbHsInitialize());
             R_ABORT_UNLESS(pscmInitialize());
+            R_ABORT_UNLESS(pmdmntInitialize());
             R_ABORT_UNLESS(setsysInitialize());
 
             // Initialize system firmware version

@@ -10,11 +10,6 @@
 
 AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmAppletResourceInterface, AMS_HID_MITM_APPLET_RESOURCE_INTERFACE_INFO, 0x48494542)
 
-#define AMS_HID_MITM_INTERFACE_INFO(C, H) \
-    AMS_SF_METHOD_INFO(C, H, 0, Result, CreateAppletResource, (sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, applet_resource_user_id))
-
-AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494444)
-
 namespace ams::syscon::hid::mitm
 {
     class HidMitmAppletResource : public sf::IServiceObject
@@ -35,7 +30,14 @@ namespace ams::syscon::hid::mitm
     private:
         std::shared_ptr<HidSharedMemoryEntry> m_shared_memory_entry;
     };
+} // namespace ams::syscon::hid::mitm
 
+#define AMS_HID_MITM_INTERFACE_INFO(C, H) \
+    AMS_SF_METHOD_INFO(C, H, 0, Result, CreateAppletResource, (sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, applet_resource_user_id))
+
+AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494444)
+namespace ams::syscon::hid::mitm
+{
     class HidMitmService : public sf::MitmServiceImplBase
     {
 

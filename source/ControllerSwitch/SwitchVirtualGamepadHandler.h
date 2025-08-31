@@ -16,7 +16,7 @@ protected:
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
 
-    void onRun();
+    void OnRun();
 
 public:
     // thread_priority (0x00~0x3F); 0x2C is the usual priority of the main thread, 0x3B is a special priority on cores 0..2 that enables preemptive multithreading (0x3F on core 3).
