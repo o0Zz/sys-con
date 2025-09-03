@@ -5,11 +5,12 @@
 
 #define HID_SHARED_MEMORY_SIZE 0x40000 // 256 KiB
 #define POLLING_FREQUENCY_US   10000   // 10ms   // Official software ticks 200 times/second (5 ms per tick)
-// #define POLLING_FREQUENCY_US 20000000 // 20s
+// #define POLLING_FREQUENCY_US 5000000 // 5s
 #define MS_TO_NS(x) (x * 1000000ul)
 
 static HidSharedMemoryManager g_HidSharedMemoryManager;
 static HidSharedMemory tmp_shmem_mem;
+static HidSharedMemory tmp_shmem_mem_dmp;
 
 static_assert(sizeof(HidSharedMemory) == HID_SHARED_MEMORY_SIZE, "HidSharedMemory size is not good!");
 
@@ -92,12 +93,12 @@ const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
     return m_fake_shared_memory;
 }
 
-void *HidSharedMemoryEntry::GetRealAddr()
+::HidSharedMemory *HidSharedMemoryEntry::GetRealAddr()
 {
     return (HidSharedMemory *)shmemGetAddr(&m_real_shared_memory);
 }
 
-void *HidSharedMemoryEntry::GetFakeAddr()
+::HidSharedMemory *HidSharedMemoryEntry::GetFakeAddr()
 {
     return (HidSharedMemory *)shmemGetAddr(&m_fake_shared_memory);
 }
@@ -174,7 +175,7 @@ int HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &ent
     m_sharedmemory_entry_list.push_back(entry);
     m_mutex.unlock();
 
-    DumpLogMemory();
+    DumpProcessesAndMemoryAddr();
 
     return 0;
 }
@@ -215,7 +216,7 @@ void HidSharedMemoryManager::RunGarbageCollector()
     m_mutex.unlock();
 }
 
-void HidSharedMemoryManager::DumpLogMemory()
+void HidSharedMemoryManager::DumpProcessesAndMemoryAddr()
 {
     ::syscon::logger::LogDebug("_____________________________________________________________________________________");
     ::syscon::logger::LogDebug("|     Program ID     |     Process ID     |      FakeAddr      |      RealAddr      |");
@@ -227,6 +228,29 @@ void HidSharedMemoryManager::DumpLogMemory()
     }
     m_mutex.unlock();
     ::syscon::logger::LogDebug("_____________________________________________________________________________________");
+}
+#include <stratosphere.hpp>
+void HidSharedMemoryManager::DumpHidSharedMemory()
+{
+    ams::fs::FileHandle file;
+
+    ::syscon::logger::LogDebug("Dumping HID shared memory...");
+
+    m_mutex.lock();
+    for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
+    {
+        std::string filename = "sdmc:/config/sys-con/HidMemory_" + std::to_string((*it)->GetProgramId()) + ".dmp";
+        memcpy(&tmp_shmem_mem_dmp, (*it)->GetRealAddr(), sizeof(HidSharedMemory));
+
+        ::syscon::logger::LogDebug("Opening %s...", filename.c_str());
+
+        ams::fs::DeleteFile(filename.c_str());
+        ams::fs::CreateFile(filename.c_str(), 0);
+        ams::fs::OpenFile(std::addressof(file), filename.c_str(), ams::fs::OpenMode_Write | ams::fs::OpenMode_AllowAppend);
+        ams::fs::WriteFile(file, 0, &tmp_shmem_mem_dmp, sizeof(HidSharedMemory), ams::fs::WriteOption::Flush);
+        ams::fs::CloseFile(file);
+    }
+    m_mutex.unlock();
 }
 
 int HidSharedMemoryManager::Start()
@@ -240,6 +264,7 @@ int HidSharedMemoryManager::Start()
     ::syscon::logger::LogDebug("HidSharedMemoryManager::Start %p starting...", this);
 
     m_running = true;
+
     Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 41, -2);
     if (R_FAILED(rc))
         return rc;
@@ -273,14 +298,68 @@ void HidSharedMemoryManager::OnRun()
     {
         auto startTimer = std::chrono::steady_clock::now();
 
+        static u64 loop_count = 0;
+        if (loop_count++ == 1000) // 10s after boot
+            DumpHidSharedMemory();
+
         m_mutex.lock();
+
+        memset(&tmp_shmem_mem, 0, sizeof(tmp_shmem_mem));
+
         for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
         {
-            memcpy(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-            // Apply diff here
-            memcpy((*it)->GetFakeAddr(), &tmp_shmem_mem, HID_SHARED_MEMORY_SIZE);
+            // memcpy(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+            // memcpy((*it)->GetFakeAddr(), &tmp_shmem_mem, HID_SHARED_MEMORY_SIZE);
+
+            // memcpy(&(*it)->GetFakeAddr()->touchscreen, &(*it)->GetRealAddr()->touchscreen, sizeof(HidTouchScreenSharedMemoryFormat));
+            //  Apply diff here
+            /*for (int i = 0; i < 10; i++)
+            {
+                HidNpadInternalState *internal_state = &tmp_shmem_mem.npad.entries[i].internal_state;
+                if (internal_state->style_set == 0)
+                {
+                    internal_state->style_set = HidNpadStyleTag_NpadFullKey;
+                    internal_state->joy_assignment_mode = HidNpadJoyAssignmentMode_Dual;
+                    internal_state->full_key_color.attribute = HidColorAttribute_Ok;
+                    internal_state->full_key_color.full_key.main = 0xFF0000FF; // BodyColor
+                    internal_state->full_key_color.full_key.sub = 0xFF0000FF;  // ButtonColor
+                    internal_state->full_key_lifo.header.unused = 0;
+                    internal_state->full_key_lifo.header.buffer_count = 1;
+                    internal_state->full_key_lifo.header.tail = 0;
+                    internal_state->full_key_lifo.header.count = 0;
+                    internal_state->full_key_lifo.storage[0].sampling_number = 0;
+                    internal_state->full_key_lifo.storage[0].state.sampling_number = 0;
+                    internal_state->full_key_lifo.storage[0].state.buttons = 0; // Bitfield
+                    internal_state->full_key_lifo.storage[0].state.analog_stick_l.x = 0;
+                    internal_state->full_key_lifo.storage[0].state.analog_stick_l.y = 0;
+                    internal_state->full_key_lifo.storage[0].state.analog_stick_r.x = 0;
+                    internal_state->full_key_lifo.storage[0].state.analog_stick_r.y = 0;
+                    internal_state->full_key_lifo.storage[0].state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
+
+                    internal_state->device_type = HidDeviceTypeBits_FullKey;
+                    internal_state->system_properties.is_charging = 0;
+                    internal_state->system_properties.is_powered = 1;
+                    internal_state->system_properties.is_unsupported_button_pressed_on_npad_system = 0;
+                    internal_state->system_properties.is_unsupported_button_pressed_on_npad_system_ext = 0;
+                    internal_state->system_properties.is_abxy_button_oriented = 0;
+                    internal_state->system_properties.is_sl_sr_button_oriented = 0;
+                    internal_state->system_properties.is_plus_available = 1;
+                    internal_state->system_properties.is_minus_available = 1;
+                    internal_state->system_properties.is_directional_buttons_available = 1;
+                    internal_state->system_button_properties.is_unintended_home_button_input_protection_enabled = 0;
+                    internal_state->battery_level[0] = 100;
+
+                    break;
+                }
+            }*/
         }
         m_mutex.unlock();
+
+        /*for (int i = 0; i < 10; i++)
+        {
+            HidNpadInternalState *internal_state = &tmp_shmem_mem.npad.entries[i].internal_state;
+            ::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun internal_state->style_set[%d]: 0x%02X", i, internal_state->style_set);
+        }*/
 
         s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
         if (execution_time_us < POLLING_FREQUENCY_US)
