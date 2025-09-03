@@ -31,6 +31,26 @@ namespace ams::syscon::hid::mitm
         R_SUCCEED();
     }
 
+    Result HidMitmService::SendVibrationValue(sf::CopyHandle vibration_device_handle, ::HidVibrationValue vibration_value, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    {
+        (void)vibration_device_handle;
+        (void)vibration_value;
+        ::syscon::logger::LogDebug("HidMitmService::SendVibrationValue...");
+
+        // Find the corresponding shared memory entry
+        std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().Get(applet_resource_user_id.GetValue().value, m_client_info.program_id.value);
+        if (!entry)
+        {
+            ::syscon::logger::LogError("HidMitmService::SendVibrationValue: Failed to find shared memory entry");
+            // return R_FAILED();
+        }
+
+        // Send the vibration value to the shared memory
+        // entry->GetSharedMemoryHandle().SendVibrationValue(vibration_device_handle, vibration_value);
+
+        R_SUCCEED();
+    }
+
     bool HidMitmService::ShouldMitm(const sm::MitmProcessInfo &client_info)
     {
         // Ignore this PID at boot to avoid to crash to system immediately

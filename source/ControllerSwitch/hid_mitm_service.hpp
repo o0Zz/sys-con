@@ -34,6 +34,7 @@ namespace ams::syscon::hid::mitm
 
 #define AMS_HID_MITM_INTERFACE_INFO(C, H) \
     AMS_SF_METHOD_INFO(C, H, 0, Result, CreateAppletResource, (sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, applet_resource_user_id))
+  // AMS_SF_METHOD_INFO(C, H, 201, Result, SendVibrationValue, (sf::CopyHandle vibration_device_handle, ::HidVibrationValue vibration_value, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (vibration_device_handle, vibration_value, applet_resource_user_id))
 
 AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494444)
 namespace ams::syscon::hid::mitm
@@ -51,6 +52,7 @@ namespace ams::syscon::hid::mitm
 
         // Service interface methods
         Result CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
+        Result SendVibrationValue(sf::CopyHandle vibration_device_handle, ::HidVibrationValue vibration_value, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
     };
 
     static_assert(IsIHidMitmInterface<HidMitmService>);
