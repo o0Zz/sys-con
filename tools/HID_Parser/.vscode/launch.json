@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "HID_Parser (Windows Debugger)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/HID_Parser.exe",
+            "args": ["-file", "${workspaceFolder}/../../HidMemory_72057594037932044.dmp"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
