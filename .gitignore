@@ -12,5 +12,7 @@ out/*
 *.nso
 *.flag
 *.zip
+*.dmp
+*.exe
 version.h
-/build/
+build/

@@ -1,7 +1,7 @@
 # List of controllers tested with sys-con
 | Controller name         | Supported | Comment | Link |
 |-------------------------|-----------|---------|------|
-| 8BitDo Ultimate 2C | Yes | - | - |
+| 8BitDo Ultimate 2C | Yes | If don't works with Dock (Procedure here #78) | - |
 | 8BitDo Wireless Bluetooth USB Adapter 2 | Yes | DInput mode | You need to use Dinput mode. See "Manual setting" in https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html |
 | 8BitDo Ultimate C 2.4g Wireless Controller  | No | Not detected: #21 | - |
 | Dualshock 4 | Yes | - | - |
