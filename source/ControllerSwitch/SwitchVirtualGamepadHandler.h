@@ -2,10 +2,19 @@
 #include "switch.h"
 #include "IController.h"
 
+class SwitchVirtualGamepadHandlerData
+{
+public:
+    bool m_is_connected;
+};
+
 // This class is a base class for SwitchHDLHandler and SwitchAbstractedPaadHandler.
 class SwitchVirtualGamepadHandler
 {
     friend void SwitchVirtualGamepadHandlerThreadFunc(void *arg);
+
+protected:
+    SwitchVirtualGamepadHandlerData m_controllerData[CONTROLLER_MAX_INPUTS];
 
 protected:
     std::unique_ptr<IController> m_controller;
@@ -15,6 +24,13 @@ protected:
     alignas(0x1000) u8 thread_stack[0x2000];
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
+
+    // Fills out the HDL state with the specified button data and passes it to HID
+    virtual Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) = 0;
+    virtual Result AttachController(uint16_t input_idx) = 0;
+    virtual Result DetachController(uint16_t input_idx) = 0;
+
+    virtual bool IsControllerAttached(uint16_t input_idx);
 
     void OnRun();
 
@@ -34,11 +50,12 @@ public:
     void ExitThread();
 
     // The function to call indefinitely by the input thread
-    virtual Result UpdateInput(uint32_t timeout_us) = 0;
+    virtual Result UpdateInput(uint32_t timeout_us);
     // The function to call indefinitely by the output thread
-    virtual Result UpdateOutput() = 0;
+    virtual Result UpdateOutput();
 
-    void ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out);
+    static void ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out);
+    static u8 ControllerTypeToDeviceType(ControllerType type);
 
     // Get the raw controller pointer
     inline IController *GetController() { return m_controller.get(); }

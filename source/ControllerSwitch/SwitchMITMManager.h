@@ -46,25 +46,17 @@ private:
 class HidSharedMemoryController
 {
 public:
-    class ControllerInfo
-    {
-    public:
-        u8 deviceType;          ///< \ref HidDeviceType
-        u8 npadInterfaceType;   ///< \ref HidNpadInterfaceType. Additional type field used with the above type field (only applies to ::HidDeviceType_JoyRight1, ::HidDeviceType_JoyLeft2, ::HidDeviceType_FullKey3, and ::HidDeviceType_System19), if the value doesn't match one of the following a default is used. ::HidDeviceType_FullKey3: ::HidNpadInterfaceType_USB indicates that the controller is connected via USB. :::HidDeviceType_System19: ::HidNpadInterfaceType_USB = unknown. When value is ::HidNpadInterfaceType_Rail, state is merged with an existing controller (with ::HidDeviceType_JoyRight1 / ::HidDeviceType_JoyLeft2). Otherwise, it's a dedicated controller.
-        u32 singleColorBody;    ///< RGBA Single Body Color.
-        u32 singleColorButtons; ///< RGBA Single Buttons Color.
-        u32 colorLeftGrip;      ///< [9.0.0+] RGBA Left Grip Color.
-        u32 colorRightGrip;     ///< [9.0.0+] RGBA Right Grip Color.
-    };
-
-    HidSharedMemoryController(const HidSharedMemoryController::ControllerInfo &info);
+    HidSharedMemoryController(uint8_t player_idx);
     ~HidSharedMemoryController();
 
-    void Update(const NormalizedButtonData &data);
-    const HidSharedMemoryController::ControllerInfo &GetInfo() const;
+    Result Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r);
 
 private:
-    HidSharedMemoryController::ControllerInfo m_info;
+    uint8_t m_player_idx;
+    u64 m_sampling_number;
+    HidNpadCommonStateAtomicStorage m_lifo;
+
+    void Initialize(const std::shared_ptr<HidSharedMemoryEntry> &entry);
 };
 
 /* ------------------------------------------------ */
@@ -72,6 +64,7 @@ private:
 class HidSharedMemoryManager
 {
     friend void HidSharedMemoryManagerThreadFunc(void *arg);
+    friend HidSharedMemoryController;
 
 public:
     HidSharedMemoryManager();
@@ -79,7 +72,7 @@ public:
 
     static HidSharedMemoryManager &GetHidSharedMemoryManager();
 
-    std::shared_ptr<HidSharedMemoryController> AttachController(const HidSharedMemoryController::ControllerInfo &info);
+    std::shared_ptr<HidSharedMemoryController> AttachController();
     void DetachController(std::shared_ptr<HidSharedMemoryController> controller);
 
     std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId);
@@ -102,7 +95,10 @@ private:
     bool m_running;
     ::Thread m_thread;
 
-    std::recursive_mutex m_mutex;
+protected:
+    std::recursive_mutex m_mutex_controller;
+    std::array<std::shared_ptr<HidSharedMemoryController>, 8> m_controller_list;
 
+    std::recursive_mutex m_mutex_sharedmemory;
     std::vector<std::shared_ptr<HidSharedMemoryEntry>> m_sharedmemory_entry_list;
 };

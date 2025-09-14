@@ -140,6 +140,36 @@ HidSharedMemoryManager &HidSharedMemoryManager::GetHidSharedMemoryManager()
     return g_HidSharedMemoryManager;
 }
 
+std::shared_ptr<HidSharedMemoryController> AttachController()
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+
+    for (size_t i = 0; i < m_controller_list.size(); i++)
+    {
+        if (m_controller_list[i] == nullptr)
+        {
+            m_controller_list[i] = std::make_shared<HidSharedMemoryController>(i);
+            return m_controller_list[i];
+        }
+    }
+
+    return nullptr;
+}
+
+void DetachController(std::shared_ptr<HidSharedMemoryController> controller)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+
+    for (size_t i = 0; i < m_controller_list.size(); i++)
+    {
+        if (m_controller_list[i] == controller)
+        {
+            m_controller_list[i] = nullptr;
+            return;
+        }
+    }
+}
+
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
 {
     std::shared_ptr<HidSharedMemoryEntry> entry = Get(processId, programId);
@@ -171,9 +201,9 @@ int HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &ent
     */
     // RunGarbageCollector();
 
-    m_mutex.lock();
+    m_mutex_sharedmemory.lock();
     m_sharedmemory_entry_list.push_back(entry);
-    m_mutex.unlock();
+    m_mutex_sharedmemory.unlock();
 
     DumpProcessesAndMemoryAddr();
 
@@ -182,23 +212,23 @@ int HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &ent
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::Get(u64 processId, u64 programId)
 {
-    m_mutex.lock();
+    m_mutex_sharedmemory.lock();
     for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); it++)
     {
         if (processId == (*it)->GetProcessId() && programId == (*it)->GetProgramId())
         {
-            m_mutex.unlock();
+            m_mutex_sharedmemory.unlock();
             return *it;
         }
     }
-    m_mutex.unlock();
+    m_mutex_sharedmemory.unlock();
 
     return nullptr;
 }
 
 void HidSharedMemoryManager::RunGarbageCollector()
 {
-    m_mutex.lock();
+    m_mutex_sharedmemory.lock();
     for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end();)
     {
         u64 pid_out = 0;
@@ -213,20 +243,20 @@ void HidSharedMemoryManager::RunGarbageCollector()
         ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it ! (Ret: 0x%08X - Mod:%d - Desc:%d)", (*it)->GetProcessId(), ret, R_MODULE(ret), R_DESCRIPTION(ret));
         it = m_sharedmemory_entry_list.erase(it);
     }
-    m_mutex.unlock();
+    m_mutex_sharedmemory.unlock();
 }
 
 void HidSharedMemoryManager::DumpProcessesAndMemoryAddr()
 {
     ::syscon::logger::LogDebug("_____________________________________________________________________________________");
     ::syscon::logger::LogDebug("|     Program ID     |     Process ID     |      FakeAddr      |      RealAddr      |");
-    m_mutex.lock();
+    m_mutex_sharedmemory.lock();
     for (const auto &entry : m_sharedmemory_entry_list)
     {
         ::syscon::logger::LogDebug("| 0x%016" PRIx64 " | 0x%016" PRIx64 " | 0x%016" PRIx64 " | 0x%016" PRIx64 " |",
                                    entry->GetProgramId(), entry->GetProcessId(), entry->GetFakeAddr(), entry->GetRealAddr());
     }
-    m_mutex.unlock();
+    m_mutex_sharedmemory.unlock();
     ::syscon::logger::LogDebug("_____________________________________________________________________________________");
 }
 #include <stratosphere.hpp>
@@ -236,7 +266,7 @@ void HidSharedMemoryManager::DumpHidSharedMemory()
 
     ::syscon::logger::LogDebug("Dumping HID shared memory...");
 
-    m_mutex.lock();
+    m_mutex_sharedmemory.lock();
     for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
     {
         std::string filename = "sdmc:/config/sys-con/HidMemory_" + std::to_string((*it)->GetProgramId()) + ".dmp";
@@ -250,7 +280,7 @@ void HidSharedMemoryManager::DumpHidSharedMemory()
         ams::fs::WriteFile(file, 0, &tmp_shmem_mem_dmp, sizeof(HidSharedMemory), ams::fs::WriteOption::Flush);
         ams::fs::CloseFile(file);
     }
-    m_mutex.unlock();
+    m_mutex_sharedmemory.unlock();
 }
 
 int HidSharedMemoryManager::Start()
@@ -302,67 +332,108 @@ void HidSharedMemoryManager::OnRun()
         if (loop_count++ == 1000) // 10s after boot
             DumpHidSharedMemory();
 
-        m_mutex.lock();
+        m_mutex_sharedmemory.lock();
 
         memset(&tmp_shmem_mem, 0, sizeof(tmp_shmem_mem));
 
         for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
         {
-            // memcpy(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-            // memcpy((*it)->GetFakeAddr(), &tmp_shmem_mem, HID_SHARED_MEMORY_SIZE);
-
-            // memcpy(&(*it)->GetFakeAddr()->touchscreen, &(*it)->GetRealAddr()->touchscreen, sizeof(HidTouchScreenSharedMemoryFormat));
-            //  Apply diff here
-            /*for (int i = 0; i < 10; i++)
-            {
-                HidNpadInternalState *internal_state = &tmp_shmem_mem.npad.entries[i].internal_state;
-                if (internal_state->style_set == 0)
-                {
-                    internal_state->style_set = HidNpadStyleTag_NpadFullKey;
-                    internal_state->joy_assignment_mode = HidNpadJoyAssignmentMode_Dual;
-                    internal_state->full_key_color.attribute = HidColorAttribute_Ok;
-                    internal_state->full_key_color.full_key.main = 0xFF0000FF; // BodyColor
-                    internal_state->full_key_color.full_key.sub = 0xFF0000FF;  // ButtonColor
-                    internal_state->full_key_lifo.header.unused = 0;
-                    internal_state->full_key_lifo.header.buffer_count = 1;
-                    internal_state->full_key_lifo.header.tail = 0;
-                    internal_state->full_key_lifo.header.count = 0;
-                    internal_state->full_key_lifo.storage[0].sampling_number = 0;
-                    internal_state->full_key_lifo.storage[0].state.sampling_number = 0;
-                    internal_state->full_key_lifo.storage[0].state.buttons = 0; // Bitfield
-                    internal_state->full_key_lifo.storage[0].state.analog_stick_l.x = 0;
-                    internal_state->full_key_lifo.storage[0].state.analog_stick_l.y = 0;
-                    internal_state->full_key_lifo.storage[0].state.analog_stick_r.x = 0;
-                    internal_state->full_key_lifo.storage[0].state.analog_stick_r.y = 0;
-                    internal_state->full_key_lifo.storage[0].state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
-
-                    internal_state->device_type = HidDeviceTypeBits_FullKey;
-                    internal_state->system_properties.is_charging = 0;
-                    internal_state->system_properties.is_powered = 1;
-                    internal_state->system_properties.is_unsupported_button_pressed_on_npad_system = 0;
-                    internal_state->system_properties.is_unsupported_button_pressed_on_npad_system_ext = 0;
-                    internal_state->system_properties.is_abxy_button_oriented = 0;
-                    internal_state->system_properties.is_sl_sr_button_oriented = 0;
-                    internal_state->system_properties.is_plus_available = 1;
-                    internal_state->system_properties.is_minus_available = 1;
-                    internal_state->system_properties.is_directional_buttons_available = 1;
-                    internal_state->system_button_properties.is_unintended_home_button_input_protection_enabled = 0;
-                    internal_state->battery_level[0] = 100;
-
-                    break;
-                }
-            }*/
+            //  memcpy(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+            //  memcpy((*it)->GetFakeAddr(), &tmp_shmem_mem, HID_SHARED_MEMORY_SIZE);*/
         }
-        m_mutex.unlock();
-
-        /*for (int i = 0; i < 10; i++)
-        {
-            HidNpadInternalState *internal_state = &tmp_shmem_mem.npad.entries[i].internal_state;
-            ::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun internal_state->style_set[%d]: 0x%02X", i, internal_state->style_set);
-        }*/
+        m_mutex_sharedmemory.unlock();
 
         s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
         if (execution_time_us < POLLING_FREQUENCY_US)
             svcSleepThread((POLLING_FREQUENCY_US - execution_time_us) * 1000); // Convert to nanoseconds
     }
+}
+
+/* ---------------------------------------- */
+
+HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx)
+    : m_player_idx(player_idx),
+      m_sampling_number(0)
+{
+}
+
+/* ---------------------------------------- */
+
+HidSharedMemoryController::~HidSharedMemoryController()
+{
+}
+
+/* ---------------------------------------- */
+
+void HidSharedMemoryController::Initialize(const std::shared_ptr<HidSharedMemoryEntry> &entry)
+{
+    ::syscon::logger::LogTrace("HidSharedMemoryManager::Initialize initializing player %d ...", m_player_idx);
+
+    HidNpadInternalState *internal_state = &entry->GetFakeAddr()->npad.entries[m_player_idx].internal_state;
+    memset(internal_state, 0, sizeof(HidNpadInternalState));
+
+    internal_state->style_set = HidNpadStyleTag_NpadSystemExt | HidNpadStyleTag_NpadFullKey;
+    internal_state->joy_assignment_mode = 0;
+    internal_state->full_key_color.attribute = HidColorAttribute_Ok;
+    internal_state->full_key_color.full_key.main = 0xFF0000FF; // BodyColor
+    internal_state->full_key_color.full_key.sub = 0xFF0000FF;  // ButtonColor
+
+    internal_state->full_key_lifo.header.unused = 0;
+    internal_state->full_key_lifo.header.buffer_count = 17;
+    internal_state->full_key_lifo.header.tail = 0;
+    internal_state->full_key_lifo.header.count = 0;
+
+    internal_state->device_type = HidDeviceTypeBits_FullKey;
+    internal_state->system_properties.is_charging = 0;
+    internal_state->system_properties.is_powered = 0;
+    internal_state->system_properties.is_unsupported_button_pressed_on_npad_system = 0;
+    internal_state->system_properties.is_unsupported_button_pressed_on_npad_system_ext = 0;
+    internal_state->system_properties.is_abxy_button_oriented = 1;
+    internal_state->system_properties.is_sl_sr_button_oriented = 0;
+    internal_state->system_properties.is_plus_available = 1;
+    internal_state->system_properties.is_minus_available = 1;
+    internal_state->system_properties.is_directional_buttons_available = 1;
+    internal_state->system_button_properties.is_unintended_home_button_input_protection_enabled = 0;
+    internal_state->battery_level[0] = 4; // Set battery charge to full.
+    internal_state->battery_level[1] = 4; // Set battery charge to full.
+    internal_state->battery_level[2] = 4; // Set battery charge to full.
+    internal_state->applet_footer_ui_attribute = 0;
+    internal_state->applet_footer_ui_type = HidAppletFooterUiType_SwitchProController;
+}
+
+/* ---------------------------------------- */
+
+Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r)
+{
+    ::syscon::logger::LogTrace("HidSharedMemoryManager::Update player %d ...", m_player_idx);
+
+    std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_sharedmemory);
+
+    for (auto it = g_HidSharedMemoryManager.m_sharedmemory_entry_list.begin(); it != g_HidSharedMemoryManager.m_sharedmemory_entry_list.end(); ++it)
+    {
+        HidNpadInternalState *internal_state = &(*it)->GetFakeAddr()->npad.entries[m_player_idx].internal_state;
+
+        if (internal_state->style_set == 0)
+            Initialize(*it);
+
+        // Update lifo
+        int current_tail = internal_state->full_key_lifo.header.tail;
+
+        internal_state->full_key_lifo.storage[current_tail].sampling_number = m_sampling_number++;
+        internal_state->full_key_lifo.storage[current_tail].state.buttons = buttons;
+        internal_state->full_key_lifo.storage[current_tail].state.analog_stick_l = analog_stick_l;
+        internal_state->full_key_lifo.storage[current_tail].state.analog_stick_r = analog_stick_r;
+        internal_state->full_key_lifo.storage[current_tail].state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
+        internal_state->full_key_lifo.storage[current_tail].state.reserved = 0;
+
+        if (internal_state->full_key_lifo.header.count < internal_state->full_key_lifo.header.buffer_count)
+            internal_state->full_key_lifo.header.count++;
+
+        if (internal_state->full_key_lifo.header.tail >= (internal_state->full_key_lifo.header.buffer_count - 1))
+            internal_state->full_key_lifo.header.tail = 0;
+        else
+            internal_state->full_key_lifo.header.tail++;
+    }
+
+    return 0;
 }

@@ -10,6 +10,7 @@
 #include "SwitchHDLHandler.h"
 #include "SwitchMITMHandler.h"
 #include "SwitchMITMManager.h"
+#include "hid_mitm_module.hpp"
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x80000 // 512 KiB
