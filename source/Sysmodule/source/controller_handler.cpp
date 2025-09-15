@@ -1,5 +1,5 @@
 #include "controller_handler.h"
-#include "switch.h"
+#include <switch.h>
 
 #ifdef ATMOSPHERE_VERSION
     #include "SwitchMITMHandler.h"

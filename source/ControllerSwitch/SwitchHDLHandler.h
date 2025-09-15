@@ -1,6 +1,6 @@
 #pragma once
 
-#include "switch.h"
+#include <switch.h>
 #include "IController.h"
 #include "SwitchVirtualGamepadHandler.h"
 
@@ -44,7 +44,6 @@ public:
 
     // Initialize controller handler, HDL state
     virtual Result Initialize() override;
-    virtual void Exit() override;
 
     static HiddbgHdlsSessionId &GetHdlsSessionId();
 };

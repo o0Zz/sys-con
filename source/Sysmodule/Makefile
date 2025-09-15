@@ -56,7 +56,7 @@ INCLUDES	:=	include ../ControllerSwitch ../ControllerLib ../Ini ../../lib/HIDDat
 #---------------------------------------------------------------------------------
 LIBS	:= -lnx -lhiddatainterpreter
 
-ifneq ($(strip $(ATMOSPHERE_VERSION)),)
+ifneq ($(strip $(ATMOSPHERE_VERSION)),) #If ATMOSPHERE BUILD
 
 LIBS	+= -lstratosphere
 CFLAGS	+= -DATMOSPHERE_VERSION=$(ATMOSPHERE_VERSION)
@@ -65,7 +65,7 @@ else
 
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
-CFLAGS	:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections \
+CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
 			$(ARCH) $(DEFINES)
 
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__
@@ -103,8 +103,8 @@ CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
-ifeq ($(strip $(ATMOSPHERE_VERSION)),)
-CPPFILES	:=	$(filter-out hid_mitm*.cpp,$(CPPFILES))
+ifeq ($(strip $(ATMOSPHERE_VERSION)),) #If ATMOSPHERE BUILD
+CPPFILES := $(filter-out hid_mitm_module.cpp hid_mitm_service.cpp,$(CPPFILES))
 endif
 
 #---------------------------------------------------------------------------------
@@ -132,7 +132,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) 
 			
-ifneq ($(strip $(ATMOSPHERE_VERSION)),)
+ifneq ($(strip $(ATMOSPHERE_VERSION)),) #If ATMOSPHERE BUILD
 	export INCLUDE	+= $(foreach dir,$(AMS_LIBDIRS),-I$(dir)/include)
 	export LIBPATHS	+= $(foreach dir,$(AMS_LIBDIRS),-L$(dir)/$(ATMOSPHERE_LIBRARY_DIR))
 endif

@@ -259,6 +259,7 @@ void HidSharedMemoryManager::DumpProcessesAndMemoryAddr()
     m_mutex_sharedmemory.unlock();
     ::syscon::logger::LogDebug("_____________________________________________________________________________________");
 }
+/*
 #include <stratosphere.hpp>
 void HidSharedMemoryManager::DumpHidSharedMemory()
 {
@@ -282,7 +283,7 @@ void HidSharedMemoryManager::DumpHidSharedMemory()
     }
     m_mutex_sharedmemory.unlock();
 }
-
+*/
 int HidSharedMemoryManager::Start()
 {
     if (m_running)
@@ -328,10 +329,10 @@ void HidSharedMemoryManager::OnRun()
     {
         auto startTimer = std::chrono::steady_clock::now();
 
-        static u64 loop_count = 0;
+        /*static u64 loop_count = 0;
         if (loop_count++ == 1000) // 10s after boot
             DumpHidSharedMemory();
-
+*/
         m_mutex_sharedmemory.lock();
 
         memset(&tmp_shmem_mem, 0, sizeof(tmp_shmem_mem));

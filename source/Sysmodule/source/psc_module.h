@@ -1,9 +1,8 @@
 #pragma once
-#include "switch.h"
 
 namespace syscon::psc
 {
-    Result Initialize();
+    int Initialize();
     void Exit();
     bool IsRunning();
 };

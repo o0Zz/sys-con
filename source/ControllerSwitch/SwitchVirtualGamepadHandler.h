@@ -1,10 +1,16 @@
 #pragma once
-#include "switch.h"
+#include <switch.h>
 #include "IController.h"
 
 class SwitchVirtualGamepadHandlerData
 {
+
 public:
+    SwitchVirtualGamepadHandlerData()
+        : m_is_connected(false)
+    {
+    }
+
     bool m_is_connected;
 };
 

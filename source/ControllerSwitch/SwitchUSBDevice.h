@@ -1,5 +1,5 @@
 #pragma once
-#include "switch.h"
+#include <switch.h>
 #include "IUSBDevice.h"
 #include "SwitchUSBInterface.h"
 

@@ -23,8 +23,9 @@ all: build
 	cp -r $(DIST_DIR)/. $(OUT_DIR)/
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
 
+#ATMOSPHERE_VERSION=$(ATMOSPHERE_VERSION)
 build:
-	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE_VERSION=$(ATMOSPHERE_VERSION)
+	$(MAKE) -C $(SOURCE_DIR)
 
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean

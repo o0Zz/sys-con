@@ -1,6 +1,6 @@
 #ifdef ATMOSPHERE_VERSION
 
-    #include "switch.h"
+    #include <switch.h>
     #include "logger.h"
     #include <stratosphere.hpp>
 

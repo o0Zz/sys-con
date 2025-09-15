@@ -1,7 +1,7 @@
 #pragma once
 
 #include "IController.h"
-
+#include <switch.h>
 namespace syscon::controllers
 {
     bool IsAtControllerLimit();

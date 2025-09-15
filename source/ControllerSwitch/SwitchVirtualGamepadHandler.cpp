@@ -127,10 +127,15 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 
     if (m_controllerData[input_idx].m_is_connected != m_controller->IsControllerConnected(input_idx)) // State changed ?
     {
+        syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Controller connection state changed on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+
         m_controllerData[input_idx].m_is_connected = m_controller->IsControllerConnected(input_idx);
         reattach_controller = m_controllerData[input_idx].m_is_connected; // If state change to connected, we need to re-attach the controller
         if (!m_controllerData[input_idx].m_is_connected)
+        {
+            syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Detaching controller on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
             DetachController(input_idx);
+        }
     }
 
     if (R_FAILED(read_rc))
@@ -182,9 +187,13 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
         reattach_controller = (buttons & HidNpadButton_L) && (buttons & HidNpadButton_R); // L+R on the switch allow to re-attach the controller
 
     if (m_controllerData[input_idx].m_is_connected && reattach_controller)
+    {
+        syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Re-attaching controller on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
         AttachController(input_idx);
+    }
 
     // We get the button inputs from the input packet and update the state of our controller
+    syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Updating controller state on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
     Result res = UpdateControllerState(buttons, analog_stick_l, analog_stick_r, input_idx);
 
     s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
