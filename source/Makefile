@@ -5,14 +5,16 @@ ATMOSPHERE_GIT_HASH := $(shell git -C ../lib/Atmosphere-libs rev-parse --short H
 SYSCON_GIT_HASH := $(shell git rev-parse --short HEAD)
 SYSCON_GIT_TAG := $(shell git describe --tags `git rev-list --tags --max-count=1`)
 SYSCON_GIT_TAG_COMMIT_COUNT := $(shell git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)
-DEBUG := 1
+DEBUG := 0
 
 .PHONY: $(TOPTARGETS) $(TARGETS)
 
 all: $(TARGETS)
 
 libstratosphere:
+ifneq ($(strip $(ATMOSPHERE_VERSION)),)
 	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere -j8 ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)
+endif
 
 libhiddatainterpreter:
 	$(MAKE) -C ../lib/HIDDataInterpreter/build/switch
@@ -38,5 +40,7 @@ clean:
 	$(MAKE) -C Sysmodule clean
 	
 mrproper: clean
+ifneq ($(strip $(ATMOSPHERE_VERSION)),)
 	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere clean
+endif
 	$(MAKE) -C ../lib/HIDDataInterpreter/build/switch clean

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdarg>
 #include <string>
+#include "ifilemanager.h"
 #include "ILogger.h"
 
 #define LOG_LEVEL_TRACE   0
@@ -13,7 +14,7 @@
 
 namespace syscon::logger
 {
-    void Initialize(const std::string &logPath);
+    void Initialize(const std::string &logPath, std::unique_ptr<IFileManager> &&file);
     void Exit();
 
     void SetLogLevel(int level);

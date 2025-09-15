@@ -9,12 +9,7 @@
 #include <vector>
 #include <stdlib.h>
 
-#ifdef ATMOSPHERE_OS_HORIZON
-    #define CONFIG_PATH "sdmc:/config/sys-con/"
-#else
-    #define CONFIG_PATH "/config/sys-con/"
-#endif
-
+#define CONFIG_PATH     "/config/sys-con/"
 #define CONFIG_FULLPATH CONFIG_PATH "config.ini"
 
 namespace syscon::config
@@ -72,6 +67,8 @@ namespace syscon::config
         std::vector<ControllerVidPid> discovery_vidpid;
         bool auto_add_controller{true};
     };
+
+    int Initialize(std::unique_ptr<IFileManager> &&fileManager);
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config);
 

@@ -30,8 +30,6 @@ protected:
     virtual Result AttachController(uint16_t input_idx) = 0;
     virtual Result DetachController(uint16_t input_idx) = 0;
 
-    virtual bool IsControllerAttached(uint16_t input_idx);
-
     void OnRun();
 
 public:

@@ -12,7 +12,9 @@ CURRENT_DIRECTORY := $(abspath $(dir $(THIS_MAKEFILE)))
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
-include $(CURRENT_DIRECTORY)/../../lib/Atmosphere-libs/config/templates/stratosphere.mk
+ifneq ($(strip $(ATMOSPHERE_VERSION)),)
+	include $(CURRENT_DIRECTORY)/../../lib/Atmosphere-libs/config/templates/stratosphere.mk
+endif
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -52,17 +54,28 @@ INCLUDES	:=	include ../ControllerSwitch ../ControllerLib ../Ini ../../lib/HIDDat
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-#ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+LIBS	:= -lnx -lhiddatainterpreter
 
-#CFLAGS	:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections $(ARCH) $(DEFINES)
-#CFLAGS	+=	$(INCLUDE) -D__SWITCH__
+ifneq ($(strip $(ATMOSPHERE_VERSION)),)
 
-#CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++23 -fconcepts-diagnostics-depth=99
+LIBS	+= -lstratosphere
+CFLAGS	+= -DATMOSPHERE_VERSION=$(ATMOSPHERE_VERSION)
 
-#ASFLAGS	:=	-g $(ARCH)
-#LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+else
 
-LIBS	:= -lnx -lhiddatainterpreter -lstratosphere
+ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+
+CFLAGS	:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections \
+			$(ARCH) $(DEFINES)
+
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__
+
+CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++23 
+
+ASFLAGS	:=	-g $(ARCH)
+LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+
+endif
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -90,6 +103,10 @@ CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
+ifeq ($(strip $(ATMOSPHERE_VERSION)),)
+CPPFILES	:=	$(filter-out hid_mitm*.cpp,$(CPPFILES))
+endif
+
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
 #---------------------------------------------------------------------------------
@@ -110,12 +127,15 @@ export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
 export HFILES_BIN	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(AMS_LIBDIRS),-I$(dir)/include) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD)
+					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+					-I$(CURDIR)/$(BUILD) \
 
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
-			$(foreach dir,$(AMS_LIBDIRS),-L$(dir)/$(ATMOSPHERE_LIBRARY_DIR))
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) 
+			
+ifneq ($(strip $(ATMOSPHERE_VERSION)),)
+	export INCLUDE	+= $(foreach dir,$(AMS_LIBDIRS),-I$(dir)/include)
+	export LIBPATHS	+= $(foreach dir,$(AMS_LIBDIRS),-L$(dir)/$(ATMOSPHERE_LIBRARY_DIR))
+endif
 
 ifeq ($(strip $(CONFIG_JSON)),)
 	jsons := $(wildcard *.json)

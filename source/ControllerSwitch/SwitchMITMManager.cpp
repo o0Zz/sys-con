@@ -140,7 +140,7 @@ HidSharedMemoryManager &HidSharedMemoryManager::GetHidSharedMemoryManager()
     return g_HidSharedMemoryManager;
 }
 
-std::shared_ptr<HidSharedMemoryController> AttachController()
+std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachController()
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
@@ -156,7 +156,7 @@ std::shared_ptr<HidSharedMemoryController> AttachController()
     return nullptr;
 }
 
-void DetachController(std::shared_ptr<HidSharedMemoryController> controller)
+void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryController> controller)
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 

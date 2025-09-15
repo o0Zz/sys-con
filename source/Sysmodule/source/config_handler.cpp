@@ -8,12 +8,18 @@
 #include <fstream>
 #include <filesystem>
 #include <chrono>
-#include <stratosphere.hpp>
+
+#ifdef WIN32
+    #define strtok_r                       strtok_s
+    #define localtime_r(localtime, result) localtime_s(result, localtime)
+#endif
 
 namespace syscon::config
 {
     namespace
     {
+        std::unique_ptr<IFileManager> file_manager;
+
         // Utils function
         std::string convertToLowercase(const std::string &str)
         {
@@ -167,7 +173,8 @@ namespace syscon::config
 
         void parseHotKey(const char *value, ControllerButton hotkeys[2])
         {
-            char *tok = strtok(const_cast<char *>(value), "+");
+            char *context;
+            char *tok = strtok_r(const_cast<char *>(value), "+", &context);
 
             for (int i = 0; i < 2; i++)
             {
@@ -175,11 +182,11 @@ namespace syscon::config
                     break;
 
                 hotkeys[i] = stringToButton(tok);
-                tok = strtok(NULL, "+");
+                tok = strtok_r(NULL, "+", &context);
             }
         }
 
-        bool is_number(const std::string &s)
+        bool isNumber(const std::string &s)
         {
             std::string::const_iterator it = s.begin();
             while (it != s.end() && std::isdigit(*it))
@@ -190,7 +197,8 @@ namespace syscon::config
         void parseBinding(const char *value, uint8_t button_pin[MAX_PIN_BY_BUTTONS], ControllerAnalogConfig *analogCfg)
         {
             int button_pin_idx = 0;
-            char *tok = strtok(const_cast<char *>(value), ",");
+            char *context;
+            char *tok = strtok_r(const_cast<char *>(value), ",", &context);
 
             // Reset binding when a new one is found
             analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Unknown;
@@ -200,7 +208,7 @@ namespace syscon::config
 
             while (tok != NULL)
             {
-                if (is_number(tok))
+                if (isNumber(tok))
                 {
                     int pin = atoi(tok);
 
@@ -220,7 +228,7 @@ namespace syscon::config
                         syscon::logger::LogError("Invalid button/axis: %s (Ignoring it) !", tok);
                 }
 
-                tok = strtok(NULL, ",");
+                tok = strtok_r(NULL, ",", &context);
             }
         }
 
@@ -278,12 +286,13 @@ namespace syscon::config
                 ini_data->global_config->auto_add_controller = (atoi(value) == 0) ? false : true;
             else if (nameStr == "discovery_vidpid")
             {
-                char *tok = strtok(const_cast<char *>(value), ",");
+                char *context;
+                char *tok = strtok_r(const_cast<char *>(value), ",", &context);
 
                 while (tok != NULL)
                 {
                     ini_data->global_config->discovery_vidpid.push_back(ControllerVidPid(tok));
-                    tok = strtok(NULL, ",");
+                    tok = strtok_r(NULL, ",", &context);
                 }
             }
             else
@@ -387,34 +396,42 @@ namespace syscon::config
             return 1; // Success
         }
 
-#ifdef ATMOSPHERE_OS_HORIZON
-
-        char ini_buffer[32 * 1024]; // 32 KiB buffer for the INI file
-        int ReadFromConfig(const char *path, ini_handler h, void *config)
+        char *IniReaderLineByLineCallback(char *str, int num, void *stream)
         {
-            ams::fs::FileHandle file;
+            for (int i = 0; i < num; i++)
+            {
+                if (((IFile *)stream)->read(&str[i], 1) <= 0)
+                    return nullptr;
 
-            Result rc = ams::fs::OpenFile(std::addressof(file), path, ams::fs::OpenMode_Read).GetValue();
-            if (R_FAILED(rc))
+                if (str[i] == '\n')
+                {
+                    str[i] = '\0'; // Null-terminate the string
+                    return str;
+                }
+            }
+
+            return nullptr;
+        }
+
+        int ReadFromConfig(const char *path, ini_handler handler, void *config)
+        {
+            std::unique_ptr<IFile> file = file_manager->open(path, OpenFlags_Read);
+            if (!file)
             {
                 syscon::logger::LogError("Unable to open configuration file: '%s' !", path);
-                return rc;
+                return -1;
             }
-            ON_SCOPE_EXIT { ams::fs::CloseFile(file); };
 
-            /* Parse the config. */
-            ams::fs::ReadFile(file, 0, ini_buffer, sizeof(ini_buffer));
-
-            return ini_parse_string(ini_buffer, h, config);
+            return ini_parse_stream(IniReaderLineByLineCallback, file.get(), handler, config);
         }
-#else
-        int ReadFromConfig(const char *path, ini_handler h, void *config)
-        {
-            return ini_parse(path, h, config);
-        }
-#endif
 
     } // namespace
+
+    int Initialize(std::unique_ptr<IFileManager> &&fileManager)
+    {
+        file_manager = std::move(fileManager);
+        return 0;
+    }
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config)
     {
@@ -439,7 +456,8 @@ namespace syscon::config
         // Get the current time.
         auto now = std::chrono::system_clock::now();
         auto timeT = std::chrono::system_clock::to_time_t(now);
-        auto timeinfo = *std::localtime(&timeT);
+        struct tm timeinfo;
+        localtime_r(&timeT, &timeinfo);
 
         // Check if the file exists and is accessible.
         if (!std::filesystem::exists(path))

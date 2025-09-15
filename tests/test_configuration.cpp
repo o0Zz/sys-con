@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "Controllers/BaseController.h"
 #include "config_handler.h"
+#include "filemanager_std.h"
 
 #define CONFIG_FULLPATH_PROJECT "../../../dist/config/sys-con/config.ini"
 
@@ -8,6 +9,7 @@ TEST(Configuration, test_load_config_unknown)
 {
     ControllerConfig config;
 
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
     int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0000, 0x0000, false, "");
     EXPECT_EQ(rc, 0);
 
@@ -24,6 +26,7 @@ TEST(Configuration, test_load_config_no_profile)
 {
     ControllerConfig config;
 
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
     int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x0cda, false, "");
     EXPECT_EQ(rc, 0);
 
@@ -40,6 +43,7 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
 {
     ControllerConfig config;
 
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
     int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x045e, 0x02dd, false, "");
     EXPECT_EQ(rc, 0);
 

@@ -9,9 +9,9 @@
                 "${DEVKITPRO}/libnx/include",
                 "source/ControllerLib",
                 "source/ControllerSwitch",
+                "lib/HIDDataInterpreter/inc",
                 "lib/Atmosphere-libs/libstratosphere/include",
                 "lib/Atmosphere-libs/libvapours/include",
-                "lib/HIDDataInterpreter/inc",
             ],
             "defines": [
                 "SWITCH",
@@ -19,7 +19,8 @@
                 "ATMOSPHERE_BOARD_NINTENDO_SWITCH",
                 "ATMOSPHERE_IS_STRATOSPHERE",
                 "ATMOSPHERE_ARCH_ARM64",
-                "ATMOSPHERE_OS_HORIZON"
+                "ATMOSPHERE_OS_HORIZON",
+                "ATMOSPHERE_VERSION"
             ],
             "compilerPath": "${DEVKITPRO}/devkitA64/bin/aarch64-none-elf-g++",
             "cStandard": "gnu18",

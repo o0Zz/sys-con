@@ -1,8 +1,8 @@
 #pragma once
 
+#include "switch.h"
 #include "IController.h"
 #include "SwitchVirtualGamepadHandler.h"
-#include <switch.h>
 
 // HDLS stands for "HID (Human Interface Devices) Device List Setting".
 // It's a part of the Nintendo Switch's HID (Human Interface Devices) system module, which is responsible for handling input from controllers and
