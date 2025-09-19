@@ -14,6 +14,7 @@ SwitchMITMHandler::SwitchMITMHandler(std::unique_ptr<IController> &&controller, 
 
 SwitchMITMHandler::~SwitchMITMHandler()
 {
+    Exit();
 }
 
 Result SwitchMITMHandler::Initialize()

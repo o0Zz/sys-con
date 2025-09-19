@@ -12,7 +12,7 @@ DEBUG := 0
 all: $(TARGETS)
 
 libstratosphere:
-ifeq ($(strip $(ATMOSPHERE)),1)
+ifeq ($(strip $(ATMOSPHERE)),0)
 	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere -j8 ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)
 endif
 

@@ -1,6 +1,7 @@
 #include "SwitchVirtualGamepadHandler.h"
 #include "SwitchLogger.h"
 #include <chrono>
+#include <cassert>
 
 SwitchVirtualGamepadHandler::SwitchVirtualGamepadHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
     : m_controller(std::move(controller)),
@@ -11,7 +12,9 @@ SwitchVirtualGamepadHandler::SwitchVirtualGamepadHandler(std::unique_ptr<IContro
 
 SwitchVirtualGamepadHandler::~SwitchVirtualGamepadHandler()
 {
-    Exit();
+    // Do NOT call Exit() here: calling virtuals in destructor is unsafe
+    // User must call Exit() manually before destruction in the derived class.
+    assert(!m_ThreadIsRunning);
 }
 
 Result SwitchVirtualGamepadHandler::Initialize()
@@ -111,7 +114,6 @@ void SwitchVirtualGamepadHandler::ExitThread()
 Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 {
     uint16_t input_idx = 0;
-    bool reattach_controller = false;
     NormalizedButtonData buttonData = {0};
     u64 buttons = 0;
     HidAnalogStickState analog_stick_l;
@@ -130,13 +132,20 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
         syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Controller connection state changed on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
 
         m_controllerData[input_idx].m_is_connected = m_controller->IsControllerConnected(input_idx);
-        reattach_controller = m_controllerData[input_idx].m_is_connected; // If state change to connected, we need to re-attach the controller
-        if (!m_controllerData[input_idx].m_is_connected)
+        if (m_controllerData[input_idx].m_is_connected)
+        {
+            // If state change to connected, we need to re-attach the controller ASAP
+            m_controllerData[input_idx].m_reattach_controller = true;
+        }
+        else
         {
             syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Detaching controller on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
             DetachController(input_idx);
         }
     }
+
+    if (m_controllerData[input_idx].m_is_connected == false)
+        return read_rc; // No need to update the controller state if it's not connected
 
     if (R_FAILED(read_rc))
         return read_rc;
@@ -183,13 +192,14 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     ConvertAxisToSwitchAxis(buttonData.sticks[0].axis_x, buttonData.sticks[0].axis_y, &analog_stick_l.x, &analog_stick_l.y);
     ConvertAxisToSwitchAxis(buttonData.sticks[1].axis_x, buttonData.sticks[1].axis_y, &analog_stick_r.x, &analog_stick_r.y);
 
-    if (!reattach_controller)
-        reattach_controller = (buttons & HidNpadButton_L) && (buttons & HidNpadButton_R); // L+R on the switch allow to re-attach the controller
+    if (!IsControllerAttached(input_idx) && !m_controllerData[input_idx].m_reattach_controller)
+        m_controllerData[input_idx].m_reattach_controller = (buttons & HidNpadButton_L) && (buttons & HidNpadButton_R); // L+R on the switch allow to re-attach the controller
 
-    if (m_controllerData[input_idx].m_is_connected && reattach_controller)
+    if (m_controllerData[input_idx].m_reattach_controller)
     {
         syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Re-attaching controller on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
         AttachController(input_idx);
+        m_controllerData[input_idx].m_reattach_controller = false;
     }
 
     // We get the button inputs from the input packet and update the state of our controller

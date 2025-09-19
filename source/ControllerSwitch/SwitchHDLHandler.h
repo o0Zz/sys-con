@@ -30,9 +30,8 @@ class SwitchHDLHandler : public SwitchVirtualGamepadHandler
 private:
     SwitchHDLHandlerData m_hdlsData[CONTROLLER_MAX_INPUTS];
 
-    bool IsVirtualDeviceAttached(uint16_t input_idx);
-
 protected:
+    bool IsControllerAttached(uint16_t input_idx) override;
     Result DetachController(uint16_t input_idx) override;
     Result AttachController(uint16_t input_idx) override;
     Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) override;

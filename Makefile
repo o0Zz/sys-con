@@ -6,7 +6,7 @@ ifeq ($(GIT_TAG_COMMIT_COUNT),+0)
 	GIT_TAG_COMMIT_COUNT := 
 endif
 
-ATMOSPHERE			?= 1
+ATMOSPHERE			?= 0
 ATMOSPHERE_VERSION	?= 1.7.x
 SOURCE_DIR			:= source
 OUT_DIR				:= out
@@ -27,7 +27,7 @@ all: build
 #
 build:
 	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE=$(ATMOSPHERE)
-	
+
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean
 	rm -rf $(OUT_DIR)

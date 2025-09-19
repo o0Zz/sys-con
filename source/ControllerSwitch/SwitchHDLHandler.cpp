@@ -12,6 +12,7 @@ SwitchHDLHandler::SwitchHDLHandler(std::unique_ptr<IController> &&controller, in
 
 SwitchHDLHandler::~SwitchHDLHandler()
 {
+    Exit();
 }
 
 Result SwitchHDLHandler::Initialize()
@@ -56,14 +57,14 @@ Result SwitchHDLHandler::Initialize()
     return 0;
 }
 
-bool SwitchHDLHandler::IsVirtualDeviceAttached(uint16_t input_idx)
+bool SwitchHDLHandler::IsControllerAttached(uint16_t input_idx)
 {
     return m_hdlsData[input_idx].m_hdlHandle.handle != 0;
 }
 
 Result SwitchHDLHandler::AttachController(uint16_t input_idx)
 {
-    if (IsVirtualDeviceAttached(input_idx))
+    if (IsControllerAttached(input_idx))
         return 0;
 
     syscon::logger::LogDebug("SwitchHDLHandler[%04x-%04x] Attaching device for input: %d ...", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
@@ -82,7 +83,7 @@ Result SwitchHDLHandler::AttachController(uint16_t input_idx)
 
 Result SwitchHDLHandler::DetachController(uint16_t input_idx)
 {
-    if (!IsVirtualDeviceAttached(input_idx))
+    if (!IsControllerAttached(input_idx))
         return 0;
 
     syscon::logger::LogDebug("SwitchHDLHandler[%04x-%04x] Detaching device for input: %d ...", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
@@ -104,7 +105,7 @@ Result SwitchHDLHandler::UpdateControllerState(u64 buttons, const HidAnalogStick
     hdlState->analog_stick_r.x = analog_stick_r.x;
     hdlState->analog_stick_r.y = analog_stick_r.y;
 
-    if (IsVirtualDeviceAttached(input_idx))
+    if (IsControllerAttached(input_idx))
     {
         syscon::logger::LogDebug("SwitchHDLHandler[%04x-%04x] UpdateHdlState - Idx: %d [Button: 0x%016X LeftX: %d LeftY: %d RightX: %d RightY: %d]", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, hdlState->buttons, hdlState->analog_stick_l.x, hdlState->analog_stick_l.y, hdlState->analog_stick_r.x, hdlState->analog_stick_r.y);
         Result rc = hiddbgSetHdlsState(m_hdlsData[input_idx].m_hdlHandle, hdlState);

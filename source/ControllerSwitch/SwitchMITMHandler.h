@@ -7,9 +7,9 @@ class SwitchMITMHandler : public SwitchVirtualGamepadHandler
 {
 private:
     std::array<std::shared_ptr<HidSharedMemoryController>, CONTROLLER_MAX_INPUTS> m_controllerList;
-    bool IsControllerAttached(uint16_t input_idx);
 
 protected:
+    bool IsControllerAttached(uint16_t input_idx) override;
     Result DetachController(uint16_t input_idx) override;
     Result AttachController(uint16_t input_idx) override;
     Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) override;

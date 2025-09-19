@@ -6,12 +6,8 @@ class SwitchVirtualGamepadHandlerData
 {
 
 public:
-    SwitchVirtualGamepadHandlerData()
-        : m_is_connected(false)
-    {
-    }
-
-    bool m_is_connected;
+    bool m_reattach_controller = false;
+    bool m_is_connected = false;
 };
 
 // This class is a base class for SwitchHDLHandler and SwitchAbstractedPaadHandler.
@@ -32,6 +28,7 @@ protected:
     bool m_ThreadIsRunning = false;
 
     // Fills out the HDL state with the specified button data and passes it to HID
+    virtual bool IsControllerAttached(uint16_t input_idx) = 0;
     virtual Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) = 0;
     virtual Result AttachController(uint16_t input_idx) = 0;
     virtual Result DetachController(uint16_t input_idx) = 0;
