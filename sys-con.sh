@@ -13,8 +13,8 @@
 
 # IP of your switch on your network:
 FTP_URL=ftp://192.168.10.238:5000
-FTP_USER=o0zz
-FTP_PASS=rootroot
+FTP_USER=
+FTP_PASS=
 
 #Below variable need to stay unchanged, they are correct whatever the developer
 ELF_FILE=./source/Sysmodule/sys-con.elf
