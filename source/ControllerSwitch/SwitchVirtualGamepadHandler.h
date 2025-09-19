@@ -1,11 +1,22 @@
 #pragma once
-#include "switch.h"
+#include <switch.h>
 #include "IController.h"
+
+class SwitchVirtualGamepadHandlerData
+{
+
+public:
+    bool m_reattach_controller = false;
+    bool m_is_connected = false;
+};
 
 // This class is a base class for SwitchHDLHandler and SwitchAbstractedPaadHandler.
 class SwitchVirtualGamepadHandler
 {
     friend void SwitchVirtualGamepadHandlerThreadFunc(void *arg);
+
+protected:
+    SwitchVirtualGamepadHandlerData m_controllerData[CONTROLLER_MAX_INPUTS];
 
 protected:
     std::unique_ptr<IController> m_controller;
@@ -16,7 +27,13 @@ protected:
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
 
-    void onRun();
+    // Fills out the HDL state with the specified button data and passes it to HID
+    virtual bool IsControllerAttached(uint16_t input_idx) = 0;
+    virtual Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) = 0;
+    virtual Result AttachController(uint16_t input_idx) = 0;
+    virtual Result DetachController(uint16_t input_idx) = 0;
+
+    void OnRun();
 
 public:
     // thread_priority (0x00~0x3F); 0x2C is the usual priority of the main thread, 0x3B is a special priority on cores 0..2 that enables preemptive multithreading (0x3F on core 3).
@@ -34,11 +51,12 @@ public:
     void ExitThread();
 
     // The function to call indefinitely by the input thread
-    virtual Result UpdateInput(uint32_t timeout_us) = 0;
+    virtual Result UpdateInput(uint32_t timeout_us);
     // The function to call indefinitely by the output thread
-    virtual Result UpdateOutput() = 0;
+    virtual Result UpdateOutput();
 
-    void ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out);
+    static void ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out);
+    static u8 ControllerTypeToDeviceType(ControllerType type);
 
     // Get the raw controller pointer
     inline IController *GetController() { return m_controller.get(); }

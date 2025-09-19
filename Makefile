@@ -6,6 +6,7 @@ ifeq ($(GIT_TAG_COMMIT_COUNT),+0)
 	GIT_TAG_COMMIT_COUNT := 
 endif
 
+ATMOSPHERE			?= 0
 ATMOSPHERE_VERSION	?= 1.7.x
 SOURCE_DIR			:= source
 OUT_DIR				:= out
@@ -23,8 +24,9 @@ all: build
 	cp -r $(DIST_DIR)/. $(OUT_DIR)/
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
 
+#
 build:
-	$(MAKE) -C $(SOURCE_DIR)
+	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE=$(ATMOSPHERE)
 
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean
@@ -38,6 +40,9 @@ mrproper: clean
 
 dist: clean all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .
+	
+atmosphere_1.7.x:
+	cd lib/Atmosphere-libs && git reset --hard
 
-distclean: mrproper all
+distclean: mrproper  atmosphere_$(ATMOSPHERE_VERSION) all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .

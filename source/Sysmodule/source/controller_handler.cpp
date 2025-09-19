@@ -1,6 +1,12 @@
-#include "switch.h"
 #include "controller_handler.h"
-#include "SwitchHDLHandler.h"
+#include <switch.h>
+
+#if ATMOSPHERE
+    #include "SwitchMITMHandler.h"
+#else
+    #include "SwitchHDLHandler.h"
+#endif
+
 #include "SwitchUSBInterface.h"
 #include <algorithm>
 #include <functional>
@@ -28,7 +34,11 @@ namespace syscon::controllers
 
     Result Insert(std::unique_ptr<IController> &&controllerPtr)
     {
+#if ATMOSPHERE
+        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler = std::make_unique<SwitchMITMHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+#else
         std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler = std::make_unique<SwitchHDLHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+#endif
 
         Result rc = switchHandler->Initialize();
         if (R_SUCCEEDED(rc))

@@ -1,4 +1,4 @@
-#include "switch.h"
+#include <switch.h>
 #include "usb_module.h"
 #include "controller_handler.h"
 #include "Controllers.h"
@@ -257,7 +257,7 @@ namespace syscon::usb
 
     } // namespace
 
-    Result Initialize(syscon::config::DiscoveryMode discovery_mode, std::vector<syscon::config::ControllerVidPid> &discovery_vidpid, bool auto_add_controller)
+    int Initialize(syscon::config::DiscoveryMode discovery_mode, std::vector<syscon::config::ControllerVidPid> &discovery_vidpid, bool auto_add_controller)
     {
         g_auto_add_controller = auto_add_controller;
 

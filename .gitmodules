@@ -4,3 +4,6 @@
 [submodule "lib/HIDDataInterpreter"]
 	path = lib/HIDDataInterpreter
 	url = https://github.com/o0Zz/HIDDataInterpreter.git
+[submodule "lib/Atmosphere-libs"]
+	path = lib/Atmosphere-libs
+	url = https://github.com/Atmosphere-NX/Atmosphere-libs.git

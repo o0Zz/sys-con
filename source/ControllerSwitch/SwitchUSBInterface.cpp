@@ -73,6 +73,8 @@ void SwitchUSBInterface::Close()
     }
 
     usbHsIfClose(&m_session);
+
+    ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Closed !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
 }
 
 ControllerResult SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, void *buffer, u16 *wLength)

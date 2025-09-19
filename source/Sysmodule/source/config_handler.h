@@ -68,6 +68,8 @@ namespace syscon::config
         bool auto_add_controller{true};
     };
 
+    int Initialize(std::unique_ptr<IFileManager> &&fileManager);
+
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config);
 
     int LoadControllerConfig(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile);

@@ -6,52 +6,62 @@
 #include <fstream>
 #include <filesystem>
 #include <iostream>
+#include <inttypes.h>
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)
 
 namespace syscon::logger
 {
-    static std::mutex sLogMutex;
-
-    static char sLogBuffer[1024];
-    static std::filesystem::path sLogPath;
-    static int slogLevel = LOG_LEVEL_TRACE;
-
-    const char klogLevelStr[LOG_LEVEL_COUNT] = {'T', 'D', 'P', 'I', 'W', 'E'};
-
-    void Initialize(const std::string &log)
+    namespace
     {
-        std::lock_guard<std::mutex> printLock(sLogMutex);
+        // Mutex to protect log writing
+        static std::mutex sLogMutex;
 
-        // Extract the directory from the log path
+        static char sLogBuffer[1024];
+        static std::filesystem::path sLogPath;
+        static int slogLevel = LOG_LEVEL_TRACE;
+        static std::unique_ptr<IFileManager> sFileManager;
+
+        const char klogLevelStr[LOG_LEVEL_COUNT] = {'T', 'D', 'P', 'I', 'W', 'E'};
+    } // namespace
+
+    void Initialize(const std::string &log, std::unique_ptr<IFileManager> &&file)
+    {
         sLogPath = std::filesystem::path(log);
+        sFileManager = std::move(file);
+
+        std::lock_guard<std::mutex> printLock(sLogMutex);
         std::filesystem::path basePath = sLogPath.parent_path();
 
-        // Create the directory if it doesn't exist
-        if (!basePath.empty() && !std::filesystem::exists(basePath))
-            std::filesystem::create_directories(basePath);
+        sFileManager->create_directories(basePath);
 
-        // Check the file size if it exists
-        if (std::filesystem::exists(sLogPath))
+        if (sFileManager->file_size(sLogPath) >= LOG_FILE_SIZE_MAX)
+            sFileManager->remove(sLogPath);
+    }
+
+    void Exit()
+    {
+        std::lock_guard<std::mutex> printLock(sLogMutex);
+        sFileManager.reset();
+    }
+
+    void LogWriteToFile(const char *logBuffer)
+    {
+        if (sFileManager == nullptr)
+            return;
+
+        auto file = sFileManager->open(sLogPath, (OpenFlags)(OpenFlags_Write | OpenFlags_Append));
+        if (file && file->is_open())
         {
-            auto fileSize = std::filesystem::file_size(sLogPath);
-            if (fileSize >= LOG_FILE_SIZE_MAX)
-                std::filesystem::remove(sLogPath);
+            file->write(logBuffer, strlen(logBuffer));
+            file->write("\n", 1);
         }
     }
 
     void SetLogLevel(int level)
     {
+        // This function is not thread safe, should be called only once at the start of the program
         slogLevel = level;
-    }
-
-    void LogWriteToFile(const char *logBuffer)
-    {
-        std::ofstream logFile(sLogPath, std::ios::app);
-        if (!logFile.is_open())
-            return;
-
-        logFile << logBuffer << "\n";
     }
 
     void Log(int lvl, const char *fmt, ::std::va_list vl)
@@ -62,7 +72,7 @@ namespace syscon::logger
         std::lock_guard<std::mutex> printLock(sLogMutex);
 
         uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02lu:%02lu:%02lu.%03lu|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
         std::vsnprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), fmt, vl);
 
         /* Write in the file. */
@@ -77,11 +87,11 @@ namespace syscon::logger
         std::lock_guard<std::mutex> printLock(sLogMutex);
 
         uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02lu:%02lu:%02lu.%03lu|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
         size_t start_offset = strlen(sLogBuffer);
 
-        std::snprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), "Buffer (%ld): ", size);
+        std::snprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), "Buffer (%zu): ", size);
 
         LogWriteToFile(sLogBuffer);
 
@@ -142,10 +152,6 @@ namespace syscon::logger
         va_start(vl, fmt);
         Log(LOG_LEVEL_ERROR, fmt, vl);
         va_end(vl);
-    }
-
-    void Exit()
-    {
     }
 
     void Logger::Log(LogLevel lvl, const char *format, ::std::va_list vl)

@@ -1,4 +1,4 @@
-#include "switch.h"
+#include <switch.h>
 #include "logger.h"
 
 #include "usb_module.h"
@@ -7,6 +7,7 @@
 #include "psc_module.h"
 #include "version.h"
 #include "SwitchHDLHandler.h"
+#include "filemanager_std.h"
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x80000 // 512 KiB
@@ -77,7 +78,7 @@ extern "C"
 
 int main(int argc, char *argv[])
 {
-    ::syscon::logger::Initialize(CONFIG_PATH "log.txt");
+    ::syscon::logger::Initialize(CONFIG_PATH "log.txt", std::make_unique<syscon::StdFileManager>());
 
     u32 version = hosversionGet();
     ::syscon::logger::LogInfo("-----------------------------------------------------");
@@ -87,6 +88,7 @@ int main(int argc, char *argv[])
     ::syscon::logger::LogDebug("Initializing configuration ...");
 
     ::syscon::config::GlobalConfig globalConfig;
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
     ::syscon::config::LoadGlobalConfig(CONFIG_FULLPATH, &globalConfig);
 
     ::syscon::logger::SetLogLevel(globalConfig.log_level);
