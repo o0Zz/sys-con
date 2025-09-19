@@ -1,22 +1,19 @@
-#ifdef ATMOSPHERE_VERSION
+#include <switch.h>
+#include "logger.h"
+#include <stratosphere.hpp>
 
-    #include <switch.h>
-    #include "logger.h"
-    #include <stratosphere.hpp>
+#include "usb_module.h"
+#include "controller_handler.h"
+#include "config_handler.h"
+#include "psc_module.h"
+#include "version.h"
+#include "SwitchMITMHandler.h"
+#include "SwitchMITMManager.h"
+#include "hid_mitm_module.hpp"
+#include "filemanager_ams.h"
 
-    #include "usb_module.h"
-    #include "controller_handler.h"
-    #include "config_handler.h"
-    #include "psc_module.h"
-    #include "version.h"
-    #include "SwitchHDLHandler.h"
-    #include "SwitchMITMHandler.h"
-    #include "SwitchMITMManager.h"
-    #include "hid_mitm_module.hpp"
-    #include "filemanager_ams.h"
-
-    // Size of the inner heap (adjust as necessary).
-    #define INNER_HEAP_SIZE 0x80000 // 512 KiB
+// Size of the inner heap (adjust as necessary).
+#define INNER_HEAP_SIZE 0x80000 // 512 KiB
 
 namespace ams
 {
@@ -75,10 +72,9 @@ namespace ams
         u32 version = hosversionGet();
         ::syscon::logger::LogInfo("-----------------------------------------------------");
         ::syscon::logger::LogInfo("SYS-CON MITM started %s+%d-%s (Build date: %s %s) - https://github.com/o0Zz/sys-con", ::syscon::version::syscon_tag, ::syscon::version::syscon_commit_count, ::syscon::version::syscon_git_hash, __DATE__, __TIME__);
-        ::syscon::logger::LogInfo("OS version: %d.%d.%d / AMS version: %s", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version), ::syscon::version::atmosphere_version);
+        ::syscon::logger::LogInfo("OS version: %d.%d.%d - Atmosphere version: %s", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version), ::syscon::version::atmosphere_version);
 
-        FsFileSystem *fs = fsdevGetDeviceFileSystem("sdmc");
-        ::syscon::logger::LogDebug("Initializing configuration %p ...", fs);
+        ::syscon::logger::LogDebug("Initializing configuration ...");
 
         ::syscon::config::GlobalConfig globalConfig;
         ::syscon::config::Initialize(std::make_unique<::syscon::AMSFileManager>());
@@ -108,9 +104,7 @@ namespace ams
         }
 
         ::syscon::logger::LogDebug("Shutting down sys-con ...");
-
         HidSharedMemoryManager::GetHidSharedMemoryManager().Stop();
-
         ams::syscon::hid::mitm::FinalizeHidMitm();
         ::syscon::psc::Exit();
         ::syscon::usb::Exit();
@@ -205,5 +199,3 @@ void operator delete(void *p, std::align_val_t align)
     AMS_UNUSED(align);
     return ams::syscon::Deallocate(p, 0);
 }
-
-#endif

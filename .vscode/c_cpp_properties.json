@@ -20,7 +20,7 @@
                 "ATMOSPHERE_IS_STRATOSPHERE",
                 "ATMOSPHERE_ARCH_ARM64",
                 "ATMOSPHERE_OS_HORIZON",
-                "ATMOSPHERE_VERSION"
+                "ATMOSPHERE"
             ],
             "compilerPath": "${DEVKITPRO}/devkitA64/bin/aarch64-none-elf-g++",
             "cStandard": "gnu18",

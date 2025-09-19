@@ -13,8 +13,8 @@
 
 # IP of your switch on your network:
 FTP_URL=ftp://192.168.10.238:5000
-FTP_USER=
-FTP_PASS=
+FTP_USER=o0zz
+FTP_PASS=rootroot
 
 #Below variable need to stay unchanged, they are correct whatever the developer
 ELF_FILE=./source/Sysmodule/sys-con.elf
@@ -130,7 +130,7 @@ elif  [ "$1" == "sd" ]; then
 	
 elif [ "$1" == "build" ]; then
 	rm *.zip
-	make distclean || exit 1
+	make distclean ATMOSPHERE=1 || exit 1
 	
 elif [ "$1" == "stacktrace" ]; then
     echo "PC: XXXXXXX value ?"

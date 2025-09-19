@@ -12,7 +12,7 @@ DEBUG := 0
 all: $(TARGETS)
 
 libstratosphere:
-ifneq ($(strip $(ATMOSPHERE_VERSION)),)
+ifeq ($(strip $(ATMOSPHERE)),1)
 	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere -j8 ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)
 endif
 
@@ -40,7 +40,7 @@ clean:
 	$(MAKE) -C Sysmodule clean
 	
 mrproper: clean
-ifneq ($(strip $(ATMOSPHERE_VERSION)),)
+ifeq ($(ATMOSPHERE),1)
 	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere clean
 endif
 	$(MAKE) -C ../lib/HIDDataInterpreter/build/switch clean

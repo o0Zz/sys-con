@@ -1,25 +1,24 @@
-#ifndef ATMOSPHERE_VERSION
-    #include <switch.h>
-    #include "logger.h"
+#include <switch.h>
+#include "logger.h"
 
-    #include "usb_module.h"
-    #include "controller_handler.h"
-    #include "config_handler.h"
-    #include "psc_module.h"
-    #include "version.h"
-    #include "SwitchHDLHandler.h"
-    #include "filemanager_std.h"
+#include "usb_module.h"
+#include "controller_handler.h"
+#include "config_handler.h"
+#include "psc_module.h"
+#include "version.h"
+#include "SwitchHDLHandler.h"
+#include "filemanager_std.h"
 
-    // Size of the inner heap (adjust as necessary).
-    #define INNER_HEAP_SIZE 0x80000 // 512 KiB
+// Size of the inner heap (adjust as necessary).
+#define INNER_HEAP_SIZE 0x80000 // 512 KiB
 
-    #define R_ABORT_UNLESS(rc)             \
-        {                                  \
-            if (R_FAILED(rc)) [[unlikely]] \
-            {                              \
-                diagAbortWithResult(rc);   \
-            }                              \
-        }
+#define R_ABORT_UNLESS(rc)             \
+    {                                  \
+        if (R_FAILED(rc)) [[unlikely]] \
+        {                              \
+            diagAbortWithResult(rc);   \
+        }                              \
+    }
 
 alignas(0x1000) constinit u8 g_hdls_buffer[0x8000]; // 32 KiB
 
@@ -79,8 +78,6 @@ extern "C"
 
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
     ::syscon::logger::Initialize(CONFIG_PATH "log.txt", std::make_unique<syscon::StdFileManager>());
 
     u32 version = hosversionGet();
@@ -119,5 +116,3 @@ int main(int argc, char *argv[])
     ::syscon::controllers::Exit();
     ::syscon::logger::Exit();
 }
-
-#endif
