@@ -168,7 +168,7 @@ namespace syscon::usb
                 {
                     eventClear(usbHsGetInterfaceStateChangeEvent());
 
-                    syscon::logger::LogInfo("USBInterface state was changed !");
+                    syscon::logger::LogDebug("USBInterface state was changed !");
 
                     s32 total_entries = QueryAcquiredInterfaces(interfaces, sizeof(interfaces));
 

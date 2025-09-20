@@ -13,6 +13,11 @@ namespace syscon
 
         ~StdFile() override
         {
+            close();
+        }
+
+        void close() noexcept override
+        {
             if (m_file.is_open())
                 m_file.close();
         }

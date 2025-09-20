@@ -19,6 +19,7 @@ namespace syscon
     public:
         virtual ~IFile() = default;
 
+        virtual void close() noexcept = 0;
         virtual bool is_open() const noexcept = 0;
 
         virtual std::size_t read(void *buffer, std::size_t bytes) noexcept = 0;

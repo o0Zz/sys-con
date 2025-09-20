@@ -9,17 +9,25 @@ namespace syscon
     class AMSFile : public IFile
     {
     public:
-        AMSFile(ams::fs::FileHandle &&file, OpenFlags flags, const std::filesystem::path &&path)
-            : m_file(std::move(file)), m_path(std::move(path)), m_fileoffset(0), m_flags(flags)
+        AMSFile(ams::fs::FileHandle &&file, int flags, const std::filesystem::path &&path)
+            : m_file(std::move(file)), m_path(std::move(path)), m_fileoffset(0)
         {
-            if ((m_flags & OpenFlags_Append))
+            if ((flags & ams::fs::OpenMode_AllowAppend))
                 ams::fs::GetFileSize(&m_fileoffset, m_file);
         }
 
         ~AMSFile() override
         {
+            close();
+        }
+
+        void close() noexcept override
+        {
             if (m_file.handle != INVALID_HANDLE)
+            {
                 ams::fs::CloseFile(m_file);
+                m_file.handle = INVALID_HANDLE;
+            }
         }
 
         bool is_open() const noexcept override
@@ -57,7 +65,6 @@ namespace syscon
         ams::fs::FileHandle m_file;
         std::filesystem::path m_path;
         s64 m_fileoffset;
-        syscon::OpenFlags m_flags;
     };
 
     class AMSFileManager final : public IFileManager

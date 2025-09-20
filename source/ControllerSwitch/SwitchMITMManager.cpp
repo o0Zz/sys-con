@@ -2,6 +2,7 @@
 #include "SwitchLogger.h"
 #include <string.h> // memcpy
 #include <cinttypes>
+#include <atomic>
 
 #define HID_SHARED_MEMORY_SIZE 0x40000 // 256 KiB
 #define POLLING_FREQUENCY_US   10000   // 10ms   // Official software ticks 200 times/second (5 ms per tick)
@@ -10,7 +11,10 @@
 
 static HidSharedMemoryManager g_HidSharedMemoryManager;
 static HidSharedMemory tmp_shmem_mem;
-static HidSharedMemory tmp_shmem_mem_dmp;
+// static HidSharedMemory tmp_shmem_mem_dmp;
+
+#define MITM_CONFIG_REUSE_SHARED_MEMORY 0 // Set to 1 to reuse the shared memory on maximum
+#define MITM_CONFIG_GC_ENABLED          0 // Set to 1 to enable garbage collection for the shared memory
 
 static_assert(sizeof(HidSharedMemory) == HID_SHARED_MEMORY_SIZE, "HidSharedMemory size is not good!");
 
@@ -172,12 +176,16 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
 {
-    std::shared_ptr<HidSharedMemoryEntry> entry = Get(processId, programId);
+    std::shared_ptr<HidSharedMemoryEntry> entry;
+
+#if MITM_CONFIG_REUSE_SHARED_MEMORY
+    entry = Get(processId, programId);
     if (entry != nullptr)
     {
         ::syscon::logger::LogDebug("HidSharedMemoryManager::CreateIfNotExists entry already exists (Process id: 0x%016" PRIx64 ", Program id: 0x%016" PRIx64 ")", processId, programId);
         return entry;
     }
+#endif
 
     entry = std::make_shared<HidSharedMemoryEntry>(hid_service, processId, programId);
     Add(entry);
@@ -199,7 +207,9 @@ int HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &ent
         Everytime we add a new entry, we run garbage collector
         in order to remove any entries for processes that are no longer running
     */
-    // RunGarbageCollector();
+#if MITM_CONFIG_GC_ENABLED
+    RunGarbageCollector();
+#endif
 
     m_mutex_sharedmemory.lock();
     m_sharedmemory_entry_list.push_back(entry);
@@ -321,6 +331,26 @@ void HidSharedMemoryManager::Stop()
     threadClose(&m_thread);
 }
 
+static void memcpy_64(void *dest, const void *src, size_t n)
+{
+    if (n % 8 != 0 || reinterpret_cast<uintptr_t>(dest) % 8 != 0 || reinterpret_cast<uintptr_t>(src) % 8 != 0)
+    {
+        ::syscon::logger::LogTrace("memcpy_64: n is not a multiple of 8 (%zu) or address is not 8-byte aligned (dest: %p, src: %p)", n, dest, src);
+        const uint8_t *s = static_cast<const uint8_t *>(src);
+        uint8_t *d = static_cast<uint8_t *>(dest);
+        for (size_t i = 0; i < n; i++)
+            d[i] = s[i];
+    }
+    else
+    {
+        //::syscon::logger::LogTrace("memcpy_64: %zu bytes", n);
+        const std::atomic<uint64_t> *s = reinterpret_cast<const std::atomic<uint64_t> *>(src);
+        std::atomic<uint64_t> *d = reinterpret_cast<std::atomic<uint64_t> *>(dest);
+        for (size_t i = 0; i < (n / 8); i++)
+            d[i].store(s[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
+}
+
 void HidSharedMemoryManager::OnRun()
 {
     ::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun running...");
@@ -335,12 +365,10 @@ void HidSharedMemoryManager::OnRun()
 */
         m_mutex_sharedmemory.lock();
 
-        memset(&tmp_shmem_mem, 0, sizeof(tmp_shmem_mem));
-
         for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
         {
-            //  memcpy(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-            //  memcpy((*it)->GetFakeAddr(), &tmp_shmem_mem, HID_SHARED_MEMORY_SIZE);*/
+            memcpy_64(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+            memcpy_64(&(*it)->GetFakeAddr()->touchscreen, &tmp_shmem_mem.touchscreen, sizeof(tmp_shmem_mem.touchscreen) - sizeof(tmp_shmem_mem.touchscreen.padding));
         }
         m_mutex_sharedmemory.unlock();
 
