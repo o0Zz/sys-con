@@ -25,14 +25,16 @@ AppletCompanion:
 	$(MAKE) -C AppletCompanion
 
 Sysmodule/source/version.h: ../.git/HEAD ../.git/index
-	echo "#pragma once" > $@
-	echo "namespace syscon::version" >> $@
-	echo "{" >> $@
-	echo "const char * syscon_tag = \"$(SYSCON_GIT_TAG)\";" >> $@
-	echo "const char * syscon_git_hash = \"$(SYSCON_GIT_HASH)\";" >> $@
-	echo "const unsigned int syscon_commit_count = $(SYSCON_GIT_TAG_COMMIT_COUNT);" >> $@
-	echo "const char * atmosphere_version = \"$(ATMOSPHERE_VERSION)-$(ATMOSPHERE_GIT_HASH)\";" >> $@
-	echo "}" >> $@
+	@echo "Generating version.h..."
+	@echo "#pragma once" > $@.tmp
+	@echo "namespace syscon::version" >> $@.tmp
+	@echo "{" >> $@.tmp
+	@echo "const char * syscon_tag = \"$(SYSCON_GIT_TAG)\";" >> $@.tmp
+	@echo "const char * syscon_git_hash = \"$(SYSCON_GIT_HASH)\";" >> $@.tmp
+	@echo "const unsigned int syscon_commit_count = $(SYSCON_GIT_TAG_COMMIT_COUNT);" >> $@.tmp
+	@echo "const char * atmosphere_version = \"$(ATMOSPHERE_VERSION)-$(ATMOSPHERE_GIT_HASH)\";" >> $@.tmp
+	@echo "}" >> $@.tmp
+	@if [ -f $@ ] && cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
 
 Sysmodule: libstratosphere libhiddatainterpreter Sysmodule/source/version.h
 	$(MAKE) -C Sysmodule DEBUG=$(DEBUG) ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)

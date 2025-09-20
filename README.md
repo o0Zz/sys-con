@@ -260,6 +260,7 @@ pacman -S make
 pacman -S git
 pacman -S switch-libjpeg-turbo
 pacman -S zip
+pacman -S diffutils
 make -C lib/libnx install
 ```
 
