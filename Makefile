@@ -6,7 +6,8 @@ ifeq ($(GIT_TAG_COMMIT_COUNT),+0)
 	GIT_TAG_COMMIT_COUNT := 
 endif
 
-ATMOSPHERE			?= 0
+ATMOSPHERE			?= 1
+ATMOSPHERE_BUILD_ENABLED ?= 1
 ATMOSPHERE_VERSION	?= 1.7.x
 SOURCE_DIR			:= source
 OUT_DIR				:= out
@@ -24,9 +25,8 @@ all: build
 	cp -r $(DIST_DIR)/. $(OUT_DIR)/
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
 
-#
 build:
-	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE=$(ATMOSPHERE)
+	$(MAKE) -C $(SOURCE_DIR) ATMOSPHERE=$(ATMOSPHERE) ATMOSPHERE_BUILD_ENABLED=$(ATMOSPHERE_BUILD_ENABLED)
 
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean
@@ -35,8 +35,6 @@ clean:
 	
 mrproper: clean
 	$(MAKE) -C $(SOURCE_DIR) mrproper
-	rm -rf $(OUT_DIR)
-	rm -f $(OUT_ZIP)
 
 dist: clean all
 	cd $(OUT_DIR)/ && zip -r ../$(OUT_ZIP) .

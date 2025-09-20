@@ -12,8 +12,10 @@ DEBUG := 0
 all: $(TARGETS)
 
 libstratosphere:
-ifeq ($(strip $(ATMOSPHERE)),0)
+ifeq ($(ATMOSPHERE),1) 
+ifeq ($(ATMOSPHERE_BUILD_ENABLED),1) 
 	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere -j8 ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)
+endif
 endif
 
 libhiddatainterpreter:
