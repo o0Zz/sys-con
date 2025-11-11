@@ -18,7 +18,26 @@ rstick_right=+Z
 rstick_up=+Rz
 rstick_down=-Rz
 ```
-Where rstick_xxxx could be: Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial (try all combinations to find the right one)
+Where rstick_xxxx could be: Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial, Brake, -Brake, Accelerator, -Accelerator (try all combinations to find the right one)
+
+##  ZL/ZR don't work or can't be bound
+First, remove any existing ZL/ZR bindings from your [vid-pid] section.
+In most cases, these triggers are internally associated with Rz or -Rz, and sys-con binds them automatically.
+
+If that doesn’t work, try binding them manually to regular buttons (numbers 0–15) to check if they’re detected as digital inputs.
+
+If they still don’t respond, it likely means that ZL/ZR are mapped as analog inputs. In that case, you will need to test them using analog axes until you find the correct mapping.
+
+Example:
+```
+[vid-pid]
+zl=Brake
+zr=Accelerator
+```
+Possible analog inputs include:
+`Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial, Brake, -Brake, Accelerator, -Accelerator`
+
+Try these combinations to determine which ones correspond to your controller’s ZL and ZR triggers.
 
 ## My Xbox One S/X Controller is not detected or takes ~1 minute to be detected (Dock Mode)
 If your Xbox One S/X controller is not being detected by the Switch or takes a long time (~1 minute) to connect, please follow the guidance below.

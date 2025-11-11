@@ -165,7 +165,7 @@ simulate_<BUTTON>=
 **Possible Values:**
 
  - **1 to 31**: Represent the Button ID of the controller
- - **Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial**: Represents the analog inputs (e.g., joystick, slider).
+ - **Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial, Brake, -Brake, Accelerator, -Accelerator**: Represents the analog inputs (e.g., joystick, slider).
  - **32 to 35**:  Represents the hat switch (D-Pad) directions:
    - `32` — `dpad_up`
    - `33` — `dpad_down`

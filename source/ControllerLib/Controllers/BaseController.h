@@ -14,6 +14,8 @@ enum ControllerAnalogType
     ControllerAnalogType_Ry,
     ControllerAnalogType_Slider,
     ControllerAnalogType_Dial,
+    ControllerAnalogType_Brake,
+    ControllerAnalogType_Accelerator,
 
     ControllerAnalogType_Count
 };

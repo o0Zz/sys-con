@@ -215,6 +215,8 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
     rawData.analog[ControllerAnalogBinding_Ry] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Ry], rawData.analog[ControllerAnalogBinding_Ry]);
     rawData.analog[ControllerAnalogBinding_Slider] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Slider], rawData.analog[ControllerAnalogBinding_Slider]);
     rawData.analog[ControllerAnalogBinding_Dial] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Dial], rawData.analog[ControllerAnalogBinding_Dial]);
+    rawData.analog[ControllerAnalogBinding_Brake] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Brake], rawData.analog[ControllerAnalogBinding_Brake]);
+    rawData.analog[ControllerAnalogBinding_Accelerator] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Accelerator], rawData.analog[ControllerAnalogBinding_Accelerator]);
 
     StickButton sticks_list[8] = {
         // button value_addr, sign
