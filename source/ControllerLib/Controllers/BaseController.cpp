@@ -192,9 +192,9 @@ public:
 
 void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedButtonData *normalData)
 {
-    Log(LogLevelDebug, "Controller[%04x-%04x] DATA: X=%d%%, Y=%d%%, Z=%d%%, Rz=%d%%, B1=%d, B2=%d, B3=%d, B4=%d, B5=%d, B6=%d, B7=%d, B8=%d, B9=%d, B10=%d",
-        m_device->GetVendor(), m_device->GetProduct(),
-        (int)(rawData.analog[ControllerAnalogBinding_X] * 100.0), (int)(rawData.analog[ControllerAnalogBinding_Y] * 100.0), (int)(rawData.analog[ControllerAnalogBinding_Z] * 100.0), (int)(rawData.analog[ControllerAnalogBinding_Rz] * 100.0),
+    Log(LogLevelDebug, "Controller[%04x-%04x] B1=%d B2=%d B3=%d B4=%d B5=%d B6=%d B7=%d B8=%d B9=%d B10=%d B11=%d B12=%d B13=%d B14=%d B15=%d B16=%d B17=%d B18=%d DPAD(UP=%d RIGHT=%d DOWN=%d LEFT=%d)",
+        m_device->GetVendor(),
+        m_device->GetProduct(),
         rawData.buttons[1] ? 1 : 0,
         rawData.buttons[2] ? 1 : 0,
         rawData.buttons[3] ? 1 : 0,
@@ -204,7 +204,33 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
         rawData.buttons[7] ? 1 : 0,
         rawData.buttons[8] ? 1 : 0,
         rawData.buttons[9] ? 1 : 0,
-        rawData.buttons[10] ? 1 : 0);
+        rawData.buttons[10] ? 1 : 0,
+        rawData.buttons[11] ? 1 : 0,
+        rawData.buttons[12] ? 1 : 0,
+        rawData.buttons[13] ? 1 : 0,
+        rawData.buttons[14] ? 1 : 0,
+        rawData.buttons[15] ? 1 : 0,
+        rawData.buttons[16] ? 1 : 0,
+        rawData.buttons[17] ? 1 : 0,
+        rawData.buttons[18] ? 1 : 0,
+        rawData.buttons[DPAD_UP_BUTTON_ID] ? 1 : 0,
+        rawData.buttons[DPAD_RIGHT_BUTTON_ID] ? 1 : 0,
+        rawData.buttons[DPAD_DOWN_BUTTON_ID] ? 1 : 0,
+        rawData.buttons[DPAD_LEFT_BUTTON_ID] ? 1 : 0);
+
+    Log(LogLevelDebug, "Controller[%04x-%04x] X=%d%%, Y=%d%%, Z=%d%%, Rx=%d%%, Ry=%d%%, Rz=%d%%, Slider=%d%%, Dial=%d%%, Brake=%d%%, Accelerator=%d%%",
+        m_device->GetVendor(),
+        m_device->GetProduct(),
+        (int)(rawData.analog[ControllerAnalogBinding_X] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Y] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Z] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Rx] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Ry] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Rz] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Slider] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Dial] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Brake] * 100.0),
+        (int)(rawData.analog[ControllerAnalogBinding_Accelerator] * 100.0));
 
     rawData.analog[ControllerAnalogBinding_Unknown] = 0.0f;
     rawData.analog[ControllerAnalogBinding_X] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_X], rawData.analog[ControllerAnalogBinding_X]);

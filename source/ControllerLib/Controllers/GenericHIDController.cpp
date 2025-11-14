@@ -92,7 +92,7 @@ ControllerResult GenericHIDController::ParseData(uint8_t *buffer, size_t size, R
     if (input_idx != NULL && *input_idx == 0)
         *input_idx = joystick_data.index;
 
-    for (int i = 0; i < MAX_CONTROLLER_BUTTONS; i++)
+    for (int i = 0; i < joystick_data.button_count; i++)
         rawData->buttons[i] = joystick_data.buttons[i];
 
     rawData->analog[ControllerAnalogType_Rx] = BaseController::Normalize(joystick_data.Rx, -32768, 32767);
