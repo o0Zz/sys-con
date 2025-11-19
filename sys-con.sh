@@ -130,7 +130,7 @@ elif  [ "$1" == "sd" ]; then
 	
 elif [ "$1" == "build" ]; then
 	rm *.zip
-	make distclean ATMOSPHERE=1 || exit 1
+	make distclean ATMOSPHERE=0 || exit 1
 	
 elif [ "$1" == "stacktrace" ]; then
     echo "PC: XXXXXXX value ?"
