@@ -22,7 +22,7 @@ WiiController::~WiiController()
 
 uint16_t WiiController::GetInputCount()
 {
-    return WII_MAX_INPUTS; // Supports a single Wii controller
+    return WII_MAX_INPUTS;
 }
 
 ControllerResult WiiController::ReadNextBuffer(uint8_t *buffer, size_t *size, uint16_t *input_idx, uint32_t timeout_us)
@@ -64,10 +64,7 @@ ControllerResult WiiController::ParseData(uint8_t *buffer, size_t size, RawInput
     m_is_connected[*input_idx] = status & STATE_CONNECTED;
 
     if (!m_is_connected[*input_idx])
-    {
-        memset(rawData, 0, sizeof(*rawData));
-        return CONTROLLER_STATUS_SUCCESS;
-    }
+        return CONTROLLER_STATUS_NOTHING_TODO;
 
     uint16_t btns = ((uint16_t)buffer[1]) | ((uint16_t)buffer[2] << 8);
 
