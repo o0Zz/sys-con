@@ -141,6 +141,11 @@ namespace syscon::usb
                             syscon::logger::LogInfo("Initializing Switch (Interface count: %d) ...", total_entries);
                             controllers::Insert(std::make_unique<SwitchController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
                         }
+                        else if (config.driver == "wii")
+                        {
+                            syscon::logger::LogInfo("Initializing Wii (Interface count: %d) ...", total_entries);
+                            controllers::Insert(std::make_unique<WiiController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
+                        }
                         else
                         {
                             /* For now if Generic controller expose more than 1 interface, we will create as many GenericHIDController as we have interfaces */
