@@ -1,6 +1,5 @@
 #include "Controllers/WiiController.h"
 
-#define STATE_CONNECTED   0x01
 #define STATE_EXTRA_POWER 0x04
 #define STATE_NORMAL      0x10
 #define STATE_WAVEBIRD    0x20
@@ -52,16 +51,13 @@ ControllerResult WiiController::ReadNextBuffer(uint8_t *buffer, size_t *size, ui
 
 ControllerResult WiiController::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
 {
-    (void)input_idx;
-
     if (size < 9)
         return CONTROLLER_STATUS_UNEXPECTED_DATA;
 
     uint8_t status = buffer[0];
 
     m_rumble_supported[*input_idx] = ((status & STATE_EXTRA_POWER) != 0); // Rumble can be supported if Extra Power bit is set
-    // m_is_connected[*input_idx] = status & (STATE_NORMAL | STATE_WAVEBIRD);
-    m_is_connected[*input_idx] = status & STATE_CONNECTED;
+    m_is_connected[*input_idx] = (status & (STATE_NORMAL | STATE_WAVEBIRD)) != 0;
 
     if (!m_is_connected[*input_idx])
         return CONTROLLER_STATUS_NOTHING_TODO;
