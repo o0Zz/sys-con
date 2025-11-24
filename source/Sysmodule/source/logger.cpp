@@ -154,14 +154,22 @@ namespace syscon::logger
         va_end(vl);
     }
 
-    void Logger::Log(LogLevel lvl, const char *format, ::std::va_list vl)
+    void Logger::Log(LogLevel lvl, const char *format, ...)
     {
+        ::std::va_list vl;
+        va_start(vl, format);
         syscon::logger::Log(lvl, format, vl);
+        va_end(vl);
     }
 
     void Logger::LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size)
     {
         syscon::logger::LogBuffer(lvl, buffer, size);
+    }
+
+    bool Logger::IsEnabled(LogLevel lvl)
+    {
+        return lvl >= slogLevel;
     }
 
 } // namespace syscon::logger

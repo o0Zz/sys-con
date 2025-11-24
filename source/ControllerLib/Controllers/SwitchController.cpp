@@ -23,7 +23,7 @@ ControllerResult SwitchController::Initialize()
 
     if (m_outPipe.size() < 1)
     {
-        Log(LogLevelError, "SwitchController: Initialization not complete ! No output endpoint found !");
+        m_logger->Log(LogLevelError, "SwitchController: Initialization not complete ! No output endpoint found !");
         return CONTROLLER_STATUS_INVALID_ENDPOINT;
     }
 
@@ -95,10 +95,10 @@ ControllerResult SwitchController::ParseData(uint8_t *buffer, size_t size, RawIn
     cal_right_y.max = std::max(right_y, cal_right_y.max);
     cal_right_y.min = std::min(right_y, cal_right_y.min);
 
-    Log(LogLevelTrace, "X=%u, Y=%u, Z=%u, Rz=%u (Calib: X=[%u,%u], Y=[%u,%u], Z=[%u,%u], Rz=[%u,%u])",
-        left_x, left_y, right_x, right_y,
-        cal_left_x.min, cal_left_x.max, cal_left_y.min, cal_left_y.max,
-        cal_right_x.min, cal_right_x.max, cal_right_y.min, cal_right_y.max);
+    m_logger->Log(LogLevelTrace, "X=%u, Y=%u, Z=%u, Rz=%u (Calib: X=[%u,%u], Y=[%u,%u], Z=[%u,%u], Rz=[%u,%u])",
+                  left_x, left_y, right_x, right_y,
+                  cal_left_x.min, cal_left_x.max, cal_left_y.min, cal_left_y.max,
+                  cal_right_x.min, cal_right_x.max, cal_right_y.min, cal_right_y.max);
 
     rawData->analog[ControllerAnalogType_X] = BaseController::Normalize(left_x, cal_left_x.min, cal_left_x.max, 2000);
     rawData->analog[ControllerAnalogType_Y] = -1.0f * BaseController::Normalize(left_y, cal_left_y.min, cal_left_y.max, 2000);

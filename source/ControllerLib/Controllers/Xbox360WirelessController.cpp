@@ -25,7 +25,7 @@ ControllerResult Xbox360WirelessController::OpenInterfaces()
 
     if (m_inPipe.size() < XBOX360_MAX_INPUTS)
     {
-        Log(LogLevelError, "Xbox360WirelessController: Not enough input endpoints (%d / %d)", m_inPipe.size(), XBOX360_MAX_INPUTS);
+        m_logger->Log(LogLevelError, "Xbox360WirelessController: Not enough input endpoints (%d / %d)", m_inPipe.size(), XBOX360_MAX_INPUTS);
         return CONTROLLER_STATUS_INVALID_ENDPOINT;
     }
 
@@ -140,7 +140,7 @@ ControllerResult Xbox360WirelessController::SetLED(uint16_t input_idx, Xbox360LE
 
 ControllerResult Xbox360WirelessController::OnControllerConnect(uint16_t input_idx)
 {
-    Log(LogLevelInfo, "Xbox360WirelessController Wireless controller connected (Idx: %d) ...", input_idx);
+    m_logger->Log(LogLevelInfo, "Xbox360WirelessController Wireless controller connected (Idx: %d) ...", input_idx);
 
     if (m_outPipe.size() > input_idx)
     {
@@ -157,7 +157,7 @@ ControllerResult Xbox360WirelessController::OnControllerConnect(uint16_t input_i
 
 ControllerResult Xbox360WirelessController::OnControllerDisconnect(uint16_t input_idx)
 {
-    Log(LogLevelInfo, "Xbox360WirelessController Wireless controller disconnected (Idx: %d) ...", input_idx);
+    m_logger->Log(LogLevelInfo, "Xbox360WirelessController Wireless controller disconnected (Idx: %d) ...", input_idx);
 
     if (m_outPipe.size() > input_idx)
         m_outPipe[input_idx]->Write(poweroffPacket, sizeof(poweroffPacket));

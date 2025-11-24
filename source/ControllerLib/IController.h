@@ -24,19 +24,6 @@ protected:
     ControllerConfig m_config;
     std::unique_ptr<ILogger> m_logger;
 
-    void Log(LogLevel lvl, const char *format, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, format);
-        m_logger->Log(lvl, format, vl);
-        va_end(vl);
-    }
-
-    void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size)
-    {
-        m_logger->LogBuffer(lvl, buffer, size);
-    }
-
 public:
     IController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger) : m_device(std::move(device)),
                                                                                                                            m_config(config),

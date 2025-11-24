@@ -15,6 +15,7 @@ class ILogger
 {
 public:
     virtual ~ILogger() = default;
-    virtual void Log(LogLevel aLogLevel, const char *format, ::std::va_list vl) = 0;
+    virtual void Log(LogLevel aLogLevel, const char *format, ...) = 0;
     virtual void LogBuffer(LogLevel aLogLevel, const uint8_t *buffer, size_t size) = 0;
+    virtual bool IsEnabled(LogLevel aLogLevel) = 0;
 };
