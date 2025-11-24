@@ -23,14 +23,8 @@ enum ControllerAnalogType
 class RawInputData
 {
 public:
-    RawInputData()
-    {
-        for (int i = 0; i < MAX_CONTROLLER_BUTTONS; i++)
-            buttons[i] = false;
-    }
-
-    bool buttons[MAX_CONTROLLER_BUTTONS];
-    float analog[ControllerAnalogType_Count];
+    bool buttons[MAX_CONTROLLER_BUTTONS] = {};
+    float analog[ControllerAnalogType_Count] = {};
 };
 
 class BaseController : public IController
