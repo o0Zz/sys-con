@@ -61,15 +61,45 @@ A complete list of tested controller is available
 When a new controller is connected, sys-con tries to determine the best profile for this new controller.
 In most cases the dpad and joystick will work fine, the buttons may not be mapped correctly by default (and in rare cases the right stick may be reversed or not working). If this is the case, you will need to map the buttons yourself using the procedure below:
 
-### Method 1 (Directly from the switch)
+### Method 1: Configure Directly on the Switch (Recommended)
 
-1. Connect your controller to the switch
-2. On the switch, go to Settings -> Controllers & Sensors > Test Input Devices
-3. Press the button and try to understand the correct mapping.
-3. On your SDCard, edit `/config/sys-con/config.ini` and find your controller's `[vid-pid]` section (most likely at the end of the file).
-Note: A new section is automatically created if the controller is not known to sys-con. This means that your controller will most likely be the last one (at the end).
+1. Connect your controller to the Nintendo Switch.
 
-Typical configuration will look like
+2. Open the input test menu: 
+   On the Switch, go to:  
+   Settings → Controllers & Sensors → Test Input Devices
+
+3. Test each button.**
+   Press every button on the controller and write down or memorize how the Switch reports each input.  
+   Your goal here is to understand the correct mapping for your specific controller.
+
+4. Edit your sys-con configuration.**
+   On the SD card, open:  
+   ```
+   /config/sys-con/config.ini
+   ```  
+   Locate the section corresponding to your controller’s **VID-PID**, which looks like:  
+   ```
+   [vid-pid]
+   ```  
+   This section is usually added automatically when sys-con detects an unknown controller.  
+   Most of the time, it will be at the bottom of the file.
+
+#### Tips for Faster Iteration
+
+The `config.ini` file is reloaded **every time you plug in a controller**.  
+To speed up testing:
+
+1. Install **vgedit** on your Switch:  
+   https://github.com/vgmoose/vgedit/releases  
+2. **Unplug the controller**  
+3. Edit `config.ini` directly from the Switch using vgedit  
+4. **Re-plug the controller** to reload the config  
+5. Test your changes immediately  
+
+This allows very quick trial-and-error cycles.
+
+#### Typical configuration
 ```
 [0810-0001]
 B=1
@@ -98,6 +128,7 @@ A=1
 ```
 
 ### Method 2 (From a windows PC)
+__Note:__ Button mapping can differ between windows and the switch
 1. Connect your controller to your PC
 2. Go to 'Control Panel' > 'Device Manager' and find your USB device under 'Human Interface Devices'.
 3. Double click on the device or right click and select Properties.
