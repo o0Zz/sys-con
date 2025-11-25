@@ -58,3 +58,16 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
     EXPECT_EQ(config.simulateCombos[1].buttonSimulated, ControllerButton::HOME);
     EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::NONE);
 }
+
+TEST(Configuration, test_load_config_with_profile_wii)
+{
+    ControllerConfig config;
+
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x057e, 0x0337, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.driver, "wii");
+    EXPECT_EQ(config.profile, "wii");
+    EXPECT_EQ(config.buttonsPin[ControllerButton::ZL][0], 0);
+}
