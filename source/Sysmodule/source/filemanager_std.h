@@ -90,6 +90,9 @@ namespace syscon
 
         std::uintmax_t file_size(const std::filesystem::path &p) const override
         {
+            if (!std::filesystem::exists(p))
+                return 0;
+
             return std::filesystem::file_size(p);
         }
     };
