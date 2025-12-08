@@ -5,7 +5,7 @@
             "label": "Build Release",
             "type": "shell",
             "promptOnClose": true,
-            "command": "make -j3 ATMOSPHERE_BUILD_ENABLED=0",
+            "command": "make -j3 ATMOSPHERE_BUILD_ENABLED=0 ATMOSPHERE=0",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
