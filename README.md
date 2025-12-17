@@ -36,6 +36,7 @@ log_level=0
 ```
 
 Reboot the Nintendo Switch.
+**Note**: Verbose logging introduces significant input lag. Use it only for debugging.
 
 ## Features
 - [x] HID joystick/gamepad/wheels supported (PC Controller compatible)

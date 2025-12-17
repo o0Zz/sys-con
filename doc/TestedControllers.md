@@ -1,9 +1,10 @@
 # List of controllers tested with sys-con
 | Controller name         | Supported | Comment | Link |
 |-------------------------|-----------|---------|------|
-| 8BitDo Ultimate 2C | Yes | If don't works with Dock (Procedure here #78) | - |
+| 8BitDo Ultimate 2C | Yes | Might be long to dectect (Up to 2min) - If don't works with Dock (Procedure here [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
 | 8BitDo Wireless Bluetooth USB Adapter 2 | Yes | DInput mode | You need to use Dinput mode. See "Manual setting" in https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html |
 | 8BitDo Ultimate C 2.4g Wireless Controller  | No | Not detected: #21 | - |
+| 8BitDo Ultimate 2.4g Wireless Controller  | Yes | Might be long to dectect (Up to 2min) - If don't works with Dock (Procedure here [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
 | Dualshock 4 | Yes | - | - |
 | Dualshock 3 | Yes | - | - |
 | Dualsense (PS5) | Yes | - | - |
@@ -24,11 +25,11 @@
 | Y3 Joypad with GAME STICK 4K LITE SEGAM M8 V4.0 | Yes | - | https://aliexpress.com/item/1005002359869263.html |
 | Y3 Joypad (Receiver YC5)| No | Not detected: #30 | https://aliexpress.com/item/1005005458136372.html |
 | Atomic PSX/PS2 adapter | Yes | - | - |
-| Cosmic Byte Xbox360 | Yes | discovery_mode=1 | - |
+| Cosmic Byte Xbox360 | Yes | You need to set `discovery_mode=1` | - |
 | Activbb X6-34U Controller | Yes | - | - |
 | Foyu Controller | Yes | - | - |
-| Gamecube adapter (HS-WU025, BX-W201C)  | Yes | - | PC Mode |
-| Gamecube adapter (HS-WU025, BX-W201C, WUP-028, [057e-0337] ...)  | Yes | discovery_mode=1 | Switch Mode |
+| Gamecube adapter (HS-WU025, BX-W201C) - PC Mode | Yes | - | - |
+| Gamecube adapter (HS-WU025, BX-W201C, WUP-028, [057e-0337] ...) - Switch Mode | Yes | - | - |
 | Chinese wired SNES Controller | Yes | - | - |
 | Xinmotek XM-10 (Arcade controller) | Yes | - | https://aliexpress.com/item/32785870354.html |
 | Logitech Driving Force GT (Wheel) | Yes | - | - |

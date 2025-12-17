@@ -237,3 +237,5 @@ Search for logs starting with `|E|`, If you find one, this is an error and it mi
 - Connect your controllers
 - Wait for the issue
 - Download the logs from `/config/sys-con/log.txt`
+
+**Note**: `log_level=0` introduces significant input lag. Use it only for debugging.
