@@ -19,6 +19,24 @@ WiiController::~WiiController()
 {
 }
 
+ControllerResult WiiController::Initialize()
+{
+    ControllerResult result = BaseController::Initialize();
+    if (result != CONTROLLER_STATUS_SUCCESS)
+        return result;
+
+    if (m_outPipe.empty())
+    {
+        m_logger->Log(LogLevelError, "WiiController: Initialization failed, no output endpoint available");
+        return CONTROLLER_STATUS_INVALID_ENDPOINT;
+    }
+
+    const uint8_t init_payload[] = {0x13};
+    (void)m_outPipe[0]->Write(init_payload, sizeof(init_payload));
+
+    return CONTROLLER_STATUS_SUCCESS;
+}
+
 uint16_t WiiController::GetInputCount()
 {
     return WII_MAX_INPUTS;

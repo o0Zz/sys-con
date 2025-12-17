@@ -22,6 +22,8 @@ public:
 
     virtual ~WiiController();
 
+    ControllerResult Initialize() override;
+
     ControllerResult ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
     bool Support(ControllerFeature feature) override;

@@ -21,7 +21,7 @@ ControllerResult SwitchController::Initialize()
     if (result != CONTROLLER_STATUS_SUCCESS)
         return result;
 
-    if (m_outPipe.size() < 1)
+    if (m_outPipe.empty())
     {
         m_logger->Log(LogLevelError, "SwitchController: Initialization not complete ! No output endpoint found !");
         return CONTROLLER_STATUS_INVALID_ENDPOINT;
@@ -37,7 +37,7 @@ ControllerResult SwitchController::Initialize()
 
     // Send the initialization packet
     uint8_t initPacket1[SWITCH_INPUT_BUFFER_SIZE]{0x80, 0x02};
-    m_outPipe[0]->Write(initPacket1, sizeof(initPacket1));
+    (void)m_outPipe[0]->Write(initPacket1, sizeof(initPacket1));
 
     // Read the response
     size_t size = sizeof(buffer);
@@ -45,7 +45,7 @@ ControllerResult SwitchController::Initialize()
 
     // Forces the Joy-Con or Pro Controller to only talk over USB HID without any timeouts.
     uint8_t initPacket2_ForceToUSB[SWITCH_INPUT_BUFFER_SIZE]{0x80, 0x04};
-    m_outPipe[0]->Write(initPacket2_ForceToUSB, sizeof(initPacket2_ForceToUSB));
+    (void)m_outPipe[0]->Write(initPacket2_ForceToUSB, sizeof(initPacket2_ForceToUSB));
 
     return CONTROLLER_STATUS_SUCCESS;
 }
