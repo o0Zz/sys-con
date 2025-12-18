@@ -4,7 +4,7 @@
 | 8BitDo Ultimate 2C | Yes | Might be long to dectect (Up to 2min) - If don't works with Dock (Procedure here [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
 | 8BitDo Wireless Bluetooth USB Adapter 2 | Yes | DInput mode | You need to use Dinput mode. See "Manual setting" in https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html |
 | 8BitDo Ultimate C 2.4g Wireless Controller  | No | Not detected: #21 | - |
-| 8BitDo Ultimate 2.4g Wireless Controller  | Yes | Might be long to dectect (Up to 2min) - If don't works with Dock (Procedure here [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
+| 8BitDo Ultimate 2.4g Wireless Controller  | Yes | D-input mode | You need to use Dinput mode. Controller has a physical switch #91 |
 | Dualshock 4 | Yes | - | - |
 | Dualshock 3 | Yes | - | - |
 | Dualsense (PS5) | Yes | - | - |

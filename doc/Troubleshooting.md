@@ -53,6 +53,45 @@ Recommended procedure to ensure proper detection:
  4. Connect the controller to the Switch (Ensure the Switch is wakeup)
  5. Wait up to 1 minute for the controller to be recognized
 
+## 8BitDo controller issues (slow detection, works in OTG but not docked, etc.)
+If your 8BitDo controller is not detected, takes a long time to be discovered, or works in OTG mode but not in docked mode, you will likely need to switch its input mode. 8BitDo controllers typically support XInput and DInput, but sys-con does not behave the same with both.
+
+Depending on your controller model, there are two possibilities to switch modes:
+
+**1. Physical switch**  
+Some 8BitDo controllers have a hardware switch to select XInput or DInput.  
+Set it accordingly, then reconnect the controller.
+
+**2. Button combination (most common)**  
+If there is no physical switch, use the following procedure:
+
+1. Power off the controller  
+2. Press and hold:
+
+> - **HOME + X** → sets the controller to **XInput**
+> - **HOME + B** → sets the controller to **DInput**
+
+Or 
+
+>- **VIEW + UP** → sets the controller to **XInput**
+>- **VIEW + DOWN** → sets the controller to **DInput**
+>- Ref: https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html
+
+3. Holding the buttons will power on the controller (Release the buttons once powered on)
+4. Re-pair the controller (Bluetooth or USB)
+
+If one mode does not work, try the other one.
+
+**3. Switch USB ports / controller order (important)**
+
+If switching input modes does not work, try changing the USB enumeration order.
+Some users reported success with the following workaround:
+- Plug another controller first (and keep it plugged in)
+- Then plug the 8BitDo controller
+
+Sys-con may successfully initialize the 8BitDo controller afterward.
+This seems to help in cases where the 8BitDo controller is long to discovered, ignored or fails to initialize when plugged in alone.
+
 ## I got error: "Failed to acquire USB interface - Error: 0x25A8C ..."
 This error occur when two drivers try to acquire the controller.
 Most of the time, this issue occured when you plug an official switch controller and the switch itself try to open it.
