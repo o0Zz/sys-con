@@ -1,10 +1,13 @@
 #include "Controllers/WiiController.h"
+#include <thread>
 
 #define STATE_EXTRA_POWER 0x04
 #define STATE_NORMAL      0x10
 #define STATE_WAVEBIRD    0x20
 
 // Ref https://github.com/ToadKing/wii-u-gc-adapter/blob/master/wii-u-gc-adapter.c
+// Ref2 https://github.com/SternXD/dolphin/blob/master/Source/Core/InputCommon/GCAdapter.cpp
+// Reverse ING: https://gbatemp.net/threads/wii-u-gamecube-adapter-reverse-engineering-cont.388169/
 
 WiiController::WiiController(std::unique_ptr<IUSBDevice> &&device,
                              const ControllerConfig &config,
@@ -33,6 +36,9 @@ ControllerResult WiiController::Initialize()
 
     const uint8_t init_payload[] = {0x13};
     (void)m_outPipe[0]->Write(init_payload, sizeof(init_payload));
+
+    const uint8_t rumble_payload[] = {0x11, 0, 0, 0, 0};
+    (void)m_outPipe[0]->Write(rumble_payload, sizeof(rumble_payload));
 
     return CONTROLLER_STATUS_SUCCESS;
 }
