@@ -67,7 +67,7 @@ void SwitchVirtualGamepadHandler::OnRun()
         if ((rc != CONTROLLER_STATUS_TIMEOUT) && (execution_time_us > 30000)) // 30ms
             ::syscon::logger::LogWarning("SwitchVirtualGamepadHandler UpdateInputOutput took: %d ms !", execution_time_us / 1000);
 
-        if (R_FAILED(rc) && rc != CONTROLLER_STATUS_TIMEOUT)
+        if (R_FAILED(rc) && rc != CONTROLLER_STATUS_TIMEOUT && rc != CONTROLLER_STATUS_NOTHING_TODO)
         {
             /*
             This case is a "normal case" and happen when the controller is disconnected

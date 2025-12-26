@@ -37,9 +37,6 @@ ControllerResult WiiController::Initialize()
     const uint8_t init_payload[] = {0x13};
     (void)m_outPipe[0]->Write(init_payload, sizeof(init_payload));
 
-    const uint8_t rumble_payload[] = {0x11, 0, 0, 0, 0};
-    (void)m_outPipe[0]->Write(rumble_payload, sizeof(rumble_payload));
-
     return CONTROLLER_STATUS_SUCCESS;
 }
 
@@ -115,4 +112,14 @@ bool WiiController::Support(ControllerFeature feature)
         return true;
 
     return false;
+}
+
+ControllerResult WiiController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+{
+    if (input_idx >= 4)
+        return CONTROLLER_STATUS_INVALID_INDEX;
+
+    rumbleData[1 + input_idx] = (uint8_t)(amp_high * 255);
+
+    return m_outPipe[0]->Write(rumbleData, sizeof(rumbleData));
 }
