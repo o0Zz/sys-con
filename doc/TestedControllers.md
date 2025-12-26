@@ -46,3 +46,4 @@
 | Buffalo iBuffalo Classic USB | Yes | - | https://www.amazon.com/Buffalo-iBuffalo-Classic-USB-Gamepad/dp/B002B9XB0E |
 | L-TEK Dance Pad PRO (DDR pad) | Yes | - | - |
 | Google Stadia Controller | Yes | - | https://www.amazon.fr/Google-Stadia-Premiere-Edition-White/dp/B09N751DP2 |
+| KIWITATA N64 USB Mini Controller | Yes | Edit config.ini and replace [0f0d-00c1] by the commented entry | https://www.amazon.ca/dp/B08P8CWBC1 |
