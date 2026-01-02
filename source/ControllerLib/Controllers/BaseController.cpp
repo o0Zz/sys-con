@@ -250,7 +250,7 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
     rawData.analog[ControllerAnalogBinding_Brake] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Brake], rawData.analog[ControllerAnalogBinding_Brake]);
     rawData.analog[ControllerAnalogBinding_Accelerator] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Accelerator], rawData.analog[ControllerAnalogBinding_Accelerator]);
 
-    StickButton sticks_list[8] = {
+    StickButton sticks_list[] = {
         // button value_addr, sign
         StickButton(ControllerButton::LSTICK_LEFT, &normalData->sticks[0].axis_x, -1.0f),
         StickButton(ControllerButton::LSTICK_RIGHT, &normalData->sticks[0].axis_x, +1.0f),
@@ -276,7 +276,7 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
             *stick.value_addr = stick.sign * value;
     }
 
-    const ControllerButton controllerButtonList[MAX_CONTROLLER_BUTTONS] = {
+    const ControllerButton controllerButtonList[] = {
         ControllerButton::X,
         ControllerButton::A,
         ControllerButton::B,
