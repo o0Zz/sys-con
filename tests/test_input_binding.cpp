@@ -24,6 +24,7 @@ TEST(BaseController, test_input_binding_basis)
     config.buttonsPin[ControllerButton::Y][0] = 2;
     config.buttonsPin[ControllerButton::A][0] = 3;
     config.buttonsPin[ControllerButton::B][0] = 4;
+    config.buttonsPin[ControllerButton::RSTICK_CLICK][0] = 15;
     config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = ControllerAnalogBinding_X;
     config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
     config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = ControllerAnalogBinding_X;
@@ -36,6 +37,7 @@ TEST(BaseController, test_input_binding_basis)
     RawInputData inputData;
     inputData.buttons[1] = true;
     inputData.buttons[3] = true;
+    inputData.buttons[15] = true;
     inputData.analog[ControllerAnalogBinding_X] = 0.5f;  // Right
     inputData.analog[ControllerAnalogBinding_Y] = -0.5f; // Down
 
@@ -48,6 +50,7 @@ TEST(BaseController, test_input_binding_basis)
     EXPECT_FALSE(normalizedData.buttons[ControllerButton::B]);
     EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_x, 0.5f);
     EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_y, -0.5f);
+    EXPECT_TRUE(normalizedData.buttons[ControllerButton::RSTICK_CLICK]);
 }
 
 TEST(BaseController, test_input_deadzone)

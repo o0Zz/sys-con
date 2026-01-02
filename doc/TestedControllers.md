@@ -29,7 +29,8 @@
 | Activbb X6-34U Controller | Yes | - | - |
 | Foyu Controller | Yes | - | - |
 | Gamecube adapter (HS-WU025, BX-W201C) - PC Mode | Yes | - | - |
-| Gamecube adapter (HS-WU025, BX-W201C, WUP-028, [057e-0337] ...) - Switch Mode | Yes | - | - |
+| Gamecube adapter (HS-WU025, BX-W201C, [057e-0337] ...) - Switch Mode | Yes | - | - |
+| Gamecube adapter (WUP-028) | Yes | Might need up to 30s to be detected | - |
 | Chinese wired SNES Controller | Yes | - | - |
 | Xinmotek XM-10 (Arcade controller) | Yes | - | https://aliexpress.com/item/32785870354.html |
 | Logitech Driving Force GT (Wheel) | Yes | - | - |
