@@ -1,11 +1,11 @@
 # List of controllers tested with sys-con
 | Controller name         | Supported | Comment | Link |
 |-------------------------|-----------|---------|------|
-| 8BitDo Ultimate 2C | Yes | Might be long to dectect (Up to 2min) - If don't works with Dock (Procedure here [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
+| 8BitDo Ultimate 2C | Yes | Might be long to dectect (Up to 2min) - Might don't works with Dock (See [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
 | 8bitdo Ultimate 2C Wireless Dongle | Yes | - | - |
-| 8BitDo Wireless Bluetooth USB Adapter 2 | Yes | DInput mode | You need to use Dinput mode. See "Manual setting" in https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html |
-| 8BitDo Ultimate C 2.4g Wireless Controller  | No | Not detected: #21 | - |
-| 8BitDo Ultimate 2.4g Wireless Controller  | Yes | D-input mode | You need to use Dinput mode. Controller has a physical switch #91 |
+| 8BitDo Wireless Bluetooth USB Adapter 2 | Yes | You need to use Dinput mode. See "Manual setting" in https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html | - |
+| 8BitDo Ultimate C 2.4g Wireless Controller  | No | Not detected: [#21](https://github.com/o0Zz/sys-con/issues/21) | - |
+| 8BitDo Ultimate 2.4g Wireless Controller  | Yes | You need to use Dinput mode. Controller has a physical switch [#91](https://github.com/o0Zz/sys-con/issues/91) | - |
 | Dualshock 4 | Yes | - | - |
 | Dualshock 3 | Yes | - | - |
 | Dualsense (PS5) | Yes | - | - |
@@ -24,7 +24,7 @@
 | Y3 Arcade Fighter Stick with GAME STICK 4K LITE SEGAM M8 V7.0 | Yes | - | https://aliexpress.com/item/1005006369969745.html |
 | Y3 Joypad with Receiver no-name | Yes | - | https://aliexpress.com/item/1005002359869263.html |
 | Y3 Joypad with GAME STICK 4K LITE SEGAM M8 V4.0 | Yes | - | https://aliexpress.com/item/1005002359869263.html |
-| Y3 Joypad (Receiver YC5)| No | Not detected: #30 | https://aliexpress.com/item/1005005458136372.html |
+| Y3 Joypad (Receiver YC5)| No | Not detected: [#30](https://github.com/o0Zz/sys-con/issues/30) | https://aliexpress.com/item/1005005458136372.html |
 | Atomic PSX/PS2 adapter | Yes | - | - |
 | Cosmic Byte Xbox360 | Yes | You need to set `discovery_mode=1` | - |
 | Activbb X6-34U Controller | Yes | - | - |
@@ -49,3 +49,4 @@
 | L-TEK Dance Pad PRO (DDR pad) | Yes | - | - |
 | Google Stadia Controller | Yes | - | https://www.amazon.fr/Google-Stadia-Premiere-Edition-White/dp/B09N751DP2 |
 | KIWITATA N64 USB Mini Controller | Yes | Edit config.ini and replace [0f0d-00c1] by the commented entry | https://www.amazon.ca/dp/B08P8CWBC1 |
+| Raptor PS4 Wired (0c12-0e16) | Yes | 	You need to set `discovery_mode=1` & `discovery_vidpid=0c12-0e16` ([#97](https://github.com/o0Zz/sys-con/issues/97)) | - |

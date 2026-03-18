@@ -92,6 +92,19 @@ Some users reported success with the following workaround:
 Sys-con may successfully initialize the 8BitDo controller afterward.
 This seems to help in cases where the 8BitDo controller is long to discovered, ignored or fails to initialize when plugged in alone.
 
+## Controller detected as USB Audio (Loss of TV sound)
+
+This happens because of how the Nintendo Switch handles USB HID discovery.
+Since sys-con enables generic HID discovery, the Switch may detect an audio-capable profile on the controller and automatically select it as the active audio device. When this occurs, audio is routed to the controller instead of the TV.
+This behavior is controlled by the Switch and cannot be changed by sys-con.
+
+Workaround: Restrict discovery to your controller using:
+```
+discovery_mode=1
+discovery_vidpid=XXXX-YYYY
+```
+Replace XXXX-YYYY with your controller VID/PID. This prevents the Switch from selecting the controller's audio profile.
+
 ## I got error: "Failed to acquire USB interface - Error: 0x25A8C ..."
 This error occur when two drivers try to acquire the controller.
 Most of the time, this issue occured when you plug an official switch controller and the switch itself try to open it.
