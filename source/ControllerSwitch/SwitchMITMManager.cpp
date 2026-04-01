@@ -5,18 +5,38 @@
 #include <atomic>
 
 #define HID_SHARED_MEMORY_SIZE 0x40000 // 256 KiB
-#define POLLING_FREQUENCY_US   10000   // 10ms   // Official software ticks 200 times/second (5 ms per tick)
+#define POLLING_FREQUENCY_US   500     // 1ms   // Official software ticks 200 times/second (5 ms per tick)
 // #define POLLING_FREQUENCY_US 5000000 // 5s
 #define MS_TO_NS(x) (x * 1000000ul)
 
 static HidSharedMemoryManager g_HidSharedMemoryManager;
-static HidSharedMemory tmp_shmem_mem;
-// static HidSharedMemory tmp_shmem_mem_dmp;
+// static __attribute__((aligned(8))) HidSharedMemory tmp_shmem_mem;
+//  static __attribute__((aligned(8))) HidSharedMemory tmp_shmem_mem_dmp;
 
 #define MITM_CONFIG_REUSE_SHARED_MEMORY 0 // Set to 1 to reuse the shared memory on maximum
 #define MITM_CONFIG_GC_ENABLED          0 // Set to 1 to enable garbage collection for the shared memory
 
 static_assert(sizeof(HidSharedMemory) == HID_SHARED_MEMORY_SIZE, "HidSharedMemory size is not good!");
+
+static void memcpy_64(void *dest, const void *src, size_t n)
+{
+    if (n % 8 != 0 || reinterpret_cast<uintptr_t>(dest) % 8 != 0 || reinterpret_cast<uintptr_t>(src) % 8 != 0)
+    {
+        ::syscon::logger::LogWarning("memcpy_64: n is not a multiple of 8 (%zu) or address is not 8-byte aligned (dest: %p, src: %p)", n, dest, src);
+        const uint8_t *s = static_cast<const uint8_t *>(src);
+        uint8_t *d = static_cast<uint8_t *>(dest);
+        for (size_t i = 0; i < n; i++)
+            d[i] = s[i];
+    }
+    else
+    {
+        //::syscon::logger::LogTrace("memcpy_64: %zu bytes", n);
+        const volatile uint64_t *s = reinterpret_cast<const volatile uint64_t *>(src);
+        volatile uint64_t *d = reinterpret_cast<volatile uint64_t *>(dest);
+        for (size_t i = 0; i < (n / 8); i++)
+            d[i] = s[i];
+    }
+}
 
 /************************************************************
               HidSharedMemoryEntry
@@ -77,6 +97,10 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId
     ::syscon::logger::LogDebug("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", RealAddr: %p, FakeAddr: %p)", m_process_id, GetRealAddr(), GetFakeAddr());
     //::syscon::logger::LogDebug("Fake memory => Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p", m_fake_shared_memory.handle, m_fake_shared_memory.size, m_fake_shared_memory.perm, GetFakeAddr());
     //::syscon::logger::LogDebug("Real memory => Handle: %016" PRIx64 ", Size: %zu, Permissions: %u, MapAddr: %p", m_real_shared_memory.handle, m_real_shared_memory.size, m_real_shared_memory.perm, GetRealAddr());
+
+    // Initialize the fake shared memory with the content of the real shared memory
+    memcpy_64(GetFakeAddr(), GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+    m_touchscreen_prev_tail = GetFakeAddr()->touchscreen.lifo.header.tail; // Initialize the previous tail with the current tail value
 }
 
 HidSharedMemoryEntry::~HidSharedMemoryEntry()
@@ -238,6 +262,8 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::Get(u64 processId,
 
 void HidSharedMemoryManager::RunGarbageCollector()
 {
+    ::syscon::logger::LogDebug("HidSharedMemoryManager Garbage Collector running...");
+
     m_mutex_sharedmemory.lock();
     for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end();)
     {
@@ -306,7 +332,7 @@ int HidSharedMemoryManager::Start()
 
     m_running = true;
 
-    Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 41, -2);
+    Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 41, 3);
     if (R_FAILED(rc))
         return rc;
 
@@ -331,28 +357,9 @@ void HidSharedMemoryManager::Stop()
     threadClose(&m_thread);
 }
 
-static void memcpy_64(void *dest, const void *src, size_t n)
-{
-    if (n % 8 != 0 || reinterpret_cast<uintptr_t>(dest) % 8 != 0 || reinterpret_cast<uintptr_t>(src) % 8 != 0)
-    {
-        ::syscon::logger::LogTrace("memcpy_64: n is not a multiple of 8 (%zu) or address is not 8-byte aligned (dest: %p, src: %p)", n, dest, src);
-        const uint8_t *s = static_cast<const uint8_t *>(src);
-        uint8_t *d = static_cast<uint8_t *>(dest);
-        for (size_t i = 0; i < n; i++)
-            d[i] = s[i];
-    }
-    else
-    {
-        //::syscon::logger::LogTrace("memcpy_64: %zu bytes", n);
-        const std::atomic<uint64_t> *s = reinterpret_cast<const std::atomic<uint64_t> *>(src);
-        std::atomic<uint64_t> *d = reinterpret_cast<std::atomic<uint64_t> *>(dest);
-        for (size_t i = 0; i < (n / 8); i++)
-            d[i].store(s[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
-    }
-}
-
 void HidSharedMemoryManager::OnRun()
 {
+    __attribute__((aligned(8))) HidTouchScreenStateAtomicStorage tmp_atomic_storage;
     ::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun running...");
 
     while (m_running)
@@ -367,9 +374,31 @@ void HidSharedMemoryManager::OnRun()
 
         for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
         {
-            memcpy_64(&tmp_shmem_mem, (*it)->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-            memcpy_64(&(*it)->GetFakeAddr()->touchscreen, &tmp_shmem_mem.touchscreen, sizeof(tmp_shmem_mem.touchscreen) - sizeof(tmp_shmem_mem.touchscreen.padding));
+            // Read count
+            u64 count = __atomic_load_n(&((*it)->GetRealAddr()->touchscreen.lifo.header.count), __ATOMIC_RELAXED);
+            if (count != 16)
+                continue; // No new input, skip
+
+            // As soon as we have at least 1 input, we can rely on tail
+            u64 tail = __atomic_load_n(&((*it)->GetRealAddr()->touchscreen.lifo.header.tail), __ATOMIC_RELAXED);
+            if (tail == (*it)->m_touchscreen_prev_tail)
+                continue; // No new input, skip
+
+            // Read storage after tail to avoid reading the same input twice in case of new input during the copy
+            memcpy_64(&tmp_atomic_storage, &(*it)->GetRealAddr()->touchscreen.lifo.storage[tail], sizeof(tmp_atomic_storage));
+
+            //::syscon::logger::LogDebug("HidSharedMemoryManager::OnRun updating shared memory for process id: 0x%016" PRIx64 " (Count: %d)", (*it)->GetProcessId(), tmp_shmem_mem.touchscreen.lifo.header.count);
+            u64 current_tail = (*it)->GetFakeAddr()->touchscreen.lifo.header.tail + 1;
+            if (current_tail >= (*it)->GetFakeAddr()->touchscreen.lifo.header.buffer_count)
+                current_tail = 0;
+
+            // This memcpy create issue !
+            memcpy_64(&(*it)->GetFakeAddr()->touchscreen.lifo.storage[current_tail], &tmp_atomic_storage, sizeof(tmp_atomic_storage));
+            __atomic_store_n(&((*it)->GetFakeAddr()->touchscreen.lifo.header.tail), current_tail, __ATOMIC_RELEASE);
+
+            (*it)->m_touchscreen_prev_tail = current_tail;
         }
+
         m_mutex_sharedmemory.unlock();
 
         s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
@@ -446,7 +475,9 @@ Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState 
             Initialize(*it);
 
         // Update lifo
-        int current_tail = internal_state->full_key_lifo.header.tail;
+        u64 current_tail = internal_state->full_key_lifo.header.tail + 1;
+        if (current_tail >= internal_state->full_key_lifo.header.buffer_count)
+            current_tail = 0;
 
         internal_state->full_key_lifo.storage[current_tail].sampling_number = m_sampling_number++;
         internal_state->full_key_lifo.storage[current_tail].state.buttons = buttons;
@@ -455,13 +486,10 @@ Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState 
         internal_state->full_key_lifo.storage[current_tail].state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
         internal_state->full_key_lifo.storage[current_tail].state.reserved = 0;
 
-        if (internal_state->full_key_lifo.header.count < internal_state->full_key_lifo.header.buffer_count)
-            internal_state->full_key_lifo.header.count++;
+        __atomic_store_n(&internal_state->full_key_lifo.header.tail, current_tail, __ATOMIC_RELEASE);
 
-        if (internal_state->full_key_lifo.header.tail >= (internal_state->full_key_lifo.header.buffer_count - 1))
-            internal_state->full_key_lifo.header.tail = 0;
-        else
-            internal_state->full_key_lifo.header.tail++;
+        if (internal_state->full_key_lifo.header.count < internal_state->full_key_lifo.header.buffer_count)
+            __atomic_store_n(&internal_state->full_key_lifo.header.count, internal_state->full_key_lifo.header.count + 1, __ATOMIC_RELEASE);
     }
 
     return 0;

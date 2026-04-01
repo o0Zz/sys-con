@@ -27,6 +27,9 @@ public:
     inline u64 GetProcessId() const;
     inline u64 GetProgramId() const;
 
+    // Testing purpose only
+    u64 m_touchscreen_prev_tail;
+
 protected:
     void Copy();
 
