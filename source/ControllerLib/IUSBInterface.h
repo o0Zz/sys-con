@@ -1,14 +1,6 @@
 #pragma once
 #include "IUSBEndpoint.h"
 
-enum usb_request_recipient
-{
-    USB_RECIPIENT_DEVICE = 0x00,
-    USB_RECIPIENT_INTERFACE = 0x01,
-    USB_RECIPIENT_ENDPOINT = 0x02,
-    USB_RECIPIENT_OTHER = 0x03,
-};
-
 class IUSBInterface
 {
 protected:

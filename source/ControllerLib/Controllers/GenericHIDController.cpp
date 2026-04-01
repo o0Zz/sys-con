@@ -7,6 +7,14 @@
 #define USB_REQUEST_GET_DESCRIPTOR 0x06
 #define USB_REQUEST_SET_IDLE       0x0A
 
+enum usb_request_recipient
+{
+    USB_RECIPIENT_DEVICE = 0x00,
+    USB_RECIPIENT_INTERFACE = 0x01,
+    USB_RECIPIENT_ENDPOINT = 0x02,
+    USB_RECIPIENT_OTHER = 0x03,
+};
+
 // https://www.usb.org/sites/default/files/documents/hid1_11.pdf  p55
 
 GenericHIDController::GenericHIDController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)

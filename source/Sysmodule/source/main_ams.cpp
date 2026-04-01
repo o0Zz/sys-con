@@ -72,7 +72,10 @@ namespace ams
         u32 version = hosversionGet();
         ::syscon::logger::LogInfo("-----------------------------------------------------");
         ::syscon::logger::LogInfo("SYS-CON MITM started %s+%d-%s (Build date: %s %s) - https://github.com/o0Zz/sys-con", ::syscon::version::syscon_tag, ::syscon::version::syscon_commit_count, ::syscon::version::syscon_git_hash, __DATE__, __TIME__);
-        ::syscon::logger::LogInfo("OS version: %d.%d.%d - Atmosphere version: %s", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version), ::syscon::version::atmosphere_version);
+        ::syscon::logger::LogInfo("OS version: %d.%d.%d (Max supported: %d.%d.%d) - Atmosphere version: %d.%d.%d",
+                                  HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version),
+                                  ATMOSPHERE_SUPPORTED_HOS_VERSION_MAJOR, ATMOSPHERE_SUPPORTED_HOS_VERSION_MINOR, ATMOSPHERE_SUPPORTED_HOS_VERSION_MICRO,
+                                  ATMOSPHERE_RELEASE_VERSION);
 
         ::syscon::logger::LogDebug("Initializing configuration ...");
 

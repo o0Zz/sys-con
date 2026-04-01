@@ -116,6 +116,7 @@ bool WiiController::Support(ControllerFeature feature)
 
 ControllerResult WiiController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
 {
+    (void)amp_low; // Not supported by Wii controller
     if (input_idx >= 4)
         return CONTROLLER_STATUS_INVALID_INDEX;
 
