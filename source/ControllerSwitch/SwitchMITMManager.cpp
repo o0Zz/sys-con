@@ -5,9 +5,8 @@
 #include <atomic>
 
 #define HID_SHARED_MEMORY_SIZE 0x40000 // 256 KiB
-#define POLLING_FREQUENCY_US   500     // 1ms   // Official software ticks 200 times/second (5 ms per tick)
-// #define POLLING_FREQUENCY_US 5000000 // 5s
-#define MS_TO_NS(x) (x * 1000000ul)
+#define POLLING_FREQUENCY_US   2000    // 2ms   // Official software ticks 200 times/second (5 ms per tick)
+#define MS_TO_NS(x)            (x * 1000000ul)
 
 static HidSharedMemoryManager g_HidSharedMemoryManager;
 // static __attribute__((aligned(8))) HidSharedMemory tmp_shmem_mem;
@@ -332,7 +331,7 @@ int HidSharedMemoryManager::Start()
 
     m_running = true;
 
-    Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 41, 3);
+    Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 38, 3 /* On CPU 3 responsible for input */);
     if (R_FAILED(rc))
         return rc;
 
@@ -392,7 +391,6 @@ void HidSharedMemoryManager::OnRun()
             if (current_tail >= (*it)->GetFakeAddr()->touchscreen.lifo.header.buffer_count)
                 current_tail = 0;
 
-            // This memcpy create issue !
             memcpy_64(&(*it)->GetFakeAddr()->touchscreen.lifo.storage[current_tail], &tmp_atomic_storage, sizeof(tmp_atomic_storage));
             __atomic_store_n(&((*it)->GetFakeAddr()->touchscreen.lifo.header.tail), current_tail, __ATOMIC_RELEASE);
 
