@@ -61,24 +61,25 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
 
         *rawData = m_rawInput;
 
-        if (controllerData->seq_num > 0xA0) { // SDL3 runs this every 3 seconds, but this should work well enough
+        if (controllerData->seq_num > 0xA0)
+        { // SDL3 runs this every 3 seconds, but this should work well enough
             for (auto &&interface : m_interfaces)
             {
                 // Send feature report to exit Lizard mode, otherwise some inputs will cause issues
-                char8_t buffer[HID_FEATURE_REPORT_BYTES] = { 1 };
-        
+                uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
+
                 FeatureReportMsg *msg =
-                    reinterpret_cast<FeatureReportMsg*>(buffer + 1);
-        
+                    reinterpret_cast<FeatureReportMsg *>(buffer + 1);
+
                 msg->header.type = ID_SET_SETTINGS_VALUES;
                 msg->header.length = sizeof(ControllerSetting);
-        
+
                 msg->payload.setSettingsValues.settings[0].settingNum =
                     SETTING_LIZARD_MODE;
-        
+
                 msg->payload.setSettingsValues.settings[0].settingValue =
                     LIZARD_MODE_OFF;
-        
+
                 ControllerResult lizardResult =
                     interface->ControlTransferOutput(
                         0x21,
@@ -86,8 +87,7 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
                         (3 << 8) | buffer[0],
                         interface->GetDescriptor()->bInterfaceNumber,
                         buffer,
-                        sizeof(buffer)
-                    );
+                        sizeof(buffer));
 
                 if (lizardResult != CONTROLLER_STATUS_SUCCESS)
                     return lizardResult;
@@ -99,29 +99,4 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
         m_logger->Log(LogLevelDebug, "SteamController2026[%04x-%04x] sent Report ID %d with data size %d", m_device->GetVendor(), m_device->GetProduct(), controllerData->report_id, size);
 
     return CONTROLLER_STATUS_NOTHING_TODO;
-}
-
-// Below doesn't work yet, just copy-pasted from Xbox code. I don't think it matters yet since I believe rumble isn't fully implemented
-bool SteamController2026::Support(ControllerFeature feature)
-{
-    if (feature == SUPPORTS_RUMBLE)
-        return true;
-
-    return false;
-}
-
-ControllerResult SteamController2026::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
-{
-    (void)input_idx;
-    const uint8_t rumble_data[]{
-        0x09, 0x00, 0x00,
-        0x09, 0x00, 0x0f, 0x00, 0x00,
-        (uint8_t)(amp_high * 255),
-        (uint8_t)(amp_low * 255),
-        0xff, 0x00, 0x00};
-
-    if (m_outPipe.size() <= input_idx)
-        return CONTROLLER_STATUS_INVALID_INDEX;
-
-    return m_outPipe[input_idx]->Write(rumble_data, sizeof(rumble_data));
 }
