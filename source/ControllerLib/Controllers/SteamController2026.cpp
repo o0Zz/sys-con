@@ -28,7 +28,6 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
 
     if (controllerData->report_id == REPORT_INPUT)
     {
-
         if (size < sizeof(Steam2026InputReport))
         {
             m_logger->Log(LogLevelError, "SteamController2026[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(Steam2026InputReport));
@@ -62,6 +61,38 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
 
         *rawData = m_rawInput;
 
+        if (controllerData->seq_num > 0xA0) { // SDL3 runs this every 3 seconds, but this should work well enough
+            for (auto &&interface : m_interfaces)
+            {
+                // Send feature report to exit Lizard mode, otherwise some inputs will cause issues
+                char8_t buffer[HID_FEATURE_REPORT_BYTES] = { 1 };
+        
+                FeatureReportMsg *msg =
+                    reinterpret_cast<FeatureReportMsg*>(buffer + 1);
+        
+                msg->header.type = ID_SET_SETTINGS_VALUES;
+                msg->header.length = sizeof(ControllerSetting);
+        
+                msg->payload.setSettingsValues.settings[0].settingNum =
+                    SETTING_LIZARD_MODE;
+        
+                msg->payload.setSettingsValues.settings[0].settingValue =
+                    LIZARD_MODE_OFF;
+        
+                ControllerResult lizardResult =
+                    interface->ControlTransferOutput(
+                        0x21,
+                        0x09,
+                        (3 << 8) | buffer[0],
+                        interface->GetDescriptor()->bInterfaceNumber,
+                        buffer,
+                        sizeof(buffer)
+                    );
+
+                if (lizardResult != CONTROLLER_STATUS_SUCCESS)
+                    return lizardResult;
+            }
+        }
         return CONTROLLER_STATUS_SUCCESS;
     }
     else
