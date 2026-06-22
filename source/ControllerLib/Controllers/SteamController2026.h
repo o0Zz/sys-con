@@ -82,6 +82,7 @@ class SteamController2026 : public BaseController
 {
 private:
     RawInputData m_rawInput;
+    uint64_t last_lizard_update;
     ControllerResult WriteAckModeReport(uint16_t input_idx, uint8_t sequence);
 
 public:
@@ -94,9 +95,9 @@ public:
 };
 
 #define HID_FEATURE_REPORT_BYTES 64
-#define ID_SET_SETTINGS_VALUES 0x87
-#define SETTING_LIZARD_MODE 0x09
-#define LIZARD_MODE_OFF 0x00
+#define ID_SET_SETTINGS_VALUES   0x87
+#define SETTING_LIZARD_MODE      0x09
+#define LIZARD_MODE_OFF          0x00
 
 typedef struct
 {

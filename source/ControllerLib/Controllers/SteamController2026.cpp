@@ -4,8 +4,6 @@
 
 #define REPORT_INPUT 0x45
 
-uint64_t last_lizard_update;
-
 SteamController2026::SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
     : BaseController(std::move(device), std::move(config), std::move(logger))
 {
