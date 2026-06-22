@@ -68,16 +68,16 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
                 // Send feature report to exit Lizard mode, otherwise some inputs will cause issues
                 uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
 
-                FeatureReportMsg *msg =
-                    reinterpret_cast<FeatureReportMsg *>(buffer + 1);
+                SetSettingsFeatureReportMsg *msg =
+                    reinterpret_cast<SetSettingsFeatureReportMsg *>(buffer + 1);
 
                 msg->header.type = ID_SET_SETTINGS_VALUES;
                 msg->header.length = sizeof(ControllerSetting);
 
-                msg->payload.setSettingsValues.settings[0].settingNum =
+                msg->setSettingsValues.settings[0].settingNum =
                     SETTING_LIZARD_MODE;
 
-                msg->payload.setSettingsValues.settings[0].settingValue =
+                msg->setSettingsValues.settings[0].settingValue =
                     LIZARD_MODE_OFF;
 
                 ControllerResult lizardResult =
