@@ -1,7 +1,10 @@
 #include "Controllers/SteamController2026.h"
 #include <vector>
+#include <chrono>
 
 #define REPORT_INPUT 0x45
+
+uint64_t last_lizard_update;
 
 SteamController2026::SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
     : BaseController(std::move(device), std::move(config), std::move(logger))
@@ -61,8 +64,9 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
 
         *rawData = m_rawInput;
 
-        if (controllerData->seq_num > 0xA0)
-        { // SDL3 runs this every 3 seconds, but this should work well enough
+        uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        if (!last_lizard_update || (now - last_lizard_update) >= 3000)
+        {
             for (auto &&interface : m_interfaces)
             {
                 // Send feature report to exit Lizard mode, otherwise some inputs will cause issues
@@ -92,6 +96,7 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
                 if (lizardResult != CONTROLLER_STATUS_SUCCESS)
                     return lizardResult;
             }
+            last_lizard_update = now;
         }
         return CONTROLLER_STATUS_SUCCESS;
     }
