@@ -8,3 +8,4 @@
 #include "Controllers/SwitchController.h"
 #include "Controllers/WiiController.h"
 #include "Controllers/GenericHIDController.h"
+#include "Controllers/SteamController2026.h"
