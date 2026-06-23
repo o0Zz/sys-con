@@ -53,6 +53,7 @@ Reboot the Nintendo Switch.
 - [x] All PC Controllers
 - [x] All Playstation Controllers
 - [x] All Xbox Controllers
+- [x] Steam Controllers
 - [x] Wheels
 
 A complete list of tested controller is available 
@@ -326,7 +327,8 @@ For an in-depth explanation of how sys-con works, see [here](source).
 In order to debug the applicaiton, you can directly refer to the logs available there: `/config/sys-con/log.txt`.
 
 ## Credits
-**Texita** For his contribution in controllers testings and mappings
+**Texita** For contributions to controller testing and mappings.
+**gingerphoenix10** For implementing the Steam controller driver.
 
 ## Support
 If you want to support this work 

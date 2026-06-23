@@ -50,3 +50,4 @@
 | Google Stadia Controller | Yes | - | https://www.amazon.fr/Google-Stadia-Premiere-Edition-White/dp/B09N751DP2 |
 | KIWITATA N64 USB Mini Controller | Yes | Edit config.ini and replace [0f0d-00c1] by the commented entry | https://www.amazon.ca/dp/B08P8CWBC1 |
 | Raptor PS4 Wired (0c12-0e16) | Yes | 	You need to set `discovery_mode=1` & `discovery_vidpid=0c12-0e16` ([#97](https://github.com/o0Zz/sys-con/issues/97)) | - |
+| Steam controller 2026 (Wired + Wireless puck) | Yes | - | - |
