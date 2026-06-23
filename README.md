@@ -327,8 +327,8 @@ For an in-depth explanation of how sys-con works, see [here](source).
 In order to debug the applicaiton, you can directly refer to the logs available there: `/config/sys-con/log.txt`.
 
 ## Credits
-**Texita** For contributions to controller testing and mappings.
-**gingerphoenix10** For implementing the Steam controller driver.
+- **Texita** For contributions to controller testing and mappings.
+- **gingerphoenix10** For implementing the Steam controller driver.
 
 ## Support
 If you want to support this work 
