@@ -6,6 +6,36 @@
 // https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/steam/controller_structs.h
 // https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/steam/controller_constants.h
 
+#define REPORT_INPUT             0x45
+#define HID_FEATURE_REPORT_BYTES 64
+#define ID_SET_SETTINGS_VALUES   0x87
+#define SETTING_LIZARD_MODE      0x09
+#define LIZARD_MODE_OFF          0x00
+
+typedef struct
+{
+    unsigned char type;
+    unsigned char length;
+} FeatureReportHeader;
+
+typedef struct
+{
+    unsigned char settingNum;
+    unsigned short settingValue;
+} ControllerSetting;
+
+typedef struct
+{
+    ControllerSetting settings[(HID_FEATURE_REPORT_BYTES - sizeof(FeatureReportHeader)) / sizeof(ControllerSetting)];
+} MsgSetSettingsValues;
+
+typedef struct
+{
+    FeatureReportHeader header;
+    MsgSetSettingsValues setSettingsValues;
+
+} SetSettingsFeatureReportMsg;
+
 _PACKED(struct Steam2026ButtonData {
     uint8_t a : 1;
     uint8_t b : 1;
@@ -93,32 +123,3 @@ public:
 
     virtual ControllerResult ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 };
-
-#define HID_FEATURE_REPORT_BYTES 64
-#define ID_SET_SETTINGS_VALUES   0x87
-#define SETTING_LIZARD_MODE      0x09
-#define LIZARD_MODE_OFF          0x00
-
-typedef struct
-{
-    unsigned char type;
-    unsigned char length;
-} FeatureReportHeader;
-
-typedef struct
-{
-    unsigned char settingNum;
-    unsigned short settingValue;
-} ControllerSetting;
-
-typedef struct
-{
-    ControllerSetting settings[(HID_FEATURE_REPORT_BYTES - sizeof(FeatureReportHeader)) / sizeof(ControllerSetting)];
-} MsgSetSettingsValues;
-
-typedef struct
-{
-    FeatureReportHeader header;
-    MsgSetSettingsValues setSettingsValues;
-
-} SetSettingsFeatureReportMsg;

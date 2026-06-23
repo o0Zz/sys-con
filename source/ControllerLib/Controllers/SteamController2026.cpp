@@ -2,8 +2,6 @@
 #include <vector>
 #include <chrono>
 
-#define REPORT_INPUT 0x45
-
 SteamController2026::SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
     : BaseController(std::move(device), std::move(config), std::move(logger))
 {
@@ -75,24 +73,10 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
 
                 msg->header.type = ID_SET_SETTINGS_VALUES;
                 msg->header.length = sizeof(ControllerSetting);
+                msg->setSettingsValues.settings[0].settingNum = SETTING_LIZARD_MODE;
+                msg->setSettingsValues.settings[0].settingValue = LIZARD_MODE_OFF;
 
-                msg->setSettingsValues.settings[0].settingNum =
-                    SETTING_LIZARD_MODE;
-
-                msg->setSettingsValues.settings[0].settingValue =
-                    LIZARD_MODE_OFF;
-
-                ControllerResult lizardResult =
-                    interface->ControlTransferOutput(
-                        0x21,
-                        0x09,
-                        (3 << 8) | buffer[0],
-                        interface->GetDescriptor()->bInterfaceNumber,
-                        buffer,
-                        sizeof(buffer));
-
-                if (lizardResult != CONTROLLER_STATUS_SUCCESS)
-                    return lizardResult;
+                interface->ControlTransferOutput(0x21, 0x09, (3 << 8) | buffer[0], interface->GetDescriptor()->bInterfaceNumber, buffer, sizeof(buffer));
             }
             last_lizard_update = now;
         }
