@@ -23,11 +23,6 @@ jobs:
       - name: Mark workspace as a safe git directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Install build dependencies
-        run: |
-          dkp-pacman -Syu --noconfirm
-          dkp-pacman -S --noconfirm --needed make git zip diffutils switch-libjpeg-turbo
-
       - name: Install libnx
         run: make -C lib/libnx install
 
