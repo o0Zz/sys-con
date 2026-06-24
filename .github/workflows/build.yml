@@ -25,8 +25,8 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed make git zip diffutils switch-libjpeg-turbo
+          dkp-pacman -Syu --noconfirm
+          dkp-pacman -S --noconfirm --needed make git zip diffutils switch-libjpeg-turbo
 
       - name: Install libnx
         run: make -C lib/libnx install
