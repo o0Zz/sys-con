@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <sys/stat.h>
 #include <mutex>
+#include <thread>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
