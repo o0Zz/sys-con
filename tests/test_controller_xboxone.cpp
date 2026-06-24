@@ -6,6 +6,7 @@
 #include "mocks/USBInterface.h"
 #include "mocks/USBEndpoint.h"
 #include <array>
+#include <cstring>
 
 MATCHER_P2(BufferMatches, expected, size, "Matches buffer content")
 {
