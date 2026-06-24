@@ -29,9 +29,18 @@ jobs:
       - name: Build and assemble release tree
         run: make all
 
+      - name: Compute version (same logic as the Makefile)
+        id: version
+        run: |
+          GIT_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
+          COUNT=$(git rev-list "$(git rev-list --tags --no-walk --max-count=1)"..HEAD --count)
+          VERSION="$GIT_TAG"
+          [ "$COUNT" != "0" ] && VERSION="$GIT_TAG+$COUNT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sys-con
+          name: sys-con-${{ steps.version.outputs.version }}
           path: out/
           if-no-files-found: error
