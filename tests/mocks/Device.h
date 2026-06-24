@@ -1,6 +1,6 @@
 #pragma once
 #include "IUSBDevice.h"
-#include "mocks/USBInterface.h"
+#include "USBInterface.h"
 
 class MockDevice : public IUSBDevice
 {
