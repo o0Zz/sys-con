@@ -1,0 +1,42 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ['*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0   # full history + tags so the Makefile's `git describe` works
+
+      - name: Mark workspace as a safe git directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed make git zip diffutils switch-libjpeg-turbo
+
+      - name: Install libnx
+        run: make -C lib/libnx install
+
+      - name: Build and assemble release tree
+        run: make all
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sys-con
+          path: out/
+          if-no-files-found: error
