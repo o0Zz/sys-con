@@ -9,7 +9,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure (host build)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build tests
+        run: cmake --build build --target SysConTests -j
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     container: devkitpro/devkita64:latest
 
