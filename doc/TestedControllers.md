@@ -13,6 +13,8 @@
 | Hori Real Arcade Pro 4 | Yes | - | https://www.amazon.com/HORI-Real-Arcade-Pro-PlayStation-4/dp/B00SULMRI4 |
 | PDP Wave Afterglow Xbox Series | Yes | - | - |
 | PDP Neon White Xbox One | Yes | - | - |
+| MSI GC20 | Yes | - | - |
+| MSI GC30 v2 | Yes | - | - |
 | Thrustmaster T150 Pro (Wheel) | Yes | - | - |
 | Thrustmaster Dual Analog 4 | Yes | - | - |
 | Xbox Original | Yes | - | - |
