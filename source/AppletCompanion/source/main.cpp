@@ -40,14 +40,6 @@ std::string buttonToStr(u64 ButtonMask)
         buttonStr += "Right ";
     if (ButtonMask & HidNpadButton_Down)
         buttonStr += "Down ";
-    if (ButtonMask & HidNpadButton_LagonCLeft)
-        buttonStr += "C-Left ";
-    if (ButtonMask & HidNpadButton_LagonCUp)
-        buttonStr += "C-Up ";
-    if (ButtonMask & HidNpadButton_LagonCRight)
-        buttonStr += "C-Right ";
-    if (ButtonMask & HidNpadButton_LagonCDown)
-        buttonStr += "C-Down ";
     /*if (ButtonMask & HidNpadButton_StickLLeft)
         buttonStr += "StickLLeft ";
     if (ButtonMask & HidNpadButton_StickLUp)
@@ -90,7 +82,7 @@ int main()
 
     PrintConsole *console = consoleInit(NULL);
 
-    padConfigureInput(8, HidNpadStyleSet_NpadStandard | HidNpadStyleTag_NpadLagon);
+    padConfigureInput(8, HidNpadStyleSet_NpadStandard);
 
     padInitializeAny(&pad);
 
