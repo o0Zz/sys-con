@@ -45,6 +45,10 @@ enum ControllerButton
     DPAD_LEFT,
     CAPTURE,
     HOME,
+    C_LEFT,  ///< N64 C-Left button (HidNpadButton_LagonCLeft, only meaningful for controller_type=n64)
+    C_UP,    ///< N64 C-Up button (HidNpadButton_LagonCUp, only meaningful for controller_type=n64)
+    C_RIGHT, ///< N64 C-Right button (HidNpadButton_LagonCRight, only meaningful for controller_type=n64)
+    C_DOWN,  ///< N64 C-Down button (HidNpadButton_LagonCDown, only meaningful for controller_type=n64)
 
     COUNT
 };

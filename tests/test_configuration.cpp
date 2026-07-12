@@ -59,6 +59,31 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
     EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::NONE);
 }
 
+TEST(Configuration, test_load_config_adaptoid_n64)
+{
+    ControllerConfig config;
+
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x06f7, 0x0001, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.controllerType, ControllerType_N64);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::A][0], 1);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::B][0], 4);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::L][0], 7);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::R][0], 8);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::PLUS][0], 9);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::ZL][0], 10);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_UP][0], 11);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_DOWN][0], 12);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_LEFT][0], 13);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_RIGHT][0], 14);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::C_UP][0], 6);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::C_DOWN][0], 2);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::C_LEFT][0], 5);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::C_RIGHT][0], 3);
+}
+
 TEST(Configuration, test_load_config_with_profile_wii)
 {
     ControllerConfig config;

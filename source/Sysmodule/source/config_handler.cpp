@@ -108,6 +108,14 @@ namespace syscon::config
                 return ControllerButton::CAPTURE;
             else if (nameStr == "home")
                 return ControllerButton::HOME;
+            else if (nameStr == "c_left")
+                return ControllerButton::C_LEFT;
+            else if (nameStr == "c_up")
+                return ControllerButton::C_UP;
+            else if (nameStr == "c_right")
+                return ControllerButton::C_RIGHT;
+            else if (nameStr == "c_down")
+                return ControllerButton::C_DOWN;
 
             return ControllerButton::NONE;
         }
