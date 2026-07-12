@@ -97,6 +97,10 @@ TEST(Configuration, test_load_config_adaptoid_n64)
     EXPECT_EQ(config.simulateCombos[3].buttonSimulated, ControllerButton::HOME);
     EXPECT_EQ(config.simulateCombos[3].buttons[0], ControllerButton::L);
     EXPECT_EQ(config.simulateCombos[3].buttons[1], ControllerButton::DPAD_RIGHT);
+    // A real N64 pad has no ZR either, but ZL+ZR brings up the menu in NSO NES Classics
+    EXPECT_EQ(config.simulateCombos[4].buttonSimulated, ControllerButton::ZR);
+    EXPECT_EQ(config.simulateCombos[4].buttons[0], ControllerButton::L);
+    EXPECT_EQ(config.simulateCombos[4].buttons[1], ControllerButton::DPAD_DOWN);
 }
 
 TEST(Configuration, test_load_config_with_profile_wii)
