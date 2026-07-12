@@ -81,8 +81,8 @@ TEST(Configuration, test_load_config_adaptoid_n64)
     EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_DOWN][0], 12);
     EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_LEFT][0], 13);
     EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_RIGHT][0], 14);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_UP][0], 6);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_DOWN][0], 2);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_UP][0], 2);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_DOWN][0], 6);
     EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_LEFT][0], 5);
     EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_RIGHT][0], 3);
 
