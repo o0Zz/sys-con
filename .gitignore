@@ -16,3 +16,4 @@ out/*
 *.exe
 version.h
 build/
+.DS_Store

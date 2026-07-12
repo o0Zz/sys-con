@@ -3,7 +3,7 @@
 #include "config_handler.h"
 #include "filemanager_std.h"
 
-#define CONFIG_FULLPATH_PROJECT "../../../dist/config/sys-con/config.ini"
+#define CONFIG_FULLPATH_PROJECT "../../dist/config/sys-con/config.ini"
 
 TEST(Configuration, test_load_config_unknown)
 {
