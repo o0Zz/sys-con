@@ -59,6 +59,42 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
     EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::NONE);
 }
 
+TEST(Configuration, test_load_config_adaptoid_n64)
+{
+    ControllerConfig config;
+
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x06f7, 0x0001, false, "");
+    EXPECT_EQ(rc, 0);
+
+    // controller_type=n64 is deliberately not set: the Switch's N64 core doesn't reliably read
+    // C-buttons from a third-party HDLS "Lagon" pad, so this falls back to the [default] pro type
+    // and drives C-buttons through the right stick instead (see config.ini for details).
+    EXPECT_EQ(config.controllerType, ControllerType_Pro);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::A][0], 1);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::B][0], 4);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::L][0], 7);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::R][0], 8);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::PLUS][0], 9);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::ZL][0], 10);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_UP][0], 11);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_DOWN][0], 12);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_LEFT][0], 13);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::DPAD_RIGHT][0], 14);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_UP][0], 6);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_DOWN][0], 2);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_LEFT][0], 5);
+    EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_RIGHT][0], 3);
+
+    // simulate_capture/simulate_home come from [default]; simulate_minus is added by this section
+    // (a real N64 pad has no minus button, needed to return to the NSO N64 menu)
+    EXPECT_EQ(config.simulateCombos[0].buttonSimulated, ControllerButton::CAPTURE);
+    EXPECT_EQ(config.simulateCombos[1].buttonSimulated, ControllerButton::HOME);
+    EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::MINUS);
+    EXPECT_EQ(config.simulateCombos[2].buttons[0], ControllerButton::L);
+    EXPECT_EQ(config.simulateCombos[2].buttons[1], ControllerButton::R);
+}
+
 TEST(Configuration, test_load_config_with_profile_wii)
 {
     ControllerConfig config;
