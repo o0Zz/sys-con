@@ -294,11 +294,7 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
         ControllerButton::DPAD_UP,
         ControllerButton::DPAD_DOWN,
         ControllerButton::DPAD_RIGHT,
-        ControllerButton::DPAD_LEFT,
-        ControllerButton::C_LEFT,
-        ControllerButton::C_UP,
-        ControllerButton::C_RIGHT,
-        ControllerButton::C_DOWN};
+        ControllerButton::DPAD_LEFT};
 
     for (ControllerButton controllerButton : controllerButtonList)
         normalData->buttons[controllerButton] = rawData.buttons[GetConfig().buttonsPin[controllerButton][0]] || rawData.buttons[GetConfig().buttonsPin[controllerButton][1]];

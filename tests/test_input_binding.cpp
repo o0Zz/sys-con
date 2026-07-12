@@ -171,30 +171,6 @@ TEST(BaseController, test_input_stick_by_buttons)
     EXPECT_FLOAT_EQ(normalizedData.sticks[1].axis_y, 1.0f);
 }
 
-TEST(BaseController, test_input_c_buttons)
-{
-    NormalizedButtonData normalizedData = {0};
-
-    ControllerConfig config;
-    config.buttonsPin[ControllerButton::C_UP][0] = 6;
-    config.buttonsPin[ControllerButton::C_DOWN][0] = 2;
-    config.buttonsPin[ControllerButton::C_LEFT][0] = 5;
-    config.buttonsPin[ControllerButton::C_RIGHT][0] = 3;
-
-    RawInputData inputData;
-    inputData.buttons[6] = true;
-    inputData.buttons[3] = true;
-    // C_DOWN (pin 2) and C_LEFT (pin 5) left unpressed
-
-    MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
-    controller.MapRawInputToNormalized(inputData, &normalizedData);
-
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::C_UP]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::C_RIGHT]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::C_DOWN]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::C_LEFT]);
-}
-
 TEST(BaseController, test_input_multiple_pin)
 {
     NormalizedButtonData normalizedData = {0};

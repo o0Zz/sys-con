@@ -188,14 +188,6 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
         buttons |= HiddbgNpadButton_Capture;
     if (buttonData.buttons[ControllerButton::HOME])
         buttons |= HiddbgNpadButton_Home;
-    if (buttonData.buttons[ControllerButton::C_LEFT])
-        buttons |= HidNpadButton_LagonCLeft;
-    if (buttonData.buttons[ControllerButton::C_UP])
-        buttons |= HidNpadButton_LagonCUp;
-    if (buttonData.buttons[ControllerButton::C_RIGHT])
-        buttons |= HidNpadButton_LagonCRight;
-    if (buttonData.buttons[ControllerButton::C_DOWN])
-        buttons |= HidNpadButton_LagonCDown;
 
     ConvertAxisToSwitchAxis(buttonData.sticks[0].axis_x, buttonData.sticks[0].axis_y, &analog_stick_l.x, &analog_stick_l.y);
     ConvertAxisToSwitchAxis(buttonData.sticks[1].axis_x, buttonData.sticks[1].axis_y, &analog_stick_r.x, &analog_stick_r.y);
