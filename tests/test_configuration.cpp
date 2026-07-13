@@ -86,21 +86,12 @@ TEST(Configuration, test_load_config_adaptoid_n64)
     EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_LEFT][0], 5);
     EXPECT_EQ(config.buttonsPin[ControllerButton::RSTICK_RIGHT][0], 3);
 
-    // simulate_capture/simulate_home come from [default] (minus+dpad_up/down) but never actually
-    // fire for this pad, since our simulated minus (below) is resolved after those two combos are
-    // checked in the same frame - this section adds its own direct combos for minus and home instead.
+    // simulate_capture/simulate_home come from [default] (minus+dpad_up/down). This pad has no
+    // Adaptoid-specific combos of its own (tried L+dpad chords for minus/home/zr, but removed them -
+    // personal taste, and they collided with in-game L+D-pad use).
     EXPECT_EQ(config.simulateCombos[0].buttonSimulated, ControllerButton::CAPTURE);
     EXPECT_EQ(config.simulateCombos[1].buttonSimulated, ControllerButton::HOME);
-    EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::MINUS);
-    EXPECT_EQ(config.simulateCombos[2].buttons[0], ControllerButton::L);
-    EXPECT_EQ(config.simulateCombos[2].buttons[1], ControllerButton::DPAD_LEFT);
-    EXPECT_EQ(config.simulateCombos[3].buttonSimulated, ControllerButton::HOME);
-    EXPECT_EQ(config.simulateCombos[3].buttons[0], ControllerButton::L);
-    EXPECT_EQ(config.simulateCombos[3].buttons[1], ControllerButton::DPAD_RIGHT);
-    // A real N64 pad has no ZR either, but ZL+ZR brings up the menu in NSO NES Classics
-    EXPECT_EQ(config.simulateCombos[4].buttonSimulated, ControllerButton::ZR);
-    EXPECT_EQ(config.simulateCombos[4].buttons[0], ControllerButton::L);
-    EXPECT_EQ(config.simulateCombos[4].buttons[1], ControllerButton::DPAD_DOWN);
+    EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::NONE);
 }
 
 TEST(Configuration, test_load_config_with_profile_wii)
