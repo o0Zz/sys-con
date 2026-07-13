@@ -30,7 +30,12 @@ Result SwitchVirtualGamepadHandler::Initialize()
 
 void SwitchVirtualGamepadHandler::Exit()
 {
-    syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Exiting ...", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct());
+    // Capture these before m_controller->Exit() tears down the underlying device - querying
+    // them afterwards crashed (null deref) during power state (sleep/shutdown) transitions.
+    uint16_t vendor = m_controller->GetDevice()->GetVendor();
+    uint16_t product = m_controller->GetDevice()->GetProduct();
+
+    syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Exiting ...", vendor, product);
 
     ExitThread();
 
@@ -39,7 +44,7 @@ void SwitchVirtualGamepadHandler::Exit()
     for (int i = 0; i < m_controller->GetInputCount(); i++)
         DetachController(i);
 
-    syscon::logger::LogInfo("SwitchVirtualGamepadHandler[%04x-%04x] Uninitialized !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct());
+    syscon::logger::LogInfo("SwitchVirtualGamepadHandler[%04x-%04x] Uninitialized !", vendor, product);
 }
 
 void SwitchVirtualGamepadHandler::OnRun()
