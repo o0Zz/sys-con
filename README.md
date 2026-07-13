@@ -1,7 +1,7 @@
 # Sys-con
 
 #### Connect any USB controller to your Nintendo Switch ! 
-***Support any controller***: PC controllers, Wheels, Dualshock 3, Dualshock 4, Dualsense (PS5), XBOX, XBOX360, XBOXONE, ...
+***Support any controller***: PC controllers, Wheels, Dualshock 3, Dualshock 4, Dualsense (PS5), XBOX, XBOX360, XBOXONE, Wii, ...
 
 ## Description
 Sys-con is a Nintendo Switch module that adds support for all HID and XID joysticks and gamepads to the Nintendo Switch.
@@ -333,4 +333,4 @@ In order to debug the applicaiton, you can directly refer to the logs available 
 ## Support
 If you want to support this work 
 
-[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/o0Zzz)
+[![ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/o0Zzz)

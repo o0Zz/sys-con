@@ -34,6 +34,10 @@
 | Gamecube adapter (HS-WU025, BX-W201C) - PC Mode | Yes | - | - |
 | Gamecube adapter (HS-WU025, BX-W201C, [057e-0337] ...) - Switch Mode | Yes | - | - |
 | Gamecube adapter (WUP-028) | Yes | Might need up to 30s to be detected | - |
+| N64 Hyperkin Adapter | Yes | - | https://www.amazon.com.au/Hyperkin-Controller-Adapter-Compatible-Nintendo/dp/B082N7K8QS |
+| N64 MayFlash Controller Adapter| Yes | - | https://www.amazon.com/dp/B002B9FIUU |
+| N64 KIWITATA USB Mini Controller | Yes | Edit config.ini and replace [0f0d-00c1] by the commented entry | https://www.amazon.ca/dp/B08P8CWBC1 |
+| N64 Adaptoid Adpater | Yes | - | - |
 | Chinese wired SNES Controller | Yes | - | - |
 | Xinmotek XM-10 (Arcade controller) | Yes | - | https://aliexpress.com/item/32785870354.html |
 | Logitech Driving Force GT (Wheel) | Yes | - | - |
@@ -42,14 +46,11 @@
 | PowerA Nintendo Switch Wired Controller | Yes | - | https://www.amazon.com/PowerA-Wired-Controller-Nintendo-Switch-Black/dp/B07PDJ45BT |
 | PS2 Dual Converter | Yes | - | https://www.aliexpress.com/item/4000662529384.html |
 | Raphnet Classic Controller USB adapter | Yes | - | - |
-| MayFlash N64 Controller Adapter| Yes | - | https://www.amazon.com/dp/B002B9FIUU |
 | Playstation classic controller | Yes | Do not works with Dock or USB hub. Only works with direct USB-C OTG cable | - |
-| Hyperkin N64 Adapter | Yes | - | https://www.amazon.com.au/Hyperkin-Controller-Adapter-Compatible-Nintendo/dp/B082N7K8QS |
 | BipBop 2.4g usb wireless | Yes | - | - |
 | Dazz Double Shock Fighter USB 2.0 | Yes | DInput mode | - |
 | Buffalo iBuffalo Classic USB | Yes | - | https://www.amazon.com/Buffalo-iBuffalo-Classic-USB-Gamepad/dp/B002B9XB0E |
 | L-TEK Dance Pad PRO (DDR pad) | Yes | - | - |
 | Google Stadia Controller | Yes | - | https://www.amazon.fr/Google-Stadia-Premiere-Edition-White/dp/B09N751DP2 |
-| KIWITATA N64 USB Mini Controller | Yes | Edit config.ini and replace [0f0d-00c1] by the commented entry | https://www.amazon.ca/dp/B08P8CWBC1 |
 | Raptor PS4 Wired (0c12-0e16) | Yes | 	You need to set `discovery_mode=1` & `discovery_vidpid=0c12-0e16` ([#97](https://github.com/o0Zz/sys-con/issues/97)) | - |
 | Steam controller 2026 (Wired + Wireless puck) | Yes | - | - |
