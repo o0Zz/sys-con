@@ -7,6 +7,7 @@
 // https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/steam/controller_constants.h
 
 #define REPORT_INPUT             0x42
+#define REPORT_INPUT_BLE         0x45
 #define REPORT_WIRELESS_STATUS_X 0x46
 #define REPORT_WIRELESS_STATUS   0x79
 #define HID_FEATURE_REPORT_BYTES 64

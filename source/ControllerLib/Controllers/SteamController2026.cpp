@@ -51,7 +51,7 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
         last_lizard_update = last_update;
     }
 
-    if (report_id == REPORT_INPUT)
+    if (report_id == REPORT_INPUT || report_id == REPORT_INPUT_BLE)
     {
         Steam2026InputReport *controllerData = reinterpret_cast<Steam2026InputReport *>(buffer);
         if (size < sizeof(Steam2026InputReport))
