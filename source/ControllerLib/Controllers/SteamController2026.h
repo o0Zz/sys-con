@@ -6,7 +6,9 @@
 // https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/steam/controller_structs.h
 // https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/steam/controller_constants.h
 
-#define REPORT_INPUT             0x45
+#define REPORT_INPUT             0x42
+#define REPORT_WIRELESS_STATUS_X 0x46
+#define REPORT_WIRELESS_STATUS   0x79
 #define HID_FEATURE_REPORT_BYTES 64
 #define ID_SET_SETTINGS_VALUES   0x87
 #define SETTING_LIZARD_MODE      0x09
@@ -35,6 +37,11 @@ typedef struct
     MsgSetSettingsValues setSettingsValues;
 
 } SetSettingsFeatureReportMsg;
+
+typedef struct
+{
+    unsigned char state;
+} TritonWirelessStatus_t;
 
 _PACKED(struct Steam2026ButtonData {
     uint8_t a : 1;
@@ -112,8 +119,9 @@ class SteamController2026 : public BaseController
 {
 private:
     RawInputData m_rawInput;
+    uint64_t last_update;
     uint64_t last_lizard_update;
-    ControllerResult WriteAckModeReport(uint16_t input_idx, uint8_t sequence);
+    bool disconnected[CONTROLLER_MAX_INPUTS];
 
 public:
     SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
@@ -122,4 +130,6 @@ public:
     virtual ControllerResult Initialize() override;
 
     virtual ControllerResult ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
+
+    virtual bool IsControllerConnected(uint16_t input_idx) override;
 };
