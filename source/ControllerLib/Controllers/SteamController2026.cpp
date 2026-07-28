@@ -22,11 +22,38 @@ ControllerResult SteamController2026::Initialize()
 
 ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
 {
-    (void)input_idx;
-    Steam2026InputReport *controllerData = reinterpret_cast<Steam2026InputReport *>(buffer);
+    uint8_t report_id = buffer[0];
 
-    if (controllerData->report_id == REPORT_INPUT)
+    last_update = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    if (!last_lizard_update || (last_update - last_lizard_update) >= 3000)
     {
+        uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
+
+        SetSettingsFeatureReportMsg *msg =
+            reinterpret_cast<SetSettingsFeatureReportMsg *>(buffer + 1);
+
+        msg->header.type = ID_SET_SETTINGS_VALUES;
+        msg->header.length = sizeof(ControllerSetting);
+
+        msg->setSettingsValues.settings[0].settingNum =
+            SETTING_LIZARD_MODE;
+
+        msg->setSettingsValues.settings[0].settingValue =
+            LIZARD_MODE_OFF;
+
+        m_interfaces[0]->ControlTransferOutput(
+            0x21,
+            0x09,
+            (3 << 8) | buffer[0],
+            m_interfaces[0]->GetDescriptor()->bInterfaceNumber,
+            buffer,
+            sizeof(buffer));
+        last_lizard_update = last_update;
+    }
+
+    if (report_id == REPORT_INPUT || report_id == REPORT_INPUT_BLE)
+    {
+        Steam2026InputReport *controllerData = reinterpret_cast<Steam2026InputReport *>(buffer);
         if (size < sizeof(Steam2026InputReport))
         {
             m_logger->Log(LogLevelError, "SteamController2026[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(Steam2026InputReport));
@@ -59,31 +86,19 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
         m_rawInput.buttons[DPAD_LEFT_BUTTON_ID] = controllerData->buttons.dpad_left;
 
         *rawData = m_rawInput;
-
-        uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        if (!last_lizard_update || (now - last_lizard_update) >= 3000)
-        {
-            for (auto &&interface : m_interfaces)
-            {
-                // Send feature report to exit Lizard mode, otherwise some inputs will cause issues
-                uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
-
-                SetSettingsFeatureReportMsg *msg =
-                    reinterpret_cast<SetSettingsFeatureReportMsg *>(buffer + 1);
-
-                msg->header.type = ID_SET_SETTINGS_VALUES;
-                msg->header.length = sizeof(ControllerSetting);
-                msg->setSettingsValues.settings[0].settingNum = SETTING_LIZARD_MODE;
-                msg->setSettingsValues.settings[0].settingValue = LIZARD_MODE_OFF;
-
-                interface->ControlTransferOutput(0x21, 0x09, (3 << 8) | buffer[0], interface->GetDescriptor()->bInterfaceNumber, buffer, sizeof(buffer));
-            }
-            last_lizard_update = now;
-        }
+        disconnected[*input_idx] = false;
         return CONTROLLER_STATUS_SUCCESS;
     }
-    else
-        m_logger->Log(LogLevelDebug, "SteamController2026[%04x-%04x] sent Report ID %d with data size %d", m_device->GetVendor(), m_device->GetProduct(), controllerData->report_id, size);
-
+    else if (report_id == REPORT_WIRELESS_STATUS_X || report_id == REPORT_WIRELESS_STATUS)
+    {
+        TritonWirelessStatus_t *statusData = reinterpret_cast<TritonWirelessStatus_t *>(buffer);
+        disconnected[*input_idx] = statusData->state == 0x01;
+    }
     return CONTROLLER_STATUS_NOTHING_TODO;
+}
+
+bool SteamController2026::IsControllerConnected(uint16_t input_idx)
+{
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    return !(disconnected[input_idx] || (now - last_update) > 5000);
 }
