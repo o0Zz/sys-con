@@ -1,6 +1,7 @@
 #include "Controllers/BaseController.h"
 #include <cmath>
 #include <chrono>
+#include <cstring>
 
 // https://www.usb.org/sites/default/files/documents/hid1_11.pdf  p55
 
@@ -131,22 +132,84 @@ ControllerResult BaseController::SetRumble(uint16_t input_idx, float amp_high, f
     return CONTROLLER_STATUS_NOT_IMPLEMENTED;
 }
 
-ControllerResult BaseController::ReadNextBuffer(uint8_t *buffer, size_t *size, uint16_t *input_idx, uint32_t timeout_us)
+ControllerResult BaseController::ReadEndpointLatest(uint16_t endpoint_idx, uint8_t *buffer, size_t *size, uint32_t timeout_us)
 {
-    uint16_t controller_idx = m_current_controller_idx;
-    m_current_controller_idx = (m_current_controller_idx + 1) % m_inPipe.size();
+    const size_t capacity = std::min((size_t)m_inPipe[endpoint_idx]->GetDescriptor()->wMaxPacketSize, *size);
 
-    *size = std::min((size_t)m_inPipe[controller_idx]->GetDescriptor()->wMaxPacketSize, *size);
-
-    ControllerResult result = m_inPipe[controller_idx]->Read(buffer, size, timeout_us);
+    size_t latestSize = capacity;
+    ControllerResult result = m_inPipe[endpoint_idx]->Read(buffer, &latestSize, timeout_us);
     if (result != CONTROLLER_STATUS_SUCCESS)
         return result;
 
-    if (*size == 0)
+    if (latestSize == 0)
         return CONTROLLER_STATUS_NOTHING_TODO;
 
-    *input_idx = controller_idx;
+    /*
+     Drain any further reports that are already queued, keeping only the freshest one.
+     The device (especially wireless ones like the Steam Puck) can deliver reports faster
+     than we poll and in bursts; without draining we would replay stale frames and fall
+     progressively behind. For a gamepad only the latest state matters.
+    */
+    uint8_t drainBuffer[CONTROLLER_INPUT_BUFFER_SIZE];
+    for (;;)
+    {
+        size_t drainSize = capacity;
+        if (m_inPipe[endpoint_idx]->Read(drainBuffer, &drainSize, 0) != CONTROLLER_STATUS_SUCCESS || drainSize == 0)
+            break;
 
+        memcpy(buffer, drainBuffer, drainSize);
+        latestSize = drainSize;
+    }
+
+    *size = latestSize;
+    return CONTROLLER_STATUS_SUCCESS;
+}
+
+ControllerResult BaseController::ReadNextBuffer(uint8_t *buffer, size_t *size, uint16_t *input_idx, uint32_t timeout_us)
+{
+    const size_t endpoint_count = m_inPipe.size();
+    if (endpoint_count == 0)
+        return CONTROLLER_STATUS_NOTHING_TODO;
+
+    const size_t requested_size = *size;
+
+    /*
+     Fast pass: probe every endpoint without blocking and service the first one that has data.
+     A non-blocking read still posts (and keeps posted) the underlying async transfer, so this
+     arms all endpoints concurrently - reports are then captured in parallel between sweeps
+     instead of only on the single endpoint we happen to visit this tick. This is what keeps a
+     multi-endpoint device (e.g. the Steam Puck, ~5 endpoints) sampled near its real report rate
+     rather than at (rate / endpoint_count).
+    */
+    for (size_t i = 0; i < endpoint_count; i++)
+    {
+        uint16_t endpoint_idx = (m_current_controller_idx + i) % endpoint_count;
+
+        size_t sz = requested_size;
+        if (ReadEndpointLatest(endpoint_idx, buffer, &sz, 0) == CONTROLLER_STATUS_SUCCESS)
+        {
+            m_current_controller_idx = (endpoint_idx + 1) % endpoint_count; // rotate so every endpoint gets a turn
+            *size = sz;
+            *input_idx = endpoint_idx;
+            return CONTROLLER_STATUS_SUCCESS;
+        }
+    }
+
+    /*
+     All endpoints idle: block once (up to timeout_us) on the next endpoint to pace the input
+     thread. This replaces the previous one-blocking-read-per-endpoint behaviour (which burned a
+     full timeout on every idle endpoint each tick) with a single wait per sweep.
+    */
+    uint16_t endpoint_idx = m_current_controller_idx;
+    m_current_controller_idx = (endpoint_idx + 1) % endpoint_count;
+
+    size_t sz = requested_size;
+    ControllerResult result = ReadEndpointLatest(endpoint_idx, buffer, &sz, timeout_us);
+    if (result != CONTROLLER_STATUS_SUCCESS)
+        return result;
+
+    *size = sz;
+    *input_idx = endpoint_idx;
     return CONTROLLER_STATUS_SUCCESS;
 }
 

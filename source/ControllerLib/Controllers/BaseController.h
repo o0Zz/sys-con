@@ -36,6 +36,8 @@ protected:
     uint8_t m_current_controller_idx = 0;
 
     virtual ControllerResult ReadNextBuffer(uint8_t *buffer, size_t *size, uint16_t *input_idx, uint32_t timeout_us);
+    // Read the freshest report from a single endpoint, draining any already-queued reports (keep-latest).
+    ControllerResult ReadEndpointLatest(uint16_t endpoint_idx, uint8_t *buffer, size_t *size, uint32_t timeout_us);
     virtual void MapRawInputToNormalized(RawInputData &rawData, NormalizedButtonData *normalData);
 
     virtual ControllerResult ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) = 0;
