@@ -5,6 +5,12 @@
 SteamController2026::SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
     : BaseController(std::move(device), std::move(config), std::move(logger))
 {
+    m_controller_count = 1;
+    if (m_interfaces.size() > 1)
+        m_controller_count = STEAMCONTROLLER_MAX_INPUTS;
+
+    for (int i = 0; i < STEAMCONTROLLER_MAX_INPUTS; i++)
+        m_controllerInfo[i].m_is_connected = false;
 }
 
 SteamController2026::~SteamController2026()
@@ -24,32 +30,10 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
 {
     uint8_t report_id = buffer[0];
 
-    last_update = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    if (!last_lizard_update || (last_update - last_lizard_update) >= 3000)
-    {
-        uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
-
-        SetSettingsFeatureReportMsg *msg =
-            reinterpret_cast<SetSettingsFeatureReportMsg *>(buffer + 1);
-
-        msg->header.type = ID_SET_SETTINGS_VALUES;
-        msg->header.length = sizeof(ControllerSetting);
-
-        msg->setSettingsValues.settings[0].settingNum =
-            SETTING_LIZARD_MODE;
-
-        msg->setSettingsValues.settings[0].settingValue =
-            LIZARD_MODE_OFF;
-
-        m_interfaces[0]->ControlTransferOutput(
-            0x21,
-            0x09,
-            (3 << 8) | buffer[0],
-            m_interfaces[0]->GetDescriptor()->bInterfaceNumber,
-            buffer,
-            sizeof(buffer));
-        last_lizard_update = last_update;
-    }
+    // The Puck report 5 endpoints but the last seems to be the dongle.
+    // The dongle is not a controller and should be ignored.
+    if (*input_idx >= STEAMCONTROLLER_MAX_INPUTS)
+        return CONTROLLER_STATUS_INVALID_INDEX;
 
     if (report_id == REPORT_INPUT || report_id == REPORT_INPUT_BLE)
     {
@@ -86,19 +70,73 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
         m_rawInput.buttons[DPAD_LEFT_BUTTON_ID] = controllerData->buttons.dpad_left;
 
         *rawData = m_rawInput;
-        disconnected[*input_idx] = false;
+        if (!m_controllerInfo[*input_idx].m_is_connected)
+            OnControllerConnect(*input_idx);
+
         return CONTROLLER_STATUS_SUCCESS;
     }
     else if (report_id == REPORT_WIRELESS_STATUS_X || report_id == REPORT_WIRELESS_STATUS)
     {
-        TritonWirelessStatus_t *statusData = reinterpret_cast<TritonWirelessStatus_t *>(buffer);
-        disconnected[*input_idx] = statusData->state == 0x01;
+        TritonWirelessStatus *statusData = reinterpret_cast<TritonWirelessStatus *>(buffer);
+        bool was_connected = m_controllerInfo[*input_idx].m_is_connected;
+        bool is_connected = statusData->state != 0x01;
+
+        if (!was_connected && is_connected)
+            OnControllerConnect(*input_idx);
+        else if (was_connected && !is_connected)
+            OnControllerDisconnect(*input_idx);
     }
     return CONTROLLER_STATUS_NOTHING_TODO;
 }
 
+uint16_t SteamController2026::GetInputCount()
+{
+    return m_controller_count;
+}
+
 bool SteamController2026::IsControllerConnected(uint16_t input_idx)
 {
-    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    return !(disconnected[input_idx] || (now - last_update) > 5000);
+    return m_controllerInfo[input_idx].m_is_connected;
+}
+
+ControllerResult SteamController2026::OnControllerConnect(uint16_t input_idx)
+{
+    m_logger->Log(LogLevelInfo, "SteamController2026 controller connected (Idx: %d) ...", input_idx);
+    m_controllerInfo[input_idx].m_is_connected = true;
+    return UpdateLizard(input_idx);
+}
+
+ControllerResult SteamController2026::OnControllerDisconnect(uint16_t input_idx)
+{
+    m_logger->Log(LogLevelInfo, "SteamController2026 controller disconnected (Idx: %d) ...", input_idx);
+    m_controllerInfo[input_idx].m_is_connected = false;
+    return CONTROLLER_STATUS_SUCCESS;
+}
+
+ControllerResult SteamController2026::UpdateLizard(uint16_t input_idx)
+{
+    if (!m_controllerInfo[input_idx].m_is_connected)
+        return CONTROLLER_STATUS_NOTHING_TODO;
+
+    if (input_idx >= m_interfaces.size())
+        return CONTROLLER_STATUS_NOTHING_TODO;
+
+    uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
+
+    SetSettingsFeatureReportMsg *msg = reinterpret_cast<SetSettingsFeatureReportMsg *>(buffer + 1);
+
+    msg->header.type = ID_SET_SETTINGS_VALUES;
+    msg->header.length = sizeof(ControllerSetting);
+    msg->setSettingsValues.settings[0].settingNum = SETTING_LIZARD_MODE;
+    msg->setSettingsValues.settings[0].settingValue = LIZARD_MODE_OFF;
+
+    m_interfaces[input_idx]->ControlTransferOutput(
+        0x21,
+        0x09,
+        (3 << 8) | buffer[0],
+        m_interfaces[input_idx]->GetDescriptor()->bInterfaceNumber,
+        buffer,
+        sizeof(buffer));
+
+    return CONTROLLER_STATUS_SUCCESS;
 }
