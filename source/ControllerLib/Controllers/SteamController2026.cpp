@@ -126,9 +126,11 @@ ControllerResult SteamController2026::UpdateLizard(uint16_t input_idx)
     SetSettingsFeatureReportMsg *msg = reinterpret_cast<SetSettingsFeatureReportMsg *>(buffer + 1);
 
     msg->header.type = ID_SET_SETTINGS_VALUES;
-    msg->header.length = sizeof(ControllerSetting);
     msg->setSettingsValues.settings[0].settingNum = SETTING_LIZARD_MODE;
     msg->setSettingsValues.settings[0].settingValue = LIZARD_MODE_OFF;
+    msg->setSettingsValues.settings[1].settingNum = SETTING_STEAM_WATCHDOG_ENABLE;
+    msg->setSettingsValues.settings[1].settingValue = WATCHDOG_DISABLE;
+    msg->header.length = 2 * sizeof(ControllerSetting);
 
     m_interfaces[input_idx]->ControlTransferOutput(
         0x21,

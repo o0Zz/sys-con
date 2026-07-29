@@ -12,34 +12,31 @@
 #define REPORT_INPUT_BLE         0x45
 #define REPORT_WIRELESS_STATUS_X 0x46
 #define REPORT_WIRELESS_STATUS   0x79
-#define HID_FEATURE_REPORT_BYTES 64
-#define ID_SET_SETTINGS_VALUES   0x87
-#define SETTING_LIZARD_MODE      0x09
-#define LIZARD_MODE_OFF          0x00
+#define HID_FEATURE_REPORT_BYTES      64
+#define ID_SET_SETTINGS_VALUES        0x87
+#define SETTING_LIZARD_MODE           0x09
+#define LIZARD_MODE_OFF               0x00
+#define SETTING_STEAM_WATCHDOG_ENABLE 0x47
+#define WATCHDOG_DISABLE              0x00
 
-typedef struct
-{
+_PACKED(struct FeatureReportHeader {
     unsigned char type;
     unsigned char length;
-} FeatureReportHeader;
+});
 
-typedef struct
-{
+_PACKED(struct ControllerSetting {
     unsigned char settingNum;
     unsigned short settingValue;
-} ControllerSetting;
+});
 
-typedef struct
-{
+_PACKED(struct MsgSetSettingsValues {
     ControllerSetting settings[(HID_FEATURE_REPORT_BYTES - sizeof(FeatureReportHeader)) / sizeof(ControllerSetting)];
-} MsgSetSettingsValues;
+});
 
-typedef struct
-{
+_PACKED(struct SetSettingsFeatureReportMsg {
     FeatureReportHeader header;
     MsgSetSettingsValues setSettingsValues;
-
-} SetSettingsFeatureReportMsg;
+});
 
 _PACKED(struct TritonWirelessStatus {
     uint8_t report_id;
