@@ -15,7 +15,11 @@ namespace syscon::psc
         // Thread to check for psc:pm state change (console waking up/going to sleep)
         void PscThreadFunc(void *arg);
 
-        alignas(0x1000) u8 psc_thread_stack[0x1000];
+        // Must be large enough for controllers::Clear()'s teardown on sleep/shutdown: destructor
+        // chains through every connected controller plus several Log*() calls, each driving
+        // newlib's stack-heavy vsnprintf internals. 0x1000 was observed to overflow (crash report
+        // showed SP sitting exactly at the stack region's floor) - sized to match the USB threads.
+        alignas(0x1000) u8 psc_thread_stack[0x4000];
         Thread g_psc_thread;
 
         bool is_psc_thread_running = false;
