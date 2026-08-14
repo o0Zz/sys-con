@@ -46,7 +46,7 @@
 | PowerA Nintendo Switch Wired Controller | Yes | - | https://www.amazon.com/PowerA-Wired-Controller-Nintendo-Switch-Black/dp/B07PDJ45BT |
 | PS2 Dual Converter | Yes | - | https://www.aliexpress.com/item/4000662529384.html |
 | Raphnet Classic Controller USB adapter | Yes | - | - |
-| Playstation classic controller | Yes | Do not works with Dock or USB hub. Only works with direct USB-C OTG cable | - |
+| Playstation classic controller | Yes | Do not works on Dock or with USB hub. Only works with direct USB-C OTG cable | - |
 | BipBop 2.4g usb wireless | Yes | - | - |
 | Dazz Double Shock Fighter USB 2.0 | Yes | DInput mode | - |
 | Buffalo iBuffalo Classic USB | Yes | - | https://www.amazon.com/Buffalo-iBuffalo-Classic-USB-Gamepad/dp/B002B9XB0E |
@@ -55,3 +55,4 @@
 | Raptor PS4 Wired (0c12-0e16) | Yes | 	You need to set `discovery_mode=1` & `discovery_vidpid=0c12-0e16` ([#97](https://github.com/o0Zz/sys-con/issues/97)) | - |
 | Steam controller 2026 (Wired + Wireless puck) | Yes | - | - |
 | Retro-bit SEGA Saturn Wireless 8-Button Arcade | Yes | - | https://www.amazon.fr/Retrobit-Saturn-Manette-boutons-dOrigine/dp/B07Y5M8R41 |
+| DragonRise USB gamepad | Yes | Do not works on Dock or with USB hub - Only works with direct USB-C OTG cable | - |

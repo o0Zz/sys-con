@@ -237,10 +237,19 @@ This leads to the following side effects:
 To resolve this issue, you must restart the Switch after three attempts to restore functionality.
 
 ## My Controller isn't detected — What should I do?
-1) Use a Direct USB-C OTG Connection: Connect your controller directly to the Switch using a USB-C OTG cable, bypassing the Dock. Some controllers may not works when connected through a USB hub, such as the Switch Dock.
-2) Test with another officially supported controller: Try using a different controller that is officially supported. This will help you determine whether the issue is with your Switch setup (Broken USB-C, ...) or your controller.
-3) Try to use a Powered Hub. Sometimes the switch is not powerfull enough to power-on your controller (Especially with the Dock)
-4) Enable and check logs: Turn on logging in Trace mode by following the instructions [here](https://github.com/o0Zz/sys-con?tab=readme-ov-file#logs). Carefully review the logs for any errors or clues about what might be causing the problem.
+1. **Try a direct USB-C OTG connection**
+   Connect the controller directly to your Switch using a USB-C OTG adapter, bypassing the Dock. Some controllers may not work properly through the Dock for various compatibility or power-related reasons.
+
+2. **Test with another supported controller**
+   Try a different controller that is known to be officially supported. This can help determine whether the issue comes from your Switch setup—such as the USB-C port, Dock, adapter, or from the controller itself.
+
+3. **Try a powered USB hub**
+   Connect the controller through a powered USB hub. In some cases, the Switch or Dock may not provide enough power for certain controllers to initialize correctly.
+
+4. **Enable Trace logging and check the logs**
+   Enable logging in **Trace** mode by following the instructions [here](https://github.com/o0Zz/sys-con?tab=readme-ov-file#logs). Then reproduce the issue and review the logs for errors or messages that could help identify the cause.
+
+If the controller is still not detected after trying these steps, include the Trace logs when reporting the issue, along with your controller model and how it is connected to the Switch.
 
 A typically working flow will look like:
 
