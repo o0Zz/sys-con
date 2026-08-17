@@ -188,6 +188,9 @@ ControllerResult BaseController::ReadNextBuffer(uint8_t *buffer, size_t *size, u
         size_t sz = requested_size;
         if (ReadEndpointLatest(endpoint_idx, buffer, &sz, 0) == CONTROLLER_STATUS_SUCCESS)
         {
+            if (endpoint_idx >= CONTROLLER_MAX_INPUTS)
+                return CONTROLLER_STATUS_INVALID_INDEX;
+
             m_current_controller_idx = (endpoint_idx + 1) % endpoint_count; // rotate so every endpoint gets a turn
             *size = sz;
             *input_idx = endpoint_idx;
@@ -207,6 +210,9 @@ ControllerResult BaseController::ReadNextBuffer(uint8_t *buffer, size_t *size, u
     ControllerResult result = ReadEndpointLatest(endpoint_idx, buffer, &sz, timeout_us);
     if (result != CONTROLLER_STATUS_SUCCESS)
         return result;
+
+    if (endpoint_idx >= CONTROLLER_MAX_INPUTS)
+        return CONTROLLER_STATUS_INVALID_INDEX;
 
     *size = sz;
     *input_idx = endpoint_idx;
