@@ -124,7 +124,17 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     HidAnalogStickState analog_stick_l;
     HidAnalogStickState analog_stick_r;
 
-    Result read_rc = m_controller->ReadInput(&buttonData, &input_idx, timeout_us);
+    ControllerResult read_rc = m_controller->ReadInput(&buttonData, &input_idx, timeout_us);
+
+    if (input_idx >= CONTROLLER_MAX_INPUTS)
+    {
+        /*
+            Input_idx can be bigger than CONTROLLER_MAX_INPUTS if the controller has more usb endpoint than CONTROLLER_MAX_INPUTS.
+            This case happen with Steam Controller and puck that report 5 usb Endpoint
+        */
+        syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Invalid input index: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+        return CONTROLLER_STATUS_INVALID_INDEX;
+    }
 
     /*
         Note: We must not return here if readInput fail, because it might have change the ControllerConnected state.
@@ -152,7 +162,7 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     if (m_controllerData[input_idx].m_is_connected == false)
         return read_rc; // No need to update the controller state if it's not connected
 
-    if (R_FAILED(read_rc))
+    if (read_rc != CONTROLLER_STATUS_SUCCESS)
         return read_rc;
 
     auto startTimer = std::chrono::steady_clock::now();

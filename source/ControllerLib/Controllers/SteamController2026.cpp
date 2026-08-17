@@ -96,6 +96,9 @@ uint16_t SteamController2026::GetInputCount()
 
 bool SteamController2026::IsControllerConnected(uint16_t input_idx)
 {
+    if (input_idx >= STEAMCONTROLLER_MAX_INPUTS)
+        return false;
+
     return m_controllerInfo[input_idx].m_is_connected;
 }
 

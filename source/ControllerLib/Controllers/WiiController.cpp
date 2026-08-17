@@ -103,6 +103,9 @@ ControllerResult WiiController::ParseData(uint8_t *buffer, size_t size, RawInput
 
 bool WiiController::IsControllerConnected(uint16_t input_idx)
 {
+    if (input_idx >= WII_MAX_INPUTS)
+        return false;
+
     return m_is_connected[input_idx];
 }
 

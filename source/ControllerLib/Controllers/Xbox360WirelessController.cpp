@@ -126,6 +126,9 @@ ControllerResult Xbox360WirelessController::SetRumble(uint16_t input_idx, float 
 
 bool Xbox360WirelessController::IsControllerConnected(uint16_t input_idx)
 {
+    if (input_idx >= XBOX360_MAX_INPUTS)
+        return false;
+
     return m_is_connected[input_idx];
 }
 
