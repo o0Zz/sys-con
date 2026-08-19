@@ -55,5 +55,5 @@
 | Raptor PS4 Wired (0c12-0e16) | Yes | 	You need to set `discovery_mode=1` & `discovery_vidpid=0c12-0e16` ([#97](https://github.com/o0Zz/sys-con/issues/97)) | - |
 | Steam controller 2026 (Wired + Wireless puck) | Yes | - | - |
 | Retro-bit SEGA Saturn Wireless 8-Button Arcade | Yes | - | https://www.amazon.fr/Retrobit-Saturn-Manette-boutons-dOrigine/dp/B07Y5M8R41 |
-| DragonRise USB gamepad | Yes | Do not works on Dock or with USB hub - Only works with direct USB-C OTG cable | - |
-| Great Tech Chinese Controller (2563-0575 045e-028e) | Yes | Hold Turbo+Home for 8 seconds to force it in xinput [#108](https://github.com/o0Zz/sys-con/issues/108) | https://www.noon.com/oman-en/pc360-pc-version-p3-android-gamepad-macro-definition-programming-dual-vibration-compatible-with-multi-platform/ZD0DFC47CFE4367017D0CZ/p/ |
+| DragonRise USB gamepad (0079-0011) | Yes | Do not works on Dock or with USB hub - Only works with direct USB-C OTG cable ([#105](https://github.com/o0Zz/sys-con/issues/105))| - |
+| Great Tech Chinese Controller (2563-0575 045e-028e) | Yes | Hold Turbo+Home for 8 seconds to force it in xinput ([#108](https://github.com/o0Zz/sys-con/issues/108)) | https://www.noon.com/oman-en/pc360-pc-version-p3-android-gamepad-macro-definition-programming-dual-vibration-compatible-with-multi-platform/ZD0DFC47CFE4367017D0CZ/p/ |
