@@ -34,6 +34,8 @@ ControllerResult WiiController::Initialize()
         return CONTROLLER_STATUS_INVALID_ENDPOINT;
     }
 
+    m_interfaces[0]->ControlTransferOutput(0x21, 0x0B, 0x0001, 0x0000, nullptr, 0);
+
     const uint8_t init_payload[] = {0x13};
     (void)m_outPipe[0]->Write(init_payload, sizeof(init_payload));
 
