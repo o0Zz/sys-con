@@ -30,31 +30,18 @@ GenericHIDController::~GenericHIDController()
 
 ControllerResult GenericHIDController::Initialize()
 {
-    uint8_t buffer[CONTROLLER_HID_REPORT_BUFFER_SIZE];
-
     ControllerResult result = BaseController::Initialize();
     if (result != CONTROLLER_STATUS_SUCCESS)
         return result;
 
+    uint8_t buffer[CONTROLLER_HID_REPORT_BUFFER_SIZE];
+    uint16_t size = sizeof(buffer);
     // https://www.usb.org/sites/default/files/hid1_11.pdf
 
     /// SET_IDLE
-    /*result = m_interfaces[0]->ControlTransferOutput((uint8_t)IUSBEndpoint::USB_ENDPOINT_OUT | 0x20 | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_SET_IDLE, 0, m_interfaces[0]->GetDescriptor()->bInterfaceNumber, nullptr, 0);
+    result = m_interfaces[0]->ControlTransferOutput((uint8_t)IUSBEndpoint::USB_ENDPOINT_OUT | 0x20 | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_SET_IDLE, 0, m_interfaces[0]->GetDescriptor()->bInterfaceNumber, nullptr, 0);
     if (result != CONTROLLER_STATUS_SUCCESS)
         m_logger->Log(LogLevelError, "GenericHIDController[%04x-%04x] SET_IDLE failed, continue anyway ...", m_device->GetVendor(), m_device->GetProduct());
-*/
-    uint8_t hid_desc[9];
-    uint16_t size_hid_desc = sizeof(hid_desc);
-
-    result = m_interfaces[0]->ControlTransferInput((uint8_t)IUSBEndpoint::USB_ENDPOINT_IN | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_GET_DESCRIPTOR, (USB_DT_REPORT << 8), m_interfaces[0]->GetDescriptor()->bInterfaceNumber, hid_desc, &size_hid_desc);
-    if (result != CONTROLLER_STATUS_SUCCESS || size_hid_desc != sizeof(hid_desc))
-    {
-        m_logger->Log(LogLevelError, "GenericHIDController[%04x-%04x] Failed to get HID descriptor", m_device->GetVendor(), m_device->GetProduct());
-        return result;
-    }
-
-    uint16_t report_size = hid_desc[7] | ((uint16_t)hid_desc[8] << 8);
-    uint16_t size = std::min(report_size, (uint16_t)sizeof(buffer));
 
     // Get HID report descriptor
     result = m_interfaces[0]->ControlTransferInput((uint8_t)IUSBEndpoint::USB_ENDPOINT_IN | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_GET_DESCRIPTOR, (USB_DT_REPORT << 8), m_interfaces[0]->GetDescriptor()->bInterfaceNumber, buffer, &size);
