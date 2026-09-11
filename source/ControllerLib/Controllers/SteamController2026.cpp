@@ -3,11 +3,11 @@
 #include <chrono>
 
 SteamController2026::SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
-    : BaseController(std::move(device), std::move(config), std::move(logger))
+    : BaseController(std::move(device), config, std::move(logger))
 {
+    // m_interfaces is not populated until OpenInterfaces() runs, so the real count is
+    // computed in Initialize(). Until then assume a single controller.
     m_controller_count = 1;
-    if (m_interfaces.size() > 1)
-        m_controller_count = STEAMCONTROLLER_MAX_INPUTS;
 
     for (int i = 0; i < STEAMCONTROLLER_MAX_INPUTS; i++)
         m_controllerInfo[i].m_is_connected = false;
@@ -23,11 +23,25 @@ ControllerResult SteamController2026::Initialize()
     if (result != CONTROLLER_STATUS_SUCCESS)
         return result;
 
+    /*
+        This has to happen after BaseController::Initialize(), which is what calls
+        OpenInterfaces() and fills m_interfaces. Computing it in the constructor (as this
+        used to) always saw an empty vector, so the count was stuck at 1 and a multi-pad
+        puck only ever exposed one controller.
+    */
+    m_controller_count = (m_interfaces.size() > 1) ? STEAMCONTROLLER_MAX_INPUTS : 1;
+
+    m_logger->Log(LogLevelDebug, "SteamController2026[%04x-%04x] %d controller(s) detected on %d interface(s)", m_device->GetVendor(), m_device->GetProduct(), m_controller_count, (int)m_interfaces.size());
+
     return CONTROLLER_STATUS_SUCCESS;
 }
 
 ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
 {
+    // buffer[0] is the report id; it must be present before we read it.
+    if (size < 1)
+        return CONTROLLER_STATUS_UNEXPECTED_DATA;
+
     uint8_t report_id = buffer[0];
 
     // The Puck report 5 endpoints but the last seems to be the dongle.

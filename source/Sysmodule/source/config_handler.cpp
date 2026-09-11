@@ -5,7 +5,6 @@
 
 #include <cstring>
 #include <cstdlib>
-#include <fstream>
 #include <filesystem>
 #include <chrono>
 
@@ -400,21 +399,87 @@ namespace syscon::config
             return 1; // Success
         }
 
-        char *IniReaderLineByLineCallback(char *str, int num, void *stream)
-        {
-            for (int i = 0; i < num; i++)
-            {
-                if (((IFile *)stream)->read(&str[i], 1) <= 0)
-                    return nullptr;
+        /*
+            fgets-shaped line reader over an IFile, with a read-ahead buffer.
 
-                if (str[i] == '\n')
-                {
-                    str[i] = '\0'; // Null-terminate the string
-                    return str;
-                }
+            The previous implementation issued one IFile::read() per byte, which is one
+            virtual call per byte on the libnx build and one ams::fs::ReadFile syscall per
+            byte on the Atmosphere one. Since LoadControllerConfig re-parses the whole file
+            once per override layer, a single controller connection cost hundreds of
+            thousands of those over the shipped ~60 KB config.
+
+            It also got two edge cases wrong, both fixed here:
+              - running out of room in `str` returned nullptr, which inih reads as EOF, so an
+                over-long line silently discarded the rest of the file. fgets returns the
+                partial line instead and resumes on the next call, which is what inih expects.
+              - a final line with no trailing newline was dropped entirely.
+        */
+        class BufferedIniReader
+        {
+        public:
+            explicit BufferedIniReader(IFile *file)
+                : m_file(file)
+            {
             }
 
-            return nullptr;
+            char *ReadLine(char *str, int num)
+            {
+                if (str == nullptr || num <= 1)
+                    return nullptr;
+
+                int written = 0;
+
+                while (written < num - 1)
+                {
+                    if (m_pos == m_len && !Refill())
+                        break; // End of file.
+
+                    char c = m_buffer[m_pos++];
+                    if (c == '\n')
+                    {
+                        // Newline is dropped; inih rstrip()s the line anyway.
+                        break;
+                    }
+
+                    str[written++] = c;
+                }
+
+                // Nothing read and nothing buffered: genuine end of file.
+                if (written == 0 && m_pos == m_len && m_eof)
+                    return nullptr;
+
+                str[written] = '\0';
+                return str;
+            }
+
+        private:
+            bool Refill()
+            {
+                if (m_eof)
+                    return false;
+
+                m_len = m_file->read(m_buffer, sizeof(m_buffer));
+                m_pos = 0;
+
+                if (m_len == 0)
+                {
+                    m_eof = true;
+                    return false;
+                }
+
+                return true;
+            }
+
+            IFile *m_file;
+            char m_buffer[512];
+            std::size_t m_len{0}; // Valid bytes currently in m_buffer.
+            std::size_t m_pos{0}; // Next byte of m_buffer to consume.
+            bool m_eof{false};
+        };
+
+        char *IniReaderLineByLineCallback(char *str, int num, void *stream)
+        {
+            return static_cast<BufferedIniReader *>(stream)->ReadLine(str, num);
         }
 
         int ReadFromConfig(const char *path, ini_handler handler, void *config)
@@ -426,7 +491,8 @@ namespace syscon::config
                 return -1;
             }
 
-            return ini_parse_stream(IniReaderLineByLineCallback, file.get(), handler, config);
+            BufferedIniReader reader(file.get());
+            return ini_parse_stream(IniReaderLineByLineCallback, &reader, handler, config);
         }
 
     } // namespace
@@ -463,16 +529,29 @@ namespace syscon::config
         struct tm timeinfo;
         localtime_r(&timeT, &timeinfo);
 
-        // Check if the file exists and is accessible.
-        if (!std::filesystem::exists(path))
+        /*
+            This must go through file_manager like every other access in this file. Using
+            std::filesystem/std::ofstream directly only works under the libnx build, which
+            mounts the SD card with fsdevMountSdmc(); the Atmosphere build mounts it with
+            ams::fs::MountSdCard("sdmc") and so has no devoptab for this path, which made
+            auto_add_controller fail with "Configuration file does not exist" every time.
+        */
+        if (file_manager == nullptr)
+        {
+            syscon::logger::LogError("Error: Configuration is not initialized !");
+            return -1;
+        }
+
+        // Refuse to conjure a config file out of nothing; auto-add only extends an existing one.
+        if (file_manager->file_size(path) == 0)
         {
             syscon::logger::LogError("Error: Configuration file does not exist: %s", path.c_str());
             return -1; // Replace with appropriate error code.
         }
 
         // Open the file for appending.
-        std::ofstream configFile(path, std::ios::app);
-        if (!configFile.is_open())
+        std::unique_ptr<IFile> configFile = file_manager->open(path, (OpenFlags)(OpenFlags_Write | OpenFlags_Append));
+        if (!configFile || !configFile->is_open())
         {
             syscon::logger::LogError("Error: Unable to open configuration file: %s", path.c_str());
             return -1; // Replace with appropriate error code.
@@ -502,9 +581,8 @@ namespace syscon::config
                << "home=12\n";
         }
 
-        configFile << ss.str();
-
-        if (configFile.fail())
+        const std::string payload = ss.str();
+        if (configFile->write(payload.data(), payload.size()) != payload.size())
         {
             syscon::logger::LogError("Error: Failed to write to configuration file: %s", path.c_str());
             return -1;

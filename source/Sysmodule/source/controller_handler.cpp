@@ -56,31 +56,46 @@ namespace syscon::controllers
         return rc;
     }
 
-    void RemoveAllNonPlugged(std::vector<s32> interfaceIDsPlugged)
+    void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged)
     {
-        std::lock_guard<std::mutex> scoped_lock(controllerMutex);
-        for (auto it = controllerHandlers.begin(); it != controllerHandlers.end(); it++)
-        {
-            bool found = false;
+        /*
+            A handler's destructor joins its polling thread and tears down USB, so it must not
+            run while controllerMutex is held. Move the unplugged handlers into this local
+            vector under the lock and let it destroy them once the lock is released.
+        */
+        std::vector<std::unique_ptr<SwitchVirtualGamepadHandler>> unpluggedHandlers;
 
-            for (auto &&ptr : (*it)->GetController()->GetDevice()->GetInterfaces())
+        {
+            std::lock_guard<std::mutex> scoped_lock(controllerMutex);
+
+            for (auto it = controllerHandlers.begin(); it != controllerHandlers.end();)
             {
-                for (auto &&interfaceID : interfaceIDsPlugged)
+                bool found = false;
+
+                for (auto &&ptr : (*it)->GetController()->GetDevice()->GetInterfaces())
                 {
-                    if (static_cast<SwitchUSBInterface *>(ptr.get())->GetID() == interfaceID)
+                    for (auto &&interfaceID : interfaceIDsPlugged)
                     {
-                        found = true;
-                        break;
+                        if (static_cast<SwitchUSBInterface *>(ptr.get())->GetID() == interfaceID)
+                        {
+                            found = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            // We check if a device was removed by comparing the controller's interfaces and the currently acquired interfaces
-            // If we didn't find a single matching interface ID, we consider a controller removed
-            if (!found)
-            {
+                // We check if a device was removed by comparing the controller's interfaces and the currently acquired interfaces
+                // If we didn't find a single matching interface ID, we consider a controller removed
+                if (found)
+                {
+                    ++it;
+                    continue;
+                }
+
                 syscon::logger::LogInfo("Controller[%04x-%04x] unplugged !", (*it)->GetController()->GetDevice()->GetVendor(), (*it)->GetController()->GetDevice()->GetProduct());
-                controllerHandlers.erase(it--);
+
+                unpluggedHandlers.push_back(std::move(*it));
+                it = controllerHandlers.erase(it);
             }
         }
     }

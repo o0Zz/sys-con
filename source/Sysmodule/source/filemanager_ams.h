@@ -37,7 +37,7 @@ namespace syscon
 
         std::size_t read(void *buffer, std::size_t bytes) noexcept override
         {
-            if (!m_file.handle != INVALID_HANDLE || !buffer || bytes == 0)
+            if (m_file.handle == INVALID_HANDLE || !buffer || bytes == 0)
                 return 0;
 
             ams::Result err = ams::fs::ReadFile(m_file, m_fileoffset, buffer, bytes);
@@ -50,7 +50,7 @@ namespace syscon
 
         std::size_t write(const void *buffer, std::size_t bytes) noexcept override
         {
-            if (!m_file.handle != INVALID_HANDLE || !buffer || bytes == 0)
+            if (m_file.handle == INVALID_HANDLE || !buffer || bytes == 0)
                 return 0;
 
             ams::Result err = ams::fs::WriteFile(m_file, m_fileoffset, buffer, bytes, ams::fs::WriteOption::Flush);

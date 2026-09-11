@@ -48,6 +48,18 @@ ControllerResult Xbox360WirelessController::ParseData(uint8_t *buffer, size_t si
     // https://github.com/xboxdrv/xboxdrv/blob/stable/src/xbox360_controller.cpp
     // https://github.com/felis/USB_Host_Shield_2.0/blob/master/XBOXRECV.cpp
 
+    // The 4-byte receiver header is read below, so it has to be there before we look at it.
+    if (size < XBOX360_WIRELESS_HEADER_SIZE)
+        return CONTROLLER_STATUS_UNEXPECTED_DATA;
+
+    /*
+        input_idx selects the receiver slot this report came from. The receiver can expose
+        more endpoints than we track slots for, so it must be range-checked before it is used
+        to index m_is_connected. (Same guard as SteamController2026, see #107.)
+    */
+    if (*input_idx >= XBOX360_MAX_INPUTS)
+        return CONTROLLER_STATUS_INVALID_INDEX;
+
     if (buffer[0] & 0x08) // Connect/Disconnect
     {
         bool is_connected = (buffer[1] & 0x80) != 0;
@@ -65,9 +77,11 @@ ControllerResult Xbox360WirelessController::ParseData(uint8_t *buffer, size_t si
 
     if (buffer[0] == 0x00 && buffer[1] == 0x01 && buffer[2] == 0x00 && buffer[3] == 0xf0) // Controller Data
     {
-        Xbox360ButtonData *buttonData = reinterpret_cast<Xbox360ButtonData *>(buffer + 4);
-        if (size < sizeof(Xbox360ButtonData))
+        // The payload starts after the 4-byte header, so that offset counts towards the size.
+        if (size < XBOX360_WIRELESS_HEADER_SIZE + sizeof(Xbox360ButtonData))
             return CONTROLLER_STATUS_UNEXPECTED_DATA;
+
+        Xbox360ButtonData *buttonData = reinterpret_cast<Xbox360ButtonData *>(buffer + XBOX360_WIRELESS_HEADER_SIZE);
 
         if (buttonData->type == XBOX360INPUT_BUTTON) // Button data
         {

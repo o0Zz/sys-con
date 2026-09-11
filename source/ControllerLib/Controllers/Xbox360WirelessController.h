@@ -5,6 +5,10 @@
 
 #define XBOX360_MAX_INPUTS 4
 
+// Every report from the wireless receiver is prefixed with a 4-byte receiver header;
+// the controller payload starts after it.
+#define XBOX360_WIRELESS_HEADER_SIZE 4
+
 class Xbox360WirelessController : public BaseController
 {
 private:

@@ -151,7 +151,7 @@ static const struct xboxone_init_packet xboxone_init_packets[] = {
 */
 
 XboxOneController::XboxOneController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
-    : BaseController(std::move(device), std::move(config), std::move(logger))
+    : BaseController(std::move(device), config, std::move(logger))
 {
 }
 
@@ -175,6 +175,11 @@ ControllerResult XboxOneController::Initialize()
 ControllerResult XboxOneController::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
 {
     (void)input_idx;
+
+    // buttonData->type is the first byte of the report; it must be present before we read it.
+    if (size < sizeof(XboxOneButtonData::type))
+        return CONTROLLER_STATUS_UNEXPECTED_DATA;
+
     XboxOneButtonData *buttonData = reinterpret_cast<XboxOneButtonData *>(buffer);
 
     if (buttonData->type == GIP_CMD_INPUT) // Button data

@@ -85,6 +85,14 @@ ControllerResult WiiController::ParseData(uint8_t *buffer, size_t size, RawInput
     if (size < 9)
         return CONTROLLER_STATUS_UNEXPECTED_DATA;
 
+    /*
+        input_idx selects which of the adapter's ports this slice came from, and is used to
+        index m_is_connected / m_rumble_supported, so it must be range-checked first.
+        (Same guard as SteamController2026, see #107.)
+    */
+    if (*input_idx >= WII_MAX_INPUTS)
+        return CONTROLLER_STATUS_INVALID_INDEX;
+
     uint8_t status = buffer[0];
 
     m_rumble_supported[*input_idx] = ((status & STATE_EXTRA_POWER) != 0); // Rumble can be supported if Extra Power bit is set

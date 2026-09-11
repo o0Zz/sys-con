@@ -7,7 +7,7 @@ namespace syscon::controllers
     bool IsAtControllerLimit();
 
     Result Insert(std::unique_ptr<IController> &&controllerPtr);
-    void RemoveAllNonPlugged(std::vector<s32> interfaceIDsPlugged);
+    void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged);
 
     void SetPollingParameters(int32_t _polling_timeout_ms, s8 _thread_priority);
 

@@ -115,6 +115,15 @@ ControllerResult BaseController::OpenInterfaces()
 void BaseController::CloseInterfaces()
 {
     m_device->Close();
+
+    /*
+        m_inPipe/m_outPipe/m_interfaces are non-owning pointers into the device we just
+        closed. Drop them so a later ReadInput()/SetRumble() can't dereference endpoints
+        that no longer exist; both now see empty pipe lists and fail cleanly instead.
+    */
+    m_inPipe.clear();
+    m_outPipe.clear();
+    m_interfaces.clear();
 }
 
 bool BaseController::Support(ControllerFeature feature)

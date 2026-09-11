@@ -1,11 +1,13 @@
 #pragma once
 
-#define LOG_LEVEL_TRACE   0
-#define LOG_LEVEL_DEBUG   1
-#define LOG_LEVEL_INFO    2
-#define LOG_LEVEL_WARNING 3
-#define LOG_LEVEL_ERROR   4
-#define LOG_LEVEL_COUNT   5
+/*
+    Declares the subset of syscon::logger that ControllerSwitch needs, without dragging in
+    logger.h (and with it ifilemanager.h). Log levels come from ILogger.h so that there is
+    exactly one definition of them: this header used to carry its own LOG_LEVEL_* table that
+    had drifted out of step with logger.h's (it was missing PERF, so every level from INFO
+    upwards was off by one).
+*/
+#include "ILogger.h"
 
 namespace syscon::logger
 {
