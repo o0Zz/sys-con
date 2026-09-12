@@ -30,7 +30,7 @@ ControllerResult WiiController::Initialize()
 
     if (m_outPipe.empty())
     {
-        m_logger->Log(LogLevelError, "WiiController: Initialization failed, no output endpoint available");
+        m_logger->Log(LogLevel::Error, "WiiController: Initialization failed, no output endpoint available");
         return CONTROLLER_STATUS_INVALID_ENDPOINT;
     }
 

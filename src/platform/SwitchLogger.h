@@ -17,5 +17,5 @@ namespace syscon::logger
     void LogInfo(const char *fmt, ...);
     void LogWarning(const char *fmt, ...);
     void LogError(const char *fmt, ...);
-    void LogBuffer(int lvl, const uint8_t *buffer, size_t size);
+    void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size);
 } // namespace syscon::logger

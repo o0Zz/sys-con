@@ -7,14 +7,17 @@
 
 struct NormalizedStick
 {
-    float axis_x;
-    float axis_y;
+    float axis_x{0.0f};
+    float axis_y{0.0f};
 };
 
 struct NormalizedButtonData
 {
-    bool buttons[MAX_CONTROLLER_BUTTONS];
-    NormalizedStick sticks[2];
+    // Indexed by GamepadButton, not by pin. This used to be a bool[MAX_CONTROLLER_BUTTONS]
+    // exactly like RawInputData::buttons, which is indexed by pin -- same name, same size
+    // constant, two unrelated index spaces, and nothing to stop them being confused.
+    GamepadButtonStates buttons{};
+    NormalizedStick sticks[2]{};
 };
 
 class IController

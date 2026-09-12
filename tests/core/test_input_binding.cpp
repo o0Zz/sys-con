@@ -17,22 +17,22 @@ public:
 
 TEST(BaseController, test_input_binding_basis)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
-    config.buttonsPin[ControllerButton::X][0] = 1;
-    config.buttonsPin[ControllerButton::Y][0] = 2;
-    config.buttonsPin[ControllerButton::A][0] = 3;
-    config.buttonsPin[ControllerButton::B][0] = 4;
-    config.buttonsPin[ControllerButton::RSTICK_CLICK][0] = 15;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsPin[GamepadButton::X][0] = 1;
+    config.buttonsPin[GamepadButton::Y][0] = 2;
+    config.buttonsPin[GamepadButton::A][0] = 3;
+    config.buttonsPin[GamepadButton::B][0] = 4;
+    config.buttonsPin[GamepadButton::RSTICK_CLICK][0] = 15;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
 
     RawInputData inputData;
     inputData.buttons[1] = true;
@@ -44,28 +44,28 @@ TEST(BaseController, test_input_binding_basis)
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
 
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::X]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::Y]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::A]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::B]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::X]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::Y]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::A]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::B]);
     EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_x, 0.5f);
     EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_y, -0.5f);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::RSTICK_CLICK]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::RSTICK_CLICK]);
 }
 
 TEST(BaseController, test_input_deadzone)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
 
     config.analogDeadzonePercent[AnalogAxis::X] = 10;
     config.analogDeadzonePercent[AnalogAxis::Y] = 10;
@@ -83,17 +83,17 @@ TEST(BaseController, test_input_deadzone)
 
 TEST(BaseController, test_input_factor)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
 
     config.analogFactorPercent[AnalogAxis::X] = 110;
     config.analogFactorPercent[AnalogAxis::Y] = 120;
@@ -111,19 +111,19 @@ TEST(BaseController, test_input_factor)
 
 TEST(BaseController, test_input_simulate_home_capture)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
-    config.buttonsPin[ControllerButton::X][0] = 1;
-    config.buttonsPin[ControllerButton::Y][0] = 2;
-    config.buttonsPin[ControllerButton::A][0] = 3;
-    config.buttonsPin[ControllerButton::B][0] = 4;
-    config.simulateCombos[0].buttonSimulated = ControllerButton::HOME;
-    config.simulateCombos[0].buttons[0] = ControllerButton::X;
-    config.simulateCombos[0].buttons[1] = ControllerButton::Y;
-    config.simulateCombos[1].buttonSimulated = ControllerButton::CAPTURE;
-    config.simulateCombos[1].buttons[0] = ControllerButton::A;
-    config.simulateCombos[1].buttons[1] = ControllerButton::B;
+    config.buttonsPin[GamepadButton::X][0] = 1;
+    config.buttonsPin[GamepadButton::Y][0] = 2;
+    config.buttonsPin[GamepadButton::A][0] = 3;
+    config.buttonsPin[GamepadButton::B][0] = 4;
+    config.simulateCombos[0].buttonSimulated = GamepadButton::HOME;
+    config.simulateCombos[0].buttons[0] = GamepadButton::X;
+    config.simulateCombos[0].buttons[1] = GamepadButton::Y;
+    config.simulateCombos[1].buttonSimulated = GamepadButton::CAPTURE;
+    config.simulateCombos[1].buttons[0] = GamepadButton::A;
+    config.simulateCombos[1].buttons[1] = GamepadButton::B;
 
     RawInputData inputData;
     inputData.buttons[1] = true;
@@ -134,23 +134,23 @@ TEST(BaseController, test_input_simulate_home_capture)
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
 
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::X]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::A]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::Y]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::B]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::HOME]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::CAPTURE]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::X]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::A]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::Y]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::B]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::HOME]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::CAPTURE]);
 }
 
 TEST(BaseController, test_input_stick_by_buttons)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
-    config.buttonsPin[ControllerButton::LSTICK_LEFT][0] = 1;
-    config.buttonsPin[ControllerButton::LSTICK_DOWN][0] = 2;
-    config.buttonsPin[ControllerButton::RSTICK_RIGHT][0] = 3;
-    config.buttonsPin[ControllerButton::RSTICK_UP][0] = 4;
+    config.buttonsPin[GamepadButton::LSTICK_LEFT][0] = 1;
+    config.buttonsPin[GamepadButton::LSTICK_DOWN][0] = 2;
+    config.buttonsPin[GamepadButton::RSTICK_RIGHT][0] = 3;
+    config.buttonsPin[GamepadButton::RSTICK_UP][0] = 4;
 
     RawInputData inputData;
     inputData.buttons[1] = true;
@@ -173,11 +173,11 @@ TEST(BaseController, test_input_stick_by_buttons)
 
 TEST(BaseController, test_input_multiple_pin)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
-    config.buttonsPin[ControllerButton::X][0] = 1;
-    config.buttonsPin[ControllerButton::X][1] = 2;
+    config.buttonsPin[GamepadButton::X][0] = 1;
+    config.buttonsPin[GamepadButton::X][1] = 2;
 
     RawInputData inputData;
     inputData.buttons[2] = true;
@@ -185,49 +185,49 @@ TEST(BaseController, test_input_multiple_pin)
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
 
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::X]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::X]);
 }
 
 TEST(BaseController, test_input_complex_combination)
 {
-    NormalizedButtonData normalizedData = {0};
+    NormalizedButtonData normalizedData{};
 
     ControllerConfig config;
 
-    config.buttonsPin[ControllerButton::A][0] = 2;
-    config.buttonsPin[ControllerButton::X][0] = DPAD_UP_BUTTON_ID;
+    config.buttonsPin[GamepadButton::A][0] = 2;
+    config.buttonsPin[GamepadButton::X][0] = DPAD_UP_BUTTON_ID;
 
-    config.buttonsPin[ControllerButton::DPAD_UP][0] = DPAD_UP_BUTTON_ID;
-    config.buttonsPin[ControllerButton::DPAD_DOWN][0] = DPAD_DOWN_BUTTON_ID;
-    config.buttonsPin[ControllerButton::DPAD_RIGHT][0] = DPAD_RIGHT_BUTTON_ID;
-    config.buttonsPin[ControllerButton::DPAD_LEFT][0] = DPAD_LEFT_BUTTON_ID;
+    config.buttonsPin[GamepadButton::DPAD_UP][0] = DPAD_UP_BUTTON_ID;
+    config.buttonsPin[GamepadButton::DPAD_DOWN][0] = DPAD_DOWN_BUTTON_ID;
+    config.buttonsPin[GamepadButton::DPAD_RIGHT][0] = DPAD_RIGHT_BUTTON_ID;
+    config.buttonsPin[GamepadButton::DPAD_LEFT][0] = DPAD_LEFT_BUTTON_ID;
 
-    config.buttonsAnalog[ControllerButton::Y].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::Y].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::Y].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::Y].sign = -1.0f;
 
-    config.buttonsPin[ControllerButton::L][0] = 1;
-    config.buttonsPin[ControllerButton::L][1] = 2;
+    config.buttonsPin[GamepadButton::L][0] = 1;
+    config.buttonsPin[GamepadButton::L][1] = 2;
 
-    config.buttonsPin[ControllerButton::R][0] = DPAD_RIGHT_BUTTON_ID;
+    config.buttonsPin[GamepadButton::R][0] = DPAD_RIGHT_BUTTON_ID;
 
-    config.simulateCombos[0].buttonSimulated = ControllerButton::HOME;
-    config.simulateCombos[0].buttons[0] = ControllerButton::X;
-    config.simulateCombos[0].buttons[1] = ControllerButton::Y;
-    config.simulateCombos[1].buttonSimulated = ControllerButton::CAPTURE;
-    config.simulateCombos[1].buttons[0] = ControllerButton::L;
-    config.simulateCombos[1].buttons[1] = ControllerButton::R;
+    config.simulateCombos[0].buttonSimulated = GamepadButton::HOME;
+    config.simulateCombos[0].buttons[0] = GamepadButton::X;
+    config.simulateCombos[0].buttons[1] = GamepadButton::Y;
+    config.simulateCombos[1].buttonSimulated = GamepadButton::CAPTURE;
+    config.simulateCombos[1].buttons[0] = GamepadButton::L;
+    config.simulateCombos[1].buttons[1] = GamepadButton::R;
 
     config.buttonsAnalogUsed = true;
 
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_LEFT].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
+    config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
 
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
 
     RawInputData inputData;
     inputData.analog[AnalogAxis::X] = -0.5f;
@@ -247,11 +247,11 @@ TEST(BaseController, test_input_complex_combination)
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
 
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::X]);
-    EXPECT_FALSE(normalizedData.buttons[ControllerButton::Y]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::HOME]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::CAPTURE]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::DPAD_UP]);
-    EXPECT_TRUE(normalizedData.buttons[ControllerButton::DPAD_RIGHT]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::X]);
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::Y]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::HOME]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::CAPTURE]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::DPAD_UP]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::DPAD_RIGHT]);
     EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_x, -0.5f);
 }

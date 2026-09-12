@@ -119,7 +119,7 @@ void SwitchVirtualGamepadHandler::ExitThread()
 Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 {
     uint16_t input_idx = 0;
-    NormalizedButtonData buttonData = {0};
+    NormalizedButtonData buttonData{};
     u64 buttons = 0;
     HidAnalogStickState analog_stick_l;
     HidAnalogStickState analog_stick_r;
@@ -167,41 +167,41 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 
     auto startTimer = std::chrono::steady_clock::now();
 
-    if (buttonData.buttons[ControllerButton::X])
+    if (buttonData.buttons[GamepadButton::X])
         buttons |= HidNpadButton_X;
-    if (buttonData.buttons[ControllerButton::A])
+    if (buttonData.buttons[GamepadButton::A])
         buttons |= HidNpadButton_A;
-    if (buttonData.buttons[ControllerButton::B])
+    if (buttonData.buttons[GamepadButton::B])
         buttons |= HidNpadButton_B;
-    if (buttonData.buttons[ControllerButton::Y])
+    if (buttonData.buttons[GamepadButton::Y])
         buttons |= HidNpadButton_Y;
-    if (buttonData.buttons[ControllerButton::LSTICK_CLICK])
+    if (buttonData.buttons[GamepadButton::LSTICK_CLICK])
         buttons |= HidNpadButton_StickL;
-    if (buttonData.buttons[ControllerButton::RSTICK_CLICK])
+    if (buttonData.buttons[GamepadButton::RSTICK_CLICK])
         buttons |= HidNpadButton_StickR;
-    if (buttonData.buttons[ControllerButton::L])
+    if (buttonData.buttons[GamepadButton::L])
         buttons |= HidNpadButton_L;
-    if (buttonData.buttons[ControllerButton::R])
+    if (buttonData.buttons[GamepadButton::R])
         buttons |= HidNpadButton_R;
-    if (buttonData.buttons[ControllerButton::ZL])
+    if (buttonData.buttons[GamepadButton::ZL])
         buttons |= HidNpadButton_ZL;
-    if (buttonData.buttons[ControllerButton::ZR])
+    if (buttonData.buttons[GamepadButton::ZR])
         buttons |= HidNpadButton_ZR;
-    if (buttonData.buttons[ControllerButton::MINUS])
+    if (buttonData.buttons[GamepadButton::MINUS])
         buttons |= HidNpadButton_Minus;
-    if (buttonData.buttons[ControllerButton::PLUS])
+    if (buttonData.buttons[GamepadButton::PLUS])
         buttons |= HidNpadButton_Plus;
-    if (buttonData.buttons[ControllerButton::DPAD_UP])
+    if (buttonData.buttons[GamepadButton::DPAD_UP])
         buttons |= HidNpadButton_Up;
-    if (buttonData.buttons[ControllerButton::DPAD_RIGHT])
+    if (buttonData.buttons[GamepadButton::DPAD_RIGHT])
         buttons |= HidNpadButton_Right;
-    if (buttonData.buttons[ControllerButton::DPAD_DOWN])
+    if (buttonData.buttons[GamepadButton::DPAD_DOWN])
         buttons |= HidNpadButton_Down;
-    if (buttonData.buttons[ControllerButton::DPAD_LEFT])
+    if (buttonData.buttons[GamepadButton::DPAD_LEFT])
         buttons |= HidNpadButton_Left;
-    if (buttonData.buttons[ControllerButton::CAPTURE])
+    if (buttonData.buttons[GamepadButton::CAPTURE])
         buttons |= HiddbgNpadButton_Capture;
-    if (buttonData.buttons[ControllerButton::HOME])
+    if (buttonData.buttons[GamepadButton::HOME])
         buttons |= HiddbgNpadButton_Home;
 
     ConvertAxisToSwitchAxis(buttonData.sticks[0].axis_x, buttonData.sticks[0].axis_y, &analog_stick_l.x, &analog_stick_l.y);

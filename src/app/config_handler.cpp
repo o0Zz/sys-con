@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "ini.h"
 
+#include <array>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -54,64 +55,64 @@ namespace syscon::config
             }
         };
 
-        ControllerButton stringToButton(const char *name)
+        GamepadButton stringToButton(const char *name)
         {
             std::string nameStr = convertToLowercase(name);
 
             if (nameStr == "b")
-                return ControllerButton::B;
+                return GamepadButton::B;
             else if (nameStr == "a")
-                return ControllerButton::A;
+                return GamepadButton::A;
             else if (nameStr == "x")
-                return ControllerButton::X;
+                return GamepadButton::X;
             else if (nameStr == "y")
-                return ControllerButton::Y;
+                return GamepadButton::Y;
             else if (nameStr == "lstick_click")
-                return ControllerButton::LSTICK_CLICK;
+                return GamepadButton::LSTICK_CLICK;
             else if (nameStr == "lstick_left")
-                return ControllerButton::LSTICK_LEFT;
+                return GamepadButton::LSTICK_LEFT;
             else if (nameStr == "lstick_right")
-                return ControllerButton::LSTICK_RIGHT;
+                return GamepadButton::LSTICK_RIGHT;
             else if (nameStr == "lstick_up")
-                return ControllerButton::LSTICK_UP;
+                return GamepadButton::LSTICK_UP;
             else if (nameStr == "lstick_down")
-                return ControllerButton::LSTICK_DOWN;
+                return GamepadButton::LSTICK_DOWN;
             else if (nameStr == "rstick_click")
-                return ControllerButton::RSTICK_CLICK;
+                return GamepadButton::RSTICK_CLICK;
             else if (nameStr == "rstick_left")
-                return ControllerButton::RSTICK_LEFT;
+                return GamepadButton::RSTICK_LEFT;
             else if (nameStr == "rstick_right")
-                return ControllerButton::RSTICK_RIGHT;
+                return GamepadButton::RSTICK_RIGHT;
             else if (nameStr == "rstick_up")
-                return ControllerButton::RSTICK_UP;
+                return GamepadButton::RSTICK_UP;
             else if (nameStr == "rstick_down")
-                return ControllerButton::RSTICK_DOWN;
+                return GamepadButton::RSTICK_DOWN;
             else if (nameStr == "l")
-                return ControllerButton::L;
+                return GamepadButton::L;
             else if (nameStr == "r")
-                return ControllerButton::R;
+                return GamepadButton::R;
             else if (nameStr == "zl")
-                return ControllerButton::ZL;
+                return GamepadButton::ZL;
             else if (nameStr == "zr")
-                return ControllerButton::ZR;
+                return GamepadButton::ZR;
             else if (nameStr == "minus")
-                return ControllerButton::MINUS;
+                return GamepadButton::MINUS;
             else if (nameStr == "plus")
-                return ControllerButton::PLUS;
+                return GamepadButton::PLUS;
             else if (nameStr == "dpad_up")
-                return ControllerButton::DPAD_UP;
+                return GamepadButton::DPAD_UP;
             else if (nameStr == "dpad_right")
-                return ControllerButton::DPAD_RIGHT;
+                return GamepadButton::DPAD_RIGHT;
             else if (nameStr == "dpad_down")
-                return ControllerButton::DPAD_DOWN;
+                return GamepadButton::DPAD_DOWN;
             else if (nameStr == "dpad_left")
-                return ControllerButton::DPAD_LEFT;
+                return GamepadButton::DPAD_LEFT;
             else if (nameStr == "capture")
-                return ControllerButton::CAPTURE;
+                return GamepadButton::CAPTURE;
             else if (nameStr == "home")
-                return ControllerButton::HOME;
+                return GamepadButton::HOME;
 
-            return ControllerButton::NONE;
+            return GamepadButton::NONE;
         }
 
         RGBAColor hexStringColorToRGBA(const char *value)
@@ -177,7 +178,7 @@ namespace syscon::config
             return true;
         }
 
-        void parseHotKey(const char *value, ControllerButton hotkeys[2])
+        void parseHotKey(const char *value, GamepadButton hotkeys[2])
         {
             char *context;
             char *tok = strtok_r(const_cast<char *>(value), "+", &context);
@@ -200,7 +201,7 @@ namespace syscon::config
             return !s.empty() && it == s.end();
         }
 
-        void parseBinding(const char *value, uint8_t button_pin[MAX_PIN_BY_BUTTONS], ControllerAnalogConfig *analogCfg)
+        void parseBinding(const char *value, std::array<uint8_t, MAX_PIN_BY_BUTTONS> &button_pin, ControllerAnalogConfig *analogCfg)
         {
             int button_pin_idx = 0;
             char *context;
@@ -285,7 +286,7 @@ namespace syscon::config
             else if (nameStr == "polling_thread_priority")
                 ini_data->global_config->polling_thread_priority = atoi(value);
             else if (nameStr == "log_level")
-                ini_data->global_config->log_level = atoi(value);
+                ini_data->global_config->log_level = LogLevelFromInt(atoi(value));
             else if (nameStr == "discovery_mode")
                 ini_data->global_config->discovery_mode = static_cast<DiscoveryMode>(atoi(value));
             else if (nameStr == "auto_add_controller")
@@ -321,8 +322,8 @@ namespace syscon::config
 
             ini_data->ini_section_found = true;
 
-            ControllerButton buttonId = stringToButton(nameStr.c_str());
-            if (buttonId != ControllerButton::NONE)
+            GamepadButton buttonId = stringToButton(nameStr.c_str());
+            if (buttonId != GamepadButton::NONE)
             {
                 ini_data->controller_config->buttonsAnalogUsed = true;
                 parseBinding(value, ini_data->controller_config->buttonsPin[buttonId], &ini_data->controller_config->buttonsAnalog[buttonId]);
@@ -339,12 +340,12 @@ namespace syscon::config
                 ini_data->controller_config->controllerType = stringToControllerType(value);
             else if (nameStr.starts_with("simulate_"))
             {
-                ControllerButton btn = stringToButton(nameStr.substr(9).c_str());
-                if (btn != ControllerButton::NONE && btn < ControllerButton::COUNT)
+                GamepadButton btn = stringToButton(nameStr.substr(9).c_str());
+                if (btn != GamepadButton::NONE && btn < GamepadButton::COUNT)
                 {
                     for (int i = 0; i < MAX_CONTROLLER_COMBO; i++)
                     {
-                        if (ini_data->controller_config->simulateCombos[i].buttonSimulated != ControllerButton::NONE)
+                        if (ini_data->controller_config->simulateCombos[i].buttonSimulated != GamepadButton::NONE)
                             continue; // Search for a free slot
 
                         ini_data->controller_config->simulateCombos[i].buttonSimulated = btn;
@@ -642,10 +643,10 @@ namespace syscon::config
                 return rc;
         }
 
-        if (config->buttonsPin[ControllerButton::B][0] == 0 && config->buttonsPin[ControllerButton::A][0] == 0 && config->buttonsPin[ControllerButton::Y][0] == 0 && config->buttonsPin[ControllerButton::X][0] == 0)
+        if (config->buttonsPin[GamepadButton::B][0] == 0 && config->buttonsPin[GamepadButton::A][0] == 0 && config->buttonsPin[GamepadButton::Y][0] == 0 && config->buttonsPin[GamepadButton::X][0] == 0)
             syscon::logger::LogError("No buttons configured for this controller [%04x-%04x] - Stick might works but buttons will not work (https://github.com/o0Zz/sys-con/blob/master/doc/Troubleshooting.md)", vendor_id, product_id);
         else
-            syscon::logger::LogInfo("Controller successfully loaded (B=%d, A=%d, Y=%d, X=%d, ...) !", config->buttonsPin[ControllerButton::B][0], config->buttonsPin[ControllerButton::A][0], config->buttonsPin[ControllerButton::Y][0], config->buttonsPin[ControllerButton::X][0]);
+            syscon::logger::LogInfo("Controller successfully loaded (B=%d, A=%d, Y=%d, X=%d, ...) !", config->buttonsPin[GamepadButton::B][0], config->buttonsPin[GamepadButton::A][0], config->buttonsPin[GamepadButton::Y][0], config->buttonsPin[GamepadButton::X][0]);
 
         return 0;
     }

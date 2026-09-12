@@ -4,20 +4,15 @@
 #include "IFileManager.h"
 #include "ILogger.h"
 
-#define LOG_LEVEL_TRACE   0
-#define LOG_LEVEL_DEBUG   1
-#define LOG_LEVEL_PERF    2
-#define LOG_LEVEL_INFO    3
-#define LOG_LEVEL_WARNING 4
-#define LOG_LEVEL_ERROR   5
-#define LOG_LEVEL_COUNT   6
+// Log levels live in ILogger.h -- this header used to carry a duplicate LOG_LEVEL_* macro
+// table, and SwitchLogger.h carried a third that had drifted out of step with it.
 
 namespace syscon::logger
 {
     void Initialize(const std::string &logPath, std::unique_ptr<IFileManager> &&file);
     void Exit();
 
-    void SetLogLevel(int level);
+    void SetLogLevel(LogLevel level);
 
     void LogTrace(const char *format, ...);
     void LogDebug(const char *format, ...);
@@ -26,8 +21,8 @@ namespace syscon::logger
     void LogWarning(const char *format, ...);
     void LogError(const char *format, ...);
 
-    void Log(int lvl, const char *fmt, ::std::va_list vl);
-    void LogBuffer(int lvl, const uint8_t *buffer, size_t size);
+    void Log(LogLevel lvl, const char *fmt, ::std::va_list vl);
+    void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size);
 
     class Logger : public ILogger
     {

@@ -58,3 +58,6 @@ using AnalogValues = EnumArray<AnalogAxis, float, AnalogAxisCount>;
 
 /// Per-axis percentages (deadzone, scaling factor), 0..100.
 using AnalogPercentages = EnumArray<AnalogAxis, uint8_t, AnalogAxisCount>;
+
+static_assert(AnalogAxisCount == 11, "AnalogAxis gained or lost a value; check AllAnalogAxes too");
+static_assert(AllAnalogAxes.size() == AnalogAxisCount - 1, "AllAnalogAxes should cover every axis except Unknown");

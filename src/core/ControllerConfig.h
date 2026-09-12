@@ -1,6 +1,8 @@
 #pragma once
 #include "AnalogAxis.h"
+#include "GamepadButton.h"
 
+#include <array>
 #include <cstdint>
 #include <string.h>
 #include <string>
@@ -18,38 +20,6 @@
 #define MAX_CONTROLLER_BUTTONS 36
 #define MAX_CONTROLLER_COMBO   16
 
-enum ControllerButton
-{
-    NONE = 0,
-    X,
-    A,
-    B,
-    Y,
-    LSTICK_CLICK,
-    LSTICK_LEFT,
-    LSTICK_RIGHT,
-    LSTICK_UP,
-    LSTICK_DOWN,
-    RSTICK_CLICK,
-    RSTICK_LEFT,
-    RSTICK_RIGHT,
-    RSTICK_UP,
-    RSTICK_DOWN,
-    L,
-    R,
-    ZL,
-    ZR,
-    MINUS,
-    PLUS,
-    DPAD_UP,
-    DPAD_RIGHT,
-    DPAD_DOWN,
-    DPAD_LEFT,
-    CAPTURE,
-    HOME,
-
-    COUNT
-};
 
 union RGBAColor
 {
@@ -89,8 +59,8 @@ struct ControllerAnalogConfig
 
 struct ControllerComboConfig
 {
-    ControllerButton buttonSimulated{ControllerButton::NONE};
-    ControllerButton buttons[2];
+    GamepadButton buttonSimulated{GamepadButton::NONE};
+    GamepadButton buttons[2];
 };
 
 class ControllerConfig
@@ -109,10 +79,11 @@ public:
     AnalogPercentages analogDeadzonePercent{0};
     AnalogPercentages analogFactorPercent{100};
 
-    uint8_t buttonsPin[ControllerButton::COUNT][MAX_PIN_BY_BUTTONS]{0};
+    // Each button can be driven by up to MAX_PIN_BY_BUTTONS pins; 0 means unmapped.
+    EnumArray<GamepadButton, std::array<uint8_t, MAX_PIN_BY_BUTTONS>, GamepadButtonCount> buttonsPin{};
 
     bool buttonsAnalogUsed{false};
-    ControllerAnalogConfig buttonsAnalog[ControllerButton::COUNT]{0};
+    EnumArray<GamepadButton, ControllerAnalogConfig, GamepadButtonCount> buttonsAnalog{};
 
     ControllerComboConfig simulateCombos[MAX_CONTROLLER_COMBO];
 
@@ -125,11 +96,10 @@ public:
     {
         for (int i = 0; i < MAX_CONTROLLER_COMBO; i++)
         {
-            simulateCombos[i].buttonSimulated = ControllerButton::NONE;
+            simulateCombos[i].buttonSimulated = GamepadButton::NONE;
             for (int j = 0; j < 2; j++)
-                simulateCombos[i].buttons[j] = ControllerButton::NONE;
+                simulateCombos[i].buttons[j] = GamepadButton::NONE;
         }
 
-        memset(buttonsPin, 0, sizeof(buttonsPin));
     }
 };

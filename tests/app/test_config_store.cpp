@@ -20,10 +20,10 @@ TEST(Configuration, test_load_config_unknown)
     EXPECT_EQ(config.driver, "");
     EXPECT_EQ(config.profile, "");
     EXPECT_EQ(config.controllerType, ControllerType_Pro);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::X][0], 0);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::A][0], 0);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::B][0], 0);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::Y][0], 0);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::X][0], 0);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::A][0], 0);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::B][0], 0);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::Y][0], 0);
 }
 
 TEST(Configuration, test_load_config_no_profile)
@@ -37,10 +37,10 @@ TEST(Configuration, test_load_config_no_profile)
     EXPECT_EQ(config.driver, "");
     EXPECT_EQ(config.profile, "");
     EXPECT_EQ(config.controllerType, ControllerType_Pro);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::X][0], 1);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::A][0], 2);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::B][0], 3);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::Y][0], 4);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::X][0], 1);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::A][0], 2);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::B][0], 3);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::Y][0], 4);
 }
 
 TEST(Configuration, test_load_config_with_profile_xboxone)
@@ -54,13 +54,13 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
     EXPECT_EQ(config.driver, "xboxone");
     EXPECT_EQ(config.profile, "xboxone");
     EXPECT_EQ(config.controllerType, ControllerType_Pro);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::X][0], 4);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::A][0], 2);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::B][0], 1);
-    EXPECT_EQ(config.buttonsPin[ControllerButton::Y][0], 3);
-    EXPECT_EQ(config.simulateCombos[0].buttonSimulated, ControllerButton::CAPTURE);
-    EXPECT_EQ(config.simulateCombos[1].buttonSimulated, ControllerButton::HOME);
-    EXPECT_EQ(config.simulateCombos[2].buttonSimulated, ControllerButton::NONE);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::X][0], 4);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::A][0], 2);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::B][0], 1);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::Y][0], 3);
+    EXPECT_EQ(config.simulateCombos[0].buttonSimulated, GamepadButton::CAPTURE);
+    EXPECT_EQ(config.simulateCombos[1].buttonSimulated, GamepadButton::HOME);
+    EXPECT_EQ(config.simulateCombos[2].buttonSimulated, GamepadButton::NONE);
 }
 
 TEST(Configuration, test_load_config_with_profile_wii)
@@ -73,5 +73,5 @@ TEST(Configuration, test_load_config_with_profile_wii)
 
     EXPECT_EQ(config.driver, "wii");
     EXPECT_EQ(config.profile, "wii");
-    EXPECT_EQ(config.buttonsPin[ControllerButton::ZL][0], 0);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::ZL][0], 0);
 }

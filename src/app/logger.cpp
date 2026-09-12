@@ -20,10 +20,10 @@ namespace syscon::logger
 
         static char sLogBuffer[1024];
         static std::filesystem::path sLogPath;
-        static int slogLevel = LOG_LEVEL_TRACE;
+        static LogLevel sLogLevel = LogLevel::Trace;
         static std::unique_ptr<IFileManager> sFileManager;
 
-        const char klogLevelStr[LOG_LEVEL_COUNT] = {'T', 'D', 'P', 'I', 'W', 'E'};
+        const char kLogLevelStr[LogLevelCount] = {'T', 'D', 'P', 'I', 'W', 'E'};
     } // namespace
 
     void Initialize(const std::string &log, std::unique_ptr<IFileManager> &&file)
@@ -59,36 +59,36 @@ namespace syscon::logger
         }
     }
 
-    void SetLogLevel(int level)
+    void SetLogLevel(LogLevel level)
     {
         // This function is not thread safe, should be called only once at the start of the program
-        slogLevel = level;
+        sLogLevel = level;
     }
 
-    void Log(int lvl, const char *fmt, ::std::va_list vl)
+    void Log(LogLevel lvl, const char *fmt, ::std::va_list vl)
     {
-        if (lvl < slogLevel)
+        if (lvl < sLogLevel)
             return; // Don't log if the level is lower than the current log level.
 
         std::lock_guard<std::mutex> printLock(sLogMutex);
 
         uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", kLogLevelStr[static_cast<size_t>(lvl)], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
         std::vsnprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), fmt, vl);
 
         /* Write in the file. */
         LogWriteToFile(sLogBuffer);
     }
 
-    void LogBuffer(int lvl, const uint8_t *buffer, size_t size)
+    void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size)
     {
-        if (lvl < slogLevel)
+        if (lvl < sLogLevel)
             return; // Don't log if the level is lower than the current log level.
 
         std::lock_guard<std::mutex> printLock(sLogMutex);
 
         uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", klogLevelStr[lvl], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", kLogLevelStr[static_cast<size_t>(lvl)], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
         size_t start_offset = strlen(sLogBuffer);
 
@@ -111,7 +111,7 @@ namespace syscon::logger
     {
         ::std::va_list vl;
         va_start(vl, fmt);
-        Log(LOG_LEVEL_TRACE, fmt, vl);
+        Log(LogLevel::Trace, fmt, vl);
         va_end(vl);
     }
 
@@ -119,7 +119,7 @@ namespace syscon::logger
     {
         ::std::va_list vl;
         va_start(vl, fmt);
-        Log(LOG_LEVEL_DEBUG, fmt, vl);
+        Log(LogLevel::Debug, fmt, vl);
         va_end(vl);
     }
 
@@ -127,7 +127,7 @@ namespace syscon::logger
     {
         ::std::va_list vl;
         va_start(vl, fmt);
-        Log(LOG_LEVEL_PERF, fmt, vl);
+        Log(LogLevel::Perf, fmt, vl);
         va_end(vl);
     }
 
@@ -135,7 +135,7 @@ namespace syscon::logger
     {
         ::std::va_list vl;
         va_start(vl, fmt);
-        Log(LOG_LEVEL_INFO, fmt, vl);
+        Log(LogLevel::Info, fmt, vl);
         va_end(vl);
     }
 
@@ -143,7 +143,7 @@ namespace syscon::logger
     {
         ::std::va_list vl;
         va_start(vl, fmt);
-        Log(LOG_LEVEL_WARNING, fmt, vl);
+        Log(LogLevel::Warning, fmt, vl);
         va_end(vl);
     }
 
@@ -151,7 +151,7 @@ namespace syscon::logger
     {
         ::std::va_list vl;
         va_start(vl, fmt);
-        Log(LOG_LEVEL_ERROR, fmt, vl);
+        Log(LogLevel::Error, fmt, vl);
         va_end(vl);
     }
 
@@ -170,7 +170,7 @@ namespace syscon::logger
 
     bool Logger::IsEnabled(LogLevel lvl)
     {
-        return lvl >= slogLevel;
+        return lvl >= sLogLevel;
     }
 
 } // namespace syscon::logger

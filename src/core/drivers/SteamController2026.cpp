@@ -31,7 +31,7 @@ ControllerResult SteamController2026::Initialize()
     */
     m_controller_count = (m_interfaces.size() > 1) ? STEAMCONTROLLER_MAX_INPUTS : 1;
 
-    m_logger->Log(LogLevelDebug, "SteamController2026[%04x-%04x] %d controller(s) detected on %d interface(s)", m_device->GetVendor(), m_device->GetProduct(), m_controller_count, (int)m_interfaces.size());
+    m_logger->Log(LogLevel::Debug, "SteamController2026[%04x-%04x] %d controller(s) detected on %d interface(s)", m_device->GetVendor(), m_device->GetProduct(), m_controller_count, (int)m_interfaces.size());
 
     return CONTROLLER_STATUS_SUCCESS;
 }
@@ -54,7 +54,7 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
         Steam2026InputReport *controllerData = reinterpret_cast<Steam2026InputReport *>(buffer);
         if (size < sizeof(Steam2026InputReport))
         {
-            m_logger->Log(LogLevelError, "SteamController2026[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(Steam2026InputReport));
+            m_logger->Log(LogLevel::Error, "SteamController2026[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(Steam2026InputReport));
             return CONTROLLER_STATUS_UNEXPECTED_DATA;
         }
 
@@ -118,14 +118,14 @@ bool SteamController2026::IsControllerConnected(uint16_t input_idx)
 
 ControllerResult SteamController2026::OnControllerConnect(uint16_t input_idx)
 {
-    m_logger->Log(LogLevelInfo, "SteamController2026 controller connected (Idx: %d) ...", input_idx);
+    m_logger->Log(LogLevel::Info, "SteamController2026 controller connected (Idx: %d) ...", input_idx);
     m_controllerInfo[input_idx].m_is_connected = true;
     return UpdateLizard(input_idx);
 }
 
 ControllerResult SteamController2026::OnControllerDisconnect(uint16_t input_idx)
 {
-    m_logger->Log(LogLevelInfo, "SteamController2026 controller disconnected (Idx: %d) ...", input_idx);
+    m_logger->Log(LogLevel::Info, "SteamController2026 controller disconnected (Idx: %d) ...", input_idx);
     m_controllerInfo[input_idx].m_is_connected = false;
     return CONTROLLER_STATUS_SUCCESS;
 }

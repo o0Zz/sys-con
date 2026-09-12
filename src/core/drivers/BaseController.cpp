@@ -8,7 +8,7 @@
 BaseController::BaseController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
     : IController(std::move(device), config, std::move(logger))
 {
-    m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] Created !", m_device->GetVendor(), m_device->GetProduct());
+    m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Created !", m_device->GetVendor(), m_device->GetProduct());
 }
 
 BaseController::~BaseController()
@@ -17,12 +17,12 @@ BaseController::~BaseController()
 
 ControllerResult BaseController::Initialize()
 {
-    m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] Initializing ...", m_device->GetVendor(), m_device->GetProduct());
+    m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Initializing ...", m_device->GetVendor(), m_device->GetProduct());
 
     ControllerResult result = OpenInterfaces();
     if (result != CONTROLLER_STATUS_SUCCESS)
     {
-        m_logger->Log(LogLevelError, "Controller[%04x-%04x] Failed to open interfaces !", m_device->GetVendor(), m_device->GetProduct());
+        m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open interfaces !", m_device->GetVendor(), m_device->GetProduct());
         return result;
     }
 
@@ -46,24 +46,24 @@ size_t BaseController::GetMaxInputBufferSize()
 
 ControllerResult BaseController::OpenInterfaces()
 {
-    m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] Opening interfaces ...", m_device->GetVendor(), m_device->GetProduct());
+    m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Opening interfaces ...", m_device->GetVendor(), m_device->GetProduct());
 
     ControllerResult result = m_device->Open();
     if (result != CONTROLLER_STATUS_SUCCESS)
     {
-        m_logger->Log(LogLevelError, "Controller[%04x-%04x] Failed to open device !", m_device->GetVendor(), m_device->GetProduct());
+        m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open device !", m_device->GetVendor(), m_device->GetProduct());
         return result;
     }
 
     std::vector<std::unique_ptr<IUSBInterface>> &interfaces = m_device->GetInterfaces();
     for (auto &&interface : interfaces)
     {
-        m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] Opening interface %d/%d ...", m_device->GetVendor(), m_device->GetProduct(), m_interfaces.size() + 1, interfaces.size());
+        m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Opening interface %d/%d ...", m_device->GetVendor(), m_device->GetProduct(), m_interfaces.size() + 1, interfaces.size());
 
         ControllerResult interfaceResult = interface->Open();
         if (interfaceResult != CONTROLLER_STATUS_SUCCESS)
         {
-            m_logger->Log(LogLevelError, "Controller[%04x-%04x] Failed to open interface !", m_device->GetVendor(), m_device->GetProduct());
+            m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open interface !", m_device->GetVendor(), m_device->GetProduct());
             return interfaceResult;
         }
 
@@ -76,7 +76,7 @@ ControllerResult BaseController::OpenInterfaces()
             ControllerResult endpointResult = inEndpoint->Open(GetConfig().inputMaxPacketSize);
             if (endpointResult != CONTROLLER_STATUS_SUCCESS)
             {
-                m_logger->Log(LogLevelError, "Controller[%04x-%04x] Failed to open input endpoint idx: %d !", m_device->GetVendor(), m_device->GetProduct(), idx);
+                m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open input endpoint idx: %d !", m_device->GetVendor(), m_device->GetProduct(), idx);
                 return endpointResult;
             }
 
@@ -92,7 +92,7 @@ ControllerResult BaseController::OpenInterfaces()
             ControllerResult endpointResult = outEndpoint->Open(GetConfig().outputMaxPacketSize);
             if (endpointResult != CONTROLLER_STATUS_SUCCESS)
             {
-                m_logger->Log(LogLevelError, "Controller[%04x-%04x] Failed to open output endpoint idx: %d !", m_device->GetVendor(), m_device->GetProduct(), idx);
+                m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open output endpoint idx: %d !", m_device->GetVendor(), m_device->GetProduct(), idx);
                 return endpointResult;
             }
 
@@ -104,11 +104,11 @@ ControllerResult BaseController::OpenInterfaces()
 
     if (m_inPipe.empty())
     {
-        m_logger->Log(LogLevelError, "Controller[%04x-%04x] Not input endpoint found !", m_device->GetVendor(), m_device->GetProduct());
+        m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Not input endpoint found !", m_device->GetVendor(), m_device->GetProduct());
         return CONTROLLER_STATUS_INVALID_ENDPOINT;
     }
 
-    m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] successfully opened !", m_device->GetVendor(), m_device->GetProduct());
+    m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] successfully opened !", m_device->GetVendor(), m_device->GetProduct());
     return CONTROLLER_STATUS_SUCCESS;
 }
 
@@ -242,9 +242,9 @@ ControllerResult BaseController::ReadInput(NormalizedButtonData *normalData, uin
     MapRawInputToNormalized(rawData, normalData);
 
     auto end = std::chrono::high_resolution_clock::now();
-    if (m_logger->IsEnabled(LogLevelPerf))
+    if (m_logger->IsEnabled(LogLevel::Perf))
     {
-        m_logger->Log(LogLevelPerf, "Controller[%04x-%04x] Reading: %dus, Parsing: %dus, Mapping: %dus",
+        m_logger->Log(LogLevel::Perf, "Controller[%04x-%04x] Reading: %dus, Parsing: %dus, Mapping: %dus",
                       m_device->GetVendor(),
                       m_device->GetProduct(),
                       std::chrono::duration_cast<std::chrono::microseconds>(parse_start - read_start).count(),
@@ -258,18 +258,18 @@ ControllerResult BaseController::ReadInput(NormalizedButtonData *normalData, uin
 class StickButton
 {
 public:
-    StickButton(ControllerButton buttonId, float *axisField, float axisSign)
+    StickButton(GamepadButton buttonId, float *axisField, float axisSign)
         : button(buttonId), value_addr(axisField), sign(axisSign) {}
-    ControllerButton button;
+    GamepadButton button;
     float *value_addr;
     float sign;
 };
 
 void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedButtonData *normalData)
 {
-    if (m_logger->IsEnabled(LogLevelDebug))
+    if (m_logger->IsEnabled(LogLevel::Debug))
     {
-        m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] B1=%d B2=%d B3=%d B4=%d B5=%d B6=%d B7=%d B8=%d B9=%d B10=%d B11=%d B12=%d B13=%d B14=%d B15=%d B16=%d B17=%d B18=%d DPAD(UP=%d RIGHT=%d DOWN=%d LEFT=%d)",
+        m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] B1=%d B2=%d B3=%d B4=%d B5=%d B6=%d B7=%d B8=%d B9=%d B10=%d B11=%d B12=%d B13=%d B14=%d B15=%d B16=%d B17=%d B18=%d DPAD(UP=%d RIGHT=%d DOWN=%d LEFT=%d)",
                       m_device->GetVendor(),
                       m_device->GetProduct(),
                       rawData.buttons[1] ? 1 : 0,
@@ -295,7 +295,7 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
                       rawData.buttons[DPAD_DOWN_BUTTON_ID] ? 1 : 0,
                       rawData.buttons[DPAD_LEFT_BUTTON_ID] ? 1 : 0);
 
-        m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] X=%d%%, Y=%d%%, Z=%d%%, Rx=%d%%, Ry=%d%%, Rz=%d%%, Slider=%d%%, Dial=%d%%, Brake=%d%%, Accelerator=%d%%",
+        m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] X=%d%%, Y=%d%%, Z=%d%%, Rx=%d%%, Ry=%d%%, Rz=%d%%, Slider=%d%%, Dial=%d%%, Brake=%d%%, Accelerator=%d%%",
                       m_device->GetVendor(),
                       m_device->GetProduct(),
                       (int)(rawData.analog[AnalogAxis::X] * 100.0),
@@ -319,14 +319,14 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
 
     StickButton sticks_list[] = {
         // button value_addr, sign
-        StickButton(ControllerButton::LSTICK_LEFT, &normalData->sticks[0].axis_x, -1.0f),
-        StickButton(ControllerButton::LSTICK_RIGHT, &normalData->sticks[0].axis_x, +1.0f),
-        StickButton(ControllerButton::LSTICK_UP, &normalData->sticks[0].axis_y, +1.0f),
-        StickButton(ControllerButton::LSTICK_DOWN, &normalData->sticks[0].axis_y, -1.0f),
-        StickButton(ControllerButton::RSTICK_LEFT, &normalData->sticks[1].axis_x, -1.0f),
-        StickButton(ControllerButton::RSTICK_RIGHT, &normalData->sticks[1].axis_x, +1.0f),
-        StickButton(ControllerButton::RSTICK_UP, &normalData->sticks[1].axis_y, +1.0f),
-        StickButton(ControllerButton::RSTICK_DOWN, &normalData->sticks[1].axis_y, -1.0f),
+        StickButton(GamepadButton::LSTICK_LEFT, &normalData->sticks[0].axis_x, -1.0f),
+        StickButton(GamepadButton::LSTICK_RIGHT, &normalData->sticks[0].axis_x, +1.0f),
+        StickButton(GamepadButton::LSTICK_UP, &normalData->sticks[0].axis_y, +1.0f),
+        StickButton(GamepadButton::LSTICK_DOWN, &normalData->sticks[0].axis_y, -1.0f),
+        StickButton(GamepadButton::RSTICK_LEFT, &normalData->sticks[1].axis_x, -1.0f),
+        StickButton(GamepadButton::RSTICK_RIGHT, &normalData->sticks[1].axis_x, +1.0f),
+        StickButton(GamepadButton::RSTICK_UP, &normalData->sticks[1].axis_y, +1.0f),
+        StickButton(GamepadButton::RSTICK_DOWN, &normalData->sticks[1].axis_y, -1.0f),
     };
 
     // Analog value
@@ -343,32 +343,13 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
             *stick.value_addr = stick.sign * value;
     }
 
-    const ControllerButton controllerButtonList[] = {
-        ControllerButton::X,
-        ControllerButton::A,
-        ControllerButton::B,
-        ControllerButton::Y,
-        ControllerButton::LSTICK_CLICK,
-        ControllerButton::RSTICK_CLICK,
-        ControllerButton::L,
-        ControllerButton::R,
-        ControllerButton::ZL,
-        ControllerButton::ZR,
-        ControllerButton::MINUS,
-        ControllerButton::PLUS,
-        ControllerButton::CAPTURE,
-        ControllerButton::HOME,
-        ControllerButton::DPAD_UP,
-        ControllerButton::DPAD_DOWN,
-        ControllerButton::DPAD_RIGHT,
-        ControllerButton::DPAD_LEFT};
 
-    for (ControllerButton controllerButton : controllerButtonList)
+    for (GamepadButton controllerButton : AllDigitalButtons)
         normalData->buttons[controllerButton] = rawData.buttons[GetConfig().buttonsPin[controllerButton][0]] || rawData.buttons[GetConfig().buttonsPin[controllerButton][1]];
 
     if (GetConfig().buttonsAnalogUsed)
     {
-        for (ControllerButton controllerButton : controllerButtonList)
+        for (GamepadButton controllerButton : AllDigitalButtons)
             normalData->buttons[controllerButton] |= (GetConfig().buttonsAnalog[controllerButton].sign * rawData.analog[GetConfig().buttonsAnalog[controllerButton].bind]) > 0.0f;
     }
 
@@ -376,7 +357,7 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
     for (int i = 0; i < MAX_CONTROLLER_COMBO; i++)
     {
         const ControllerComboConfig *combo = &GetConfig().simulateCombos[i];
-        if (combo->buttonSimulated == ControllerButton::NONE)
+        if (combo->buttonSimulated == GamepadButton::NONE)
             break; // Stop at the first empty combo
 
         if (normalData->buttons[combo->buttons[0]] && normalData->buttons[combo->buttons[1]])

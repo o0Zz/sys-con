@@ -186,7 +186,7 @@ ControllerResult XboxOneController::ParseData(uint8_t *buffer, size_t size, RawI
     {
         if (size < sizeof(XboxOneButtonData))
         {
-            m_logger->Log(LogLevelError, "XboxOneController[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(XboxOneButtonData));
+            m_logger->Log(LogLevel::Error, "XboxOneController[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(XboxOneButtonData));
             return CONTROLLER_STATUS_UNEXPECTED_DATA;
         }
 
@@ -223,7 +223,7 @@ ControllerResult XboxOneController::ParseData(uint8_t *buffer, size_t size, RawI
     {
         if (size < 6)
         {
-            m_logger->Log(LogLevelError, "XboxOneController[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(XboxOneButtonData));
+            m_logger->Log(LogLevel::Error, "XboxOneController[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(XboxOneButtonData));
             return CONTROLLER_STATUS_UNEXPECTED_DATA;
         }
 

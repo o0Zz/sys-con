@@ -62,7 +62,7 @@ namespace syscon::config
     public:
         uint16_t polling_timeout_ms{10};
         int8_t polling_thread_priority{30};
-        int log_level{LOG_LEVEL_INFO};
+        LogLevel log_level{LogLevel::Info};
         DiscoveryMode discovery_mode{DiscoveryMode::HID_AND_XBOX};
         std::vector<ControllerVidPid> discovery_vidpid;
         bool auto_add_controller{true};
