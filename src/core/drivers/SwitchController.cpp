@@ -100,10 +100,10 @@ ControllerResult SwitchController::ParseData(uint8_t *buffer, size_t size, RawIn
                   cal_left_x.min, cal_left_x.max, cal_left_y.min, cal_left_y.max,
                   cal_right_x.min, cal_right_x.max, cal_right_y.min, cal_right_y.max);
 
-    rawData->analog[ControllerAnalogType_X] = BaseController::Normalize(left_x, cal_left_x.min, cal_left_x.max, 2000);
-    rawData->analog[ControllerAnalogType_Y] = -1.0f * BaseController::Normalize(left_y, cal_left_y.min, cal_left_y.max, 2000);
-    rawData->analog[ControllerAnalogType_Z] = BaseController::Normalize(right_x, cal_right_x.min, cal_right_x.max, 2000);
-    rawData->analog[ControllerAnalogType_Rz] = -1.0f * BaseController::Normalize(right_y, cal_right_y.min, cal_right_y.max, 2000);
+    rawData->analog[AnalogAxis::X] = BaseController::Normalize(left_x, cal_left_x.min, cal_left_x.max, 2000);
+    rawData->analog[AnalogAxis::Y] = -1.0f * BaseController::Normalize(left_y, cal_left_y.min, cal_left_y.max, 2000);
+    rawData->analog[AnalogAxis::Z] = BaseController::Normalize(right_x, cal_right_x.min, cal_right_x.max, 2000);
+    rawData->analog[AnalogAxis::Rz] = -1.0f * BaseController::Normalize(right_y, cal_right_y.min, cal_right_y.max, 2000);
 
     rawData->buttons[DPAD_UP_BUTTON_ID] = buttonData->dpad_up;
     rawData->buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;

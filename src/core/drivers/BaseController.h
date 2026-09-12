@@ -3,28 +3,12 @@
 #include "IController.h"
 #include <vector>
 
-enum ControllerAnalogType
-{
-    ControllerAnalogType_Unknown = 0,
-    ControllerAnalogType_X,
-    ControllerAnalogType_Y,
-    ControllerAnalogType_Z,
-    ControllerAnalogType_Rz,
-    ControllerAnalogType_Rx,
-    ControllerAnalogType_Ry,
-    ControllerAnalogType_Slider,
-    ControllerAnalogType_Dial,
-    ControllerAnalogType_Brake,
-    ControllerAnalogType_Accelerator,
-
-    ControllerAnalogType_Count
-};
 
 class RawInputData
 {
 public:
     bool buttons[MAX_CONTROLLER_BUTTONS] = {};
-    float analog[ControllerAnalogType_Count] = {};
+    AnalogValues analog{};
 };
 
 class BaseController : public IController

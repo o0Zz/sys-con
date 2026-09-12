@@ -25,8 +25,8 @@ TEST(Controller, test_steam2026_input_report)
 
     EXPECT_TRUE(controller.IsControllerConnected(input_idx));
     EXPECT_FALSE(rawData.buttons[1]);
-    EXPECT_FLOAT_EQ(rawData.analog[ControllerAnalogType_X], BaseController::Normalize(0x0241, -32768, 32767));
-    EXPECT_FLOAT_EQ(rawData.analog[ControllerAnalogType_Y], BaseController::Normalize(-static_cast<int16_t>(0xFED2), -32768, 32767));
+    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], BaseController::Normalize(0x0241, -32768, 32767));
+    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], BaseController::Normalize(-static_cast<int16_t>(0xFED2), -32768, 32767));
 }
 
 TEST(Controller, test_steam2026_misc_report_ignored)

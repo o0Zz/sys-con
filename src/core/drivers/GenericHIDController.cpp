@@ -102,16 +102,16 @@ ControllerResult GenericHIDController::ParseData(uint8_t *buffer, size_t size, R
     for (int i = 0; i < joystick_data.button_count; i++)
         rawData->buttons[i] = joystick_data.buttons[i];
 
-    rawData->analog[ControllerAnalogType_Rx] = BaseController::Normalize(joystick_data.rx, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Ry] = BaseController::Normalize(joystick_data.ry, -32768, 32767);
-    rawData->analog[ControllerAnalogType_X] = BaseController::Normalize(joystick_data.x, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Y] = BaseController::Normalize(joystick_data.y, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Z] = BaseController::Normalize(joystick_data.z, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Rz] = BaseController::Normalize(joystick_data.rz, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Slider] = BaseController::Normalize(joystick_data.slider, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Dial] = BaseController::Normalize(joystick_data.dial, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Brake] = BaseController::Normalize(joystick_data.brake, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Accelerator] = BaseController::Normalize(joystick_data.accelerator, -32768, 32767);
+    rawData->analog[AnalogAxis::Rx] = BaseController::Normalize(joystick_data.rx, -32768, 32767);
+    rawData->analog[AnalogAxis::Ry] = BaseController::Normalize(joystick_data.ry, -32768, 32767);
+    rawData->analog[AnalogAxis::X] = BaseController::Normalize(joystick_data.x, -32768, 32767);
+    rawData->analog[AnalogAxis::Y] = BaseController::Normalize(joystick_data.y, -32768, 32767);
+    rawData->analog[AnalogAxis::Z] = BaseController::Normalize(joystick_data.z, -32768, 32767);
+    rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(joystick_data.rz, -32768, 32767);
+    rawData->analog[AnalogAxis::Slider] = BaseController::Normalize(joystick_data.slider, -32768, 32767);
+    rawData->analog[AnalogAxis::Dial] = BaseController::Normalize(joystick_data.dial, -32768, 32767);
+    rawData->analog[AnalogAxis::Brake] = BaseController::Normalize(joystick_data.brake, -32768, 32767);
+    rawData->analog[AnalogAxis::Accelerator] = BaseController::Normalize(joystick_data.accelerator, -32768, 32767);
 
     rawData->buttons[DPAD_UP_BUTTON_ID] = joystick_data.hat_switch == HIDJoystickHatSwitch::UP || joystick_data.hat_switch == HIDJoystickHatSwitch::UP_RIGHT || joystick_data.hat_switch == HIDJoystickHatSwitch::UP_LEFT;
     rawData->buttons[DPAD_RIGHT_BUTTON_ID] = joystick_data.hat_switch == HIDJoystickHatSwitch::RIGHT || joystick_data.hat_switch == HIDJoystickHatSwitch::UP_RIGHT || joystick_data.hat_switch == HIDJoystickHatSwitch::DOWN_RIGHT;

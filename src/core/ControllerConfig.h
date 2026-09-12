@@ -1,4 +1,6 @@
 #pragma once
+#include "AnalogAxis.h"
+
 #include <cstdint>
 #include <string.h>
 #include <string>
@@ -62,22 +64,6 @@ union RGBAColor
     uint32_t rgbaValue;
 };
 
-enum ControllerAnalogBinding
-{
-    ControllerAnalogBinding_Unknown = 0,
-    ControllerAnalogBinding_X,
-    ControllerAnalogBinding_Y,
-    ControllerAnalogBinding_Z,
-    ControllerAnalogBinding_Rz,
-    ControllerAnalogBinding_Rx,
-    ControllerAnalogBinding_Ry,
-    ControllerAnalogBinding_Slider,
-    ControllerAnalogBinding_Dial,
-    ControllerAnalogBinding_Brake,
-    ControllerAnalogBinding_Accelerator,
-
-    ControllerAnalogBinding_Count
-};
 
 enum ControllerType
 {
@@ -98,7 +84,7 @@ enum ControllerType
 struct ControllerAnalogConfig
 {
     float sign{1.0};
-    ControllerAnalogBinding bind{ControllerAnalogBinding::ControllerAnalogBinding_Unknown};
+    AnalogAxis bind{AnalogAxis::Unknown};
 };
 
 struct ControllerComboConfig
@@ -117,8 +103,11 @@ public:
     uint32_t outputMaxPacketSize{0};
 
     ControllerType controllerType{ControllerType_Pro};
-    uint8_t analogDeadzonePercent[ControllerAnalogBinding_Count]{0};
-    uint8_t analogFactorPercent[ControllerAnalogBinding_Count]{100};
+    // EnumArray, so these can only be indexed with an AnalogAxis. The previous plain arrays
+    // were a trap: `uint8_t analogFactorPercent[N]{100}` sets only element 0 to 100 and the
+    // rest to 0, which is why the constructor below had to re-fill them by hand.
+    AnalogPercentages analogDeadzonePercent{0};
+    AnalogPercentages analogFactorPercent{100};
 
     uint8_t buttonsPin[ControllerButton::COUNT][MAX_PIN_BY_BUTTONS]{0};
 
@@ -134,12 +123,6 @@ public:
 
     ControllerConfig()
     {
-        for (int i = 0; i < ControllerAnalogBinding_Count; i++)
-        {
-            analogDeadzonePercent[i] = 0;
-            analogFactorPercent[i] = 100;
-        }
-
         for (int i = 0; i < MAX_CONTROLLER_COMBO; i++)
         {
             simulateCombos[i].buttonSimulated = ControllerButton::NONE;

@@ -73,10 +73,10 @@ ControllerResult SteamController2026::ParseData(uint8_t *buffer, size_t size, Ra
         m_rawInput.buttons[13] = controllerData->buttons.lstick;
         m_rawInput.buttons[14] = controllerData->buttons.rstick;
 
-        m_rawInput.analog[ControllerAnalogType_X] = BaseController::Normalize(controllerData->left_stick_x, -32768, 32767);
-        m_rawInput.analog[ControllerAnalogType_Y] = BaseController::Normalize(-controllerData->left_stick_y, -32768, 32767);
-        m_rawInput.analog[ControllerAnalogType_Z] = BaseController::Normalize(controllerData->right_stick_x, -32768, 32767);
-        m_rawInput.analog[ControllerAnalogType_Rz] = BaseController::Normalize(-controllerData->right_stick_y, -32768, 32767);
+        m_rawInput.analog[AnalogAxis::X] = BaseController::Normalize(controllerData->left_stick_x, -32768, 32767);
+        m_rawInput.analog[AnalogAxis::Y] = BaseController::Normalize(-controllerData->left_stick_y, -32768, 32767);
+        m_rawInput.analog[AnalogAxis::Z] = BaseController::Normalize(controllerData->right_stick_x, -32768, 32767);
+        m_rawInput.analog[AnalogAxis::Rz] = BaseController::Normalize(-controllerData->right_stick_y, -32768, 32767);
 
         m_rawInput.buttons[DPAD_UP_BUTTON_ID] = controllerData->buttons.dpad_up;
         m_rawInput.buttons[DPAD_RIGHT_BUTTON_ID] = controllerData->buttons.dpad_right;

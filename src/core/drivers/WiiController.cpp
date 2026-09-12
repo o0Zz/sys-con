@@ -109,12 +109,12 @@ ControllerResult WiiController::ParseData(uint8_t *buffer, size_t size, RawInput
         rawData->buttons[j + 1] = (btns & mask) ? 1 : 0;
     }
 
-    rawData->analog[ControllerAnalogType_X] = BaseController::Normalize(buffer[3], 0, 255);
-    rawData->analog[ControllerAnalogType_Y] = BaseController::Normalize(buffer[4], 0, 255);
-    rawData->analog[ControllerAnalogType_Rx] = BaseController::Normalize(buffer[5], 0, 255);
-    rawData->analog[ControllerAnalogType_Ry] = BaseController::Normalize(buffer[6], 0, 255);
-    rawData->analog[ControllerAnalogType_Z] = BaseController::Normalize(buffer[7], 0, 255);
-    rawData->analog[ControllerAnalogType_Rz] = BaseController::Normalize(buffer[8], 0, 255);
+    rawData->analog[AnalogAxis::X] = BaseController::Normalize(buffer[3], 0, 255);
+    rawData->analog[AnalogAxis::Y] = BaseController::Normalize(buffer[4], 0, 255);
+    rawData->analog[AnalogAxis::Rx] = BaseController::Normalize(buffer[5], 0, 255);
+    rawData->analog[AnalogAxis::Ry] = BaseController::Normalize(buffer[6], 0, 255);
+    rawData->analog[AnalogAxis::Z] = BaseController::Normalize(buffer[7], 0, 255);
+    rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(buffer[8], 0, 255);
 
     return CONTROLLER_STATUS_SUCCESS;
 }

@@ -143,34 +143,34 @@ namespace syscon::config
         {
             std::string stickcfg = convertToLowercase(cfg);
 
-            analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Unknown;
+            analogCfg->bind = AnalogAxis::Unknown;
             analogCfg->sign = stickcfg[0] == '-' ? -1.0f : 1.0f;
 
             if (stickcfg[0] == '-' || stickcfg[0] == '+')
                 stickcfg = stickcfg.substr(1);
 
             if (stickcfg == "x")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_X;
+                analogCfg->bind = AnalogAxis::X;
             else if (stickcfg == "y")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Y;
+                analogCfg->bind = AnalogAxis::Y;
             else if (stickcfg == "z")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Z;
+                analogCfg->bind = AnalogAxis::Z;
             else if (stickcfg == "rz")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Rz;
+                analogCfg->bind = AnalogAxis::Rz;
             else if (stickcfg == "rx")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Rx;
+                analogCfg->bind = AnalogAxis::Rx;
             else if (stickcfg == "ry")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Ry;
+                analogCfg->bind = AnalogAxis::Ry;
             else if (stickcfg == "slider")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Slider;
+                analogCfg->bind = AnalogAxis::Slider;
             else if (stickcfg == "dial")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Dial;
+                analogCfg->bind = AnalogAxis::Dial;
             else if (stickcfg == "brake")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Brake;
+                analogCfg->bind = AnalogAxis::Brake;
             else if (stickcfg == "accelerator")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Accelerator;
+                analogCfg->bind = AnalogAxis::Accelerator;
             else if (stickcfg == "none")
-                analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Unknown;
+                analogCfg->bind = AnalogAxis::Unknown;
             else
                 return false;
 
@@ -207,7 +207,7 @@ namespace syscon::config
             char *tok = strtok_r(const_cast<char *>(value), ",", &context);
 
             // Reset binding when a new one is found
-            analogCfg->bind = ControllerAnalogBinding::ControllerAnalogBinding_Unknown;
+            analogCfg->bind = AnalogAxis::Unknown;
             analogCfg->sign = 0.0;
             for (int i = 0; i < MAX_PIN_BY_BUTTONS; i++)
                 button_pin[i] = 0;
@@ -356,37 +356,37 @@ namespace syscon::config
                     syscon::logger::LogError("Unknown key: %s, continue anyway ...", nameStr.c_str());
             }
             else if (nameStr == "deadzone_x")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_X] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::X] = atoi(value);
             else if (nameStr == "deadzone_y")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Y] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Y] = atoi(value);
             else if (nameStr == "deadzone_z")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Z] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Z] = atoi(value);
             else if (nameStr == "deadzone_rz")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Rz] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Rz] = atoi(value);
             else if (nameStr == "deadzone_rx")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Rx] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Rx] = atoi(value);
             else if (nameStr == "deadzone_ry")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Ry] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Ry] = atoi(value);
             else if (nameStr == "deadzone_slider")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Slider] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Slider] = atoi(value);
             else if (nameStr == "deadzone_dial")
-                ini_data->controller_config->analogDeadzonePercent[ControllerAnalogBinding::ControllerAnalogBinding_Dial] = atoi(value);
+                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Dial] = atoi(value);
             else if (nameStr == "factor_x")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_X] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::X] = atoi(value);
             else if (nameStr == "factor_y")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Y] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Y] = atoi(value);
             else if (nameStr == "factor_z")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Z] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Z] = atoi(value);
             else if (nameStr == "factor_rz")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Rz] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Rz] = atoi(value);
             else if (nameStr == "factor_rx")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Rx] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Rx] = atoi(value);
             else if (nameStr == "factor_ry")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Ry] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Ry] = atoi(value);
             else if (nameStr == "factor_slider")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Slider] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Slider] = atoi(value);
             else if (nameStr == "factor_dial")
-                ini_data->controller_config->analogFactorPercent[ControllerAnalogBinding::ControllerAnalogBinding_Dial] = atoi(value);
+                ini_data->controller_config->analogFactorPercent[AnalogAxis::Dial] = atoi(value);
             else if (nameStr == "color_body")
                 ini_data->controller_config->bodyColor = hexStringColorToRGBA(value);
             else if (nameStr == "color_buttons")

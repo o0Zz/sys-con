@@ -27,5 +27,5 @@ TEST(Controller, test_switch_lstick_left)
     uint8_t buffer[64] = {0x30, 0xFC, 0x91, 0x00, 0x80, 0x00, 0xC6, 0xB1, 0x72, 0xE5, 0xE7, 0x79, 0x03, 0x00, 0x00, 0x00};
     EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), CONTROLLER_STATUS_SUCCESS);
 
-    EXPECT_FLOAT_EQ(rawData.analog[ControllerAnalogBinding_X], -1.0f);
+    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], -1.0f);
 }

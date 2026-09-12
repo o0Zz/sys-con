@@ -298,29 +298,24 @@ void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedBu
         m_logger->Log(LogLevelDebug, "Controller[%04x-%04x] X=%d%%, Y=%d%%, Z=%d%%, Rx=%d%%, Ry=%d%%, Rz=%d%%, Slider=%d%%, Dial=%d%%, Brake=%d%%, Accelerator=%d%%",
                       m_device->GetVendor(),
                       m_device->GetProduct(),
-                      (int)(rawData.analog[ControllerAnalogBinding_X] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Y] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Z] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Rx] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Ry] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Rz] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Slider] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Dial] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Brake] * 100.0),
-                      (int)(rawData.analog[ControllerAnalogBinding_Accelerator] * 100.0));
+                      (int)(rawData.analog[AnalogAxis::X] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Y] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Z] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Rx] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Ry] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Rz] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Slider] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Dial] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Brake] * 100.0),
+                      (int)(rawData.analog[AnalogAxis::Accelerator] * 100.0));
     }
 
-    rawData.analog[ControllerAnalogBinding_Unknown] = 0.0f;
-    rawData.analog[ControllerAnalogBinding_X] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_X], rawData.analog[ControllerAnalogBinding_X]);
-    rawData.analog[ControllerAnalogBinding_Y] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Y], rawData.analog[ControllerAnalogBinding_Y]);
-    rawData.analog[ControllerAnalogBinding_Z] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Z], rawData.analog[ControllerAnalogBinding_Z]);
-    rawData.analog[ControllerAnalogBinding_Rz] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Rz], rawData.analog[ControllerAnalogBinding_Rz]);
-    rawData.analog[ControllerAnalogBinding_Rx] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Rx], rawData.analog[ControllerAnalogBinding_Rx]);
-    rawData.analog[ControllerAnalogBinding_Ry] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Ry], rawData.analog[ControllerAnalogBinding_Ry]);
-    rawData.analog[ControllerAnalogBinding_Slider] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Slider], rawData.analog[ControllerAnalogBinding_Slider]);
-    rawData.analog[ControllerAnalogBinding_Dial] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Dial], rawData.analog[ControllerAnalogBinding_Dial]);
-    rawData.analog[ControllerAnalogBinding_Brake] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Brake], rawData.analog[ControllerAnalogBinding_Brake]);
-    rawData.analog[ControllerAnalogBinding_Accelerator] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[ControllerAnalogBinding_Accelerator], rawData.analog[ControllerAnalogBinding_Accelerator]);
+    // Unknown is the "not bound to anything" axis; drivers never write it, and mapping reads
+    // it whenever a button has no analog binding, so it has to read as centred.
+    rawData.analog[AnalogAxis::Unknown] = 0.0f;
+
+    for (AnalogAxis axis : AllAnalogAxes)
+        rawData.analog[axis] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[axis], rawData.analog[axis]);
 
     StickButton sticks_list[] = {
         // button value_addr, sign

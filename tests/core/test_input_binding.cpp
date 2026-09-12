@@ -25,21 +25,21 @@ TEST(BaseController, test_input_binding_basis)
     config.buttonsPin[ControllerButton::A][0] = 3;
     config.buttonsPin[ControllerButton::B][0] = 4;
     config.buttonsPin[ControllerButton::RSTICK_CLICK][0] = 15;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
 
     RawInputData inputData;
     inputData.buttons[1] = true;
     inputData.buttons[3] = true;
     inputData.buttons[15] = true;
-    inputData.analog[ControllerAnalogBinding_X] = 0.5f;  // Right
-    inputData.analog[ControllerAnalogBinding_Y] = -0.5f; // Down
+    inputData.analog[AnalogAxis::X] = 0.5f;  // Right
+    inputData.analog[AnalogAxis::Y] = -0.5f; // Down
 
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
@@ -58,21 +58,21 @@ TEST(BaseController, test_input_deadzone)
     NormalizedButtonData normalizedData = {0};
 
     ControllerConfig config;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
 
-    config.analogDeadzonePercent[ControllerAnalogBinding_X] = 10;
-    config.analogDeadzonePercent[ControllerAnalogBinding_Y] = 10;
+    config.analogDeadzonePercent[AnalogAxis::X] = 10;
+    config.analogDeadzonePercent[AnalogAxis::Y] = 10;
 
     RawInputData inputData;
-    inputData.analog[ControllerAnalogType_X] = 0.1f;
-    inputData.analog[ControllerAnalogType_Y] = 0.2f;
+    inputData.analog[AnalogAxis::X] = 0.1f;
+    inputData.analog[AnalogAxis::Y] = 0.2f;
 
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
@@ -86,21 +86,21 @@ TEST(BaseController, test_input_factor)
     NormalizedButtonData normalizedData = {0};
 
     ControllerConfig config;
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
 
-    config.analogFactorPercent[ControllerAnalogBinding_X] = 110;
-    config.analogFactorPercent[ControllerAnalogBinding_Y] = 120;
+    config.analogFactorPercent[AnalogAxis::X] = 110;
+    config.analogFactorPercent[AnalogAxis::Y] = 120;
 
     RawInputData inputData;
-    inputData.analog[ControllerAnalogType_X] = 0.9f;
-    inputData.analog[ControllerAnalogType_Y] = 0.9f;
+    inputData.analog[AnalogAxis::X] = 0.9f;
+    inputData.analog[AnalogAxis::Y] = 0.9f;
 
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
@@ -158,8 +158,8 @@ TEST(BaseController, test_input_stick_by_buttons)
     inputData.buttons[3] = true;
     inputData.buttons[4] = true;
 
-    inputData.analog[ControllerAnalogType_X] = 0.0f;
-    inputData.analog[ControllerAnalogType_Y] = 0.0f;
+    inputData.analog[AnalogAxis::X] = 0.0f;
+    inputData.analog[AnalogAxis::Y] = 0.0f;
 
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
@@ -202,7 +202,7 @@ TEST(BaseController, test_input_complex_combination)
     config.buttonsPin[ControllerButton::DPAD_RIGHT][0] = DPAD_RIGHT_BUTTON_ID;
     config.buttonsPin[ControllerButton::DPAD_LEFT][0] = DPAD_LEFT_BUTTON_ID;
 
-    config.buttonsAnalog[ControllerButton::Y].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::Y].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::Y].sign = -1.0f;
 
     config.buttonsPin[ControllerButton::L][0] = 1;
@@ -219,18 +219,18 @@ TEST(BaseController, test_input_complex_combination)
 
     config.buttonsAnalogUsed = true;
 
-    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_LEFT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_LEFT].sign = -1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = ControllerAnalogBinding_X;
+    config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[ControllerButton::LSTICK_RIGHT].sign = +1.0f;
 
-    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_UP].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_UP].sign = +1.0f;
-    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = ControllerAnalogBinding_Y;
+    config.buttonsAnalog[ControllerButton::LSTICK_DOWN].bind = AnalogAxis::Y;
     config.buttonsAnalog[ControllerButton::LSTICK_DOWN].sign = -1.0f;
 
     RawInputData inputData;
-    inputData.analog[ControllerAnalogType_X] = -0.5f;
+    inputData.analog[AnalogAxis::X] = -0.5f;
     inputData.buttons[2] = true;
     inputData.buttons[DPAD_UP_BUTTON_ID] = true;
     inputData.buttons[DPAD_RIGHT_BUTTON_ID] = true;

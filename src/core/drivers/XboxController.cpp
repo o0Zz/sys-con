@@ -29,12 +29,12 @@ ControllerResult XboxController::ParseData(uint8_t *buffer, size_t size, RawInpu
     rawData->buttons[9] = buttonData->button9;
     rawData->buttons[10] = buttonData->button10;
 
-    rawData->analog[ControllerAnalogType_Rx] = BaseController::Normalize(buttonData->trigger_left, 0, 255);
-    rawData->analog[ControllerAnalogType_Ry] = BaseController::Normalize(buttonData->trigger_right, 0, 255);
-    rawData->analog[ControllerAnalogType_X] = BaseController::Normalize(buttonData->stick_left_x, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Y] = BaseController::Normalize(-buttonData->stick_left_y, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Z] = BaseController::Normalize(buttonData->stick_right_x, -32768, 32767);
-    rawData->analog[ControllerAnalogType_Rz] = BaseController::Normalize(-buttonData->stick_right_y, -32768, 32767);
+    rawData->analog[AnalogAxis::Rx] = BaseController::Normalize(buttonData->trigger_left, 0, 255);
+    rawData->analog[AnalogAxis::Ry] = BaseController::Normalize(buttonData->trigger_right, 0, 255);
+    rawData->analog[AnalogAxis::X] = BaseController::Normalize(buttonData->stick_left_x, -32768, 32767);
+    rawData->analog[AnalogAxis::Y] = BaseController::Normalize(-buttonData->stick_left_y, -32768, 32767);
+    rawData->analog[AnalogAxis::Z] = BaseController::Normalize(buttonData->stick_right_x, -32768, 32767);
+    rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(-buttonData->stick_right_y, -32768, 32767);
 
     rawData->buttons[DPAD_UP_BUTTON_ID] = buttonData->dpad_up;
     rawData->buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;
