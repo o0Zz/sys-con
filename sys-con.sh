@@ -17,7 +17,7 @@ FTP_USER=
 FTP_PASS=
 
 #Below variable need to stay unchanged, they are correct whatever the developer
-ELF_FILE=./source/Sysmodule/sys-con.elf
+ELF_FILE=./src/app/sys-con.elf
 NSP_FILE=./out/atmosphere/contents/690000000000000D/exefs.nsp
 DST_NSP_FILE=atmosphere/contents/690000000000000D/exefs.nsp
 NRO_FILE=./out/switch/sys-con.nro

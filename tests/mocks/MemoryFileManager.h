@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ifilemanager.h"
+#include "IFileManager.h"
 
 #include <cstring>
 #include <map>

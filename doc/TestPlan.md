@@ -36,9 +36,9 @@ and it re-exercises past regressions to make sure they have not resurfaced.
 startup entries, at the default log level (Info).
 
 **If this test fails, investigate:**
-[logger.cpp](../source/Sysmodule/source/logger.cpp) (`Initialize` / `LogWriteToFile` —
+[logger.cpp](../src/app/logger.cpp) (`Initialize` / `LogWriteToFile` —
 directory creation and file open) and the file-manager backend
-[filemanager_ams.h](../source/Sysmodule/source/filemanager_ams.h).
+[AMSFileManager.h](../src/app/AMSFileManager.h).
 
 ---
 
@@ -56,8 +56,8 @@ directory creation and file open) and the file-manager backend
 - No crash, and the existing config content is preserved (not corrupted/truncated).
 
 **If this test fails, investigate:**
-[config_handler.cpp](../source/Sysmodule/source/config_handler.cpp) (auto-add path and
-the `.ini` write-back) and [ini.h](../source/Ini/ini.h).
+[config_handler.cpp](../src/app/config_handler.cpp) (auto-add path and
+the `.ini` write-back) and [ini.h](../lib/ini/ini.h).
 
 ---
 
@@ -74,7 +74,7 @@ Controller connects, all buttons/sticks/triggers map correctly per the `[xbox360
 no crash.
 
 **If this test fails, investigate:**
-[Xbox360Controller.cpp](../source/ControllerLib/Controllers/Xbox360Controller.cpp).
+[Xbox360Controller.cpp](../src/core/drivers/Xbox360Controller.cpp).
 
 ---
 
@@ -90,9 +90,9 @@ Controller is detected as a generic HID device, dpad and sticks work, buttons ar
 reported. No crash.
 
 **If this test fails, investigate:**
-[GenericHIDController.cpp](../source/ControllerLib/Controllers/GenericHIDController.cpp)
+[GenericHIDController.cpp](../src/core/drivers/GenericHIDController.cpp)
 (HID report-descriptor parsing) and the shared
-[BaseController.cpp](../source/ControllerLib/Controllers/BaseController.cpp).
+[BaseController.cpp](../src/core/drivers/BaseController.cpp).
 
 ---
 
@@ -108,8 +108,8 @@ reported. No crash.
 The paired pad appears as a connected controller and all inputs work. No crash.
 
 **If this test fails, investigate:**
-[Xbox360WirelessController.cpp](../source/ControllerLib/Controllers/Xbox360WirelessController.cpp)
-and the device-attach path in [usb_module.cpp](../source/Sysmodule/source/usb_module.cpp).
+[Xbox360WirelessController.cpp](../src/core/drivers/Xbox360WirelessController.cpp)
+and the device-attach path in [usb_module.cpp](../src/app/usb_module.cpp).
 
 ---
 
@@ -123,8 +123,8 @@ and the device-attach path in [usb_module.cpp](../source/Sysmodule/source/usb_mo
 The controller disconnects cleanly; log shows the disconnect; the system remains stable.
 
 **If this test fails, investigate:**
-The disconnect/teardown path in [usb_module.cpp](../source/Sysmodule/source/usb_module.cpp)
-and [controller_handler.cpp](../source/Sysmodule/source/controller_handler.cpp).
+The disconnect/teardown path in [usb_module.cpp](../src/app/usb_module.cpp)
+and [controller_handler.cpp](../src/app/controller_handler.cpp).
 
 ---
 
@@ -139,9 +139,9 @@ and [controller_handler.cpp](../source/Sysmodule/source/controller_handler.cpp).
 The controller reconnects and works exactly as in TC5. No crash, no duplicate entries.
 
 **If this test fails, investigate:**
-[controller_handler.cpp](../source/Sysmodule/source/controller_handler.cpp) (stale state
+[controller_handler.cpp](../src/app/controller_handler.cpp) (stale state
 not released on TC6) and
-[Xbox360WirelessController.cpp](../source/ControllerLib/Controllers/Xbox360WirelessController.cpp).
+[Xbox360WirelessController.cpp](../src/core/drivers/Xbox360WirelessController.cpp).
 
 ---
 
@@ -158,8 +158,8 @@ no truncated/garbled input.
 
 **If this test fails, investigate:**
 Report/buffer sizing in
-[GenericHIDController.cpp](../source/ControllerLib/Controllers/GenericHIDController.cpp)
-and [ControllerConfig.h](../source/ControllerLib/ControllerConfig.h) (undersized input
+[GenericHIDController.cpp](../src/core/drivers/GenericHIDController.cpp)
+and [ControllerConfig.h](../src/core/ControllerConfig.h) (undersized input
 buffer would truncate the large DS4 report).
 
 ---
@@ -178,8 +178,8 @@ buffer would truncate the large DS4 report).
 - A plugged controller still works with default mappings.
 
 **If this test fails, investigate:**
-[config_handler.cpp](../source/Sysmodule/source/config_handler.cpp) (missing-file
-handling / fallback to defaults) and [ini.h](../source/Ini/ini.h).
+[config_handler.cpp](../src/app/config_handler.cpp) (missing-file
+handling / fallback to defaults) and [ini.h](../lib/ini/ini.h).
 
 ---
 
@@ -198,7 +198,7 @@ Sleep/wake, reboot and shutdown all complete cleanly with the controller(s) conn
 No crash, and on wake the controller keeps working.
 
 **If this test fails, investigate:**
-[psc_module.cpp](../source/Sysmodule/source/psc_module.cpp). On each power transition the
+[psc_module.cpp](../src/app/psc_module.cpp). On each power transition the
 `PscThreadFunc` handler runs `controllers::Clear()` on `psc_thread_stack`; its teardown
 chains through every connected controller plus stack-heavy `Log*()`/`vsnprintf` calls.
 A crash here means `psc_thread_stack` is likely undersized.
