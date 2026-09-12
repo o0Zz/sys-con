@@ -96,6 +96,7 @@
 04b4:c681 XtremeMorpheus
 04b4:d5d5 ZoltrixZBoxer
 04d9:0002 TwinShockPs2
+04d9:0008 Saulabi4KArcadeStick
 04e8:a000 EiGp20
 0500:9b28 SaturnAdapter
 050d:0802 NostromoN40
