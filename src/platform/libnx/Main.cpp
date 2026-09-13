@@ -7,6 +7,7 @@
 #include "psc_module.h"
 #include "version.h"
 #include "SwitchHDLHandler.h"
+#include "HidMitm.h"
 #include "StdFileManager.h"
 
 // Size of the inner heap (adjust as necessary).
@@ -21,6 +22,10 @@
     }
 
 alignas(0x1000) constinit u8 g_hdls_buffer[0x8000]; // 32 KiB
+
+// Set once in main() when the hiddbg HDLS work buffer is attached (mode=hiddbg), so
+// __appExit only releases it when it was actually attached.
+static bool g_hdls_attached = false;
 
 extern "C"
 {
@@ -48,9 +53,9 @@ extern "C"
         hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
         setsysExit();
 
+        // Open hid:dbg here (needs sm, which is exited below). The HDLS work buffer is
+        // attached later in main(), only when mode=hiddbg, once the config has been read.
         R_ABORT_UNLESS(hiddbgInitialize());
-        if (hosversionAtLeast(7, 0, 0))
-            R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
 
         R_ABORT_UNLESS(usbHsInitialize());
         R_ABORT_UNLESS(pscmInitialize());
@@ -66,7 +71,7 @@ extern "C"
         usbHsExit();
         pscmExit();
 
-        if (hosversionAtLeast(7, 0, 0))
+        if (g_hdls_attached && hosversionAtLeast(7, 0, 0))
             hiddbgReleaseHdlsWorkBuffer(SwitchHDLHandler::GetHdlsSessionId());
 
         hiddbgExit();
@@ -98,6 +103,22 @@ int main(int argc, char *argv[])
 
     ::syscon::logger::LogDebug("Polling timeout: %d ms", globalConfig.polling_timeout_ms);
     ::syscon::controllers::SetPollingParameters(globalConfig.polling_timeout_ms, globalConfig.polling_thread_priority);
+    ::syscon::controllers::SetMode(globalConfig.mode);
+
+    if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
+    {
+        ::syscon::logger::LogDebug("Initializing HID MITM (mode=mitm) ...");
+        R_ABORT_UNLESS(::syscon::hid::mitm::Initialize());
+    }
+    else
+    {
+        ::syscon::logger::LogDebug("Initializing hiddbg HDLS (mode=hiddbg) ...");
+        if (hosversionAtLeast(7, 0, 0))
+        {
+            R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
+            g_hdls_attached = true;
+        }
+    }
 
     ::syscon::logger::LogDebug("Initializing USB stack ...");
     ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
@@ -114,5 +135,9 @@ int main(int argc, char *argv[])
     ::syscon::psc::Exit();
     ::syscon::usb::Exit();
     ::syscon::controllers::Exit();
+
+    if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
+        ::syscon::hid::mitm::Finalize();
+
     ::syscon::logger::Exit();
 }

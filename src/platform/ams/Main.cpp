@@ -9,11 +9,18 @@
 #include "version.h"
 #include "SwitchMITMHandler.h"
 #include "SwitchMITMManager.h"
+#include "SwitchHDLHandler.h"
 #include "HidMitmModule.h"
+#include "HidMitm.h"
 #include "AMSFileManager.h"
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x80000 // 512 KiB
+
+// HDLS work buffer for the hiddbg path (mode=hiddbg). g_hdls_attached tracks whether it was
+// actually attached, so teardown only releases it then.
+alignas(0x1000) constinit u8 g_hdls_buffer[0x8000]; // 32 KiB
+static bool g_hdls_attached = false;
 
 namespace ams
 {
@@ -90,6 +97,22 @@ namespace ams
 
         ::syscon::logger::LogDebug("Polling timeout: %d ms", globalConfig.polling_timeout_ms);
         ::syscon::controllers::SetPollingParameters(globalConfig.polling_timeout_ms, globalConfig.polling_thread_priority);
+        ::syscon::controllers::SetMode(globalConfig.mode);
+
+        if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
+        {
+            ::syscon::logger::LogDebug("Initializing HID MITM (mode=mitm) ...");
+            R_ABORT_UNLESS(::syscon::hid::mitm::Initialize());
+        }
+        else
+        {
+            ::syscon::logger::LogDebug("Initializing hiddbg HDLS (mode=hiddbg) ...");
+            if (hosversionAtLeast(7, 0, 0))
+            {
+                R_ABORT_UNLESS(hiddbgAttachHdlsWorkBuffer(&SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
+                g_hdls_attached = true;
+            }
+        }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
         ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
@@ -97,21 +120,21 @@ namespace ams
         ::syscon::logger::LogDebug("Initializing power supply managment ...");
         ::syscon::psc::Initialize();
 
-        ::syscon::logger::LogDebug("Initializing MITM ...");
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
-        ams::syscon::hid::mitm::InitializeHidMitm();
-
         while ((::syscon::psc::IsRunning()))
         {
             svcSleepThread(1e+8L);
         }
 
         ::syscon::logger::LogDebug("Shutting down sys-con ...");
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Stop();
-        ams::syscon::hid::mitm::FinalizeHidMitm();
         ::syscon::psc::Exit();
         ::syscon::usb::Exit();
         ::syscon::controllers::Exit();
+
+        if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
+            ::syscon::hid::mitm::Finalize();
+        else if (g_hdls_attached && hosversionAtLeast(7, 0, 0))
+            hiddbgReleaseHdlsWorkBuffer(SwitchHDLHandler::GetHdlsSessionId());
+
         ::syscon::logger::Exit();
     }
 
@@ -129,6 +152,7 @@ namespace ams
             R_ABORT_UNLESS(pscmInitialize());
             R_ABORT_UNLESS(pmdmntInitialize());
             R_ABORT_UNLESS(setsysInitialize());
+            R_ABORT_UNLESS(hiddbgInitialize()); // Opened for the hiddbg path (mode=hiddbg).
 
             // Initialize system firmware version
             SetSysFirmwareVersion fw;
@@ -140,6 +164,7 @@ namespace ams
 
         void FinalizeSystemModule()
         {
+            hiddbgExit();
             usbHsExit();
             pscmExit();
         }

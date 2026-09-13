@@ -1,5 +1,7 @@
 #include "HidMitmModule.h"
 #include "HidMitmService.h"
+#include "HidMitm.h"
+#include "SwitchMITMManager.h"
 #include <stratosphere.hpp>
 #include "SwitchLogger.h"
 
@@ -116,3 +118,22 @@ namespace ams::syscon::hid::mitm
     }
 
 } // namespace ams::syscon::hid::mitm
+
+// Shared lifecycle facade (declared in src/platform/HidMitm.h), so both Main.cpp files
+// start/stop the MITM identically regardless of build flavour. The libnx build implements
+// this in HidMitmServer.cpp; the ams build delegates to the libstratosphere module above.
+namespace syscon::hid::mitm
+{
+    Result Initialize()
+    {
+        HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
+        ams::syscon::hid::mitm::InitializeHidMitm();
+        return 0;
+    }
+
+    void Finalize()
+    {
+        HidSharedMemoryManager::GetHidSharedMemoryManager().Stop();
+        ams::syscon::hid::mitm::FinalizeHidMitm();
+    }
+} // namespace syscon::hid::mitm

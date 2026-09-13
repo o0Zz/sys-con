@@ -57,6 +57,17 @@ namespace syscon::config
         VIDPID = 2,
     } DiscoveryMode;
 
+    // How USB controllers are published to the console as virtual pads.
+    //  - HIDDBG: attach virtual devices through hiddbg/HDLS (SwitchHDLHandler).
+    //  - MITM:   man-in-the-middle the hid service and feed each game a fake HID
+    //            shared memory (SwitchMITMHandler + SwitchMITMManager).
+    // Selected at runtime; both mechanisms are compiled into both build flavours.
+    enum class VirtualPadMode
+    {
+        HIDDBG = 0,
+        MITM = 1,
+    };
+
     class GlobalConfig
     {
     public:
@@ -66,6 +77,7 @@ namespace syscon::config
         DiscoveryMode discovery_mode{DiscoveryMode::HID_AND_XBOX};
         std::vector<ControllerVidPid> discovery_vidpid;
         bool auto_add_controller{true};
+        VirtualPadMode mode{VirtualPadMode::HIDDBG};
     };
 
     int Initialize(std::unique_ptr<IFileManager> &&fileManager);

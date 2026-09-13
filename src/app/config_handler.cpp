@@ -297,6 +297,16 @@ namespace syscon::config
                 ini_data->global_config->discovery_mode = static_cast<DiscoveryMode>(atoi(value));
             else if (nameStr == "auto_add_controller")
                 ini_data->global_config->auto_add_controller = (atoi(value) == 0) ? false : true;
+            else if (nameStr == "mode")
+            {
+                std::string modeStr = convertToLowercase(value);
+                if (modeStr == "mitm")
+                    ini_data->global_config->mode = VirtualPadMode::MITM;
+                else if (modeStr == "hiddbg")
+                    ini_data->global_config->mode = VirtualPadMode::HIDDBG;
+                else
+                    syscon::logger::LogError("Unknown mode: %s (expected 'mitm' or 'hiddbg') - Ignoring it !", value);
+            }
             else if (nameStr == "discovery_vidpid")
             {
                 char *context;

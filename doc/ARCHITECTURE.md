@@ -41,9 +41,10 @@ src/controllerlib/ │  BaseController  +  9 drivers (drivers/)    │  standalo
                    ┌───────────────┴─────────────────────────────┐
    src/platform/   │  SwitchUSBDevice/Interface/Endpoint         │  libnx, both flavours
                    │  SwitchVirtualGamepadHandler                │  the polling thread
+                   │  SwitchHDLHandler · SwitchMITMHandler       │  both handlers, both flavours
                    ├─────────────────────────────────────────────┤
-     …/libnx/      │  SwitchHDLHandler · main.cpp                │  ATMOSPHERE=0 only
-     …/ams/        │  SwitchMITMHandler · main_ams.cpp · MITM    │  ATMOSPHERE=1 only
+     …/libnx/      │  main.cpp · sm_mitm · HidMitmServer         │  ATMOSPHERE=0 only
+     …/ams/        │  main_ams.cpp · HidMitmService/Module (AMS) │  ATMOSPHERE=1 only
                    └─────────────────────────────────────────────┘
 ```
 
@@ -136,7 +137,7 @@ Two consequences to be careful about:
 | USB interface change | `usb_module.cpp` | `0x2C`, any core | notices unplugs, calls `RemoveAllNonPlugged` |
 | per-controller polling | `SwitchVirtualGamepadHandler::InitThread` | config `polling_thread_priority`, **core 3** | the pipeline above, one thread per controller |
 | PSC | `psc_module.cpp` | `0x2C`, any core | sleep/wake; calls `controllers::Clear()` |
-| HID MITM | `HidMitmModule.cpp` (ATMOSPHERE=1 only) | `20` | serves the MITM'd `hid` IPC |
+| HID MITM | `HidMitmServer.cpp` (libnx) / `HidMitmModule.cpp` (ams); `mode=mitm` only | `0x20`/`20`, core 3 | serves the MITM'd `hid` IPC |
 
 Shared state and its lock:
 
@@ -182,8 +183,15 @@ builds and ships.**
 | entry point | `main.cpp` | `main_ams.cpp` |
 | runtime | libnx | libnx + libstratosphere |
 | file I/O | `StdFileManager` | `AMSFileManager` |
-| virtual pad | `SwitchHDLHandler` (hiddbg HDLS) | `SwitchMITMHandler` (fake HID shared memory) |
-| extra | — | a `hid` MITM server |
+| MITM server framework | hand-written (`sm_mitm` + `HidMitmServer`) | libstratosphere (`HidMitmService`/`Module`) |
+
+Both virtual-pad handlers — `SwitchHDLHandler` (hiddbg HDLS) and `SwitchMITMHandler` (fake
+HID shared memory) — plus the shared `SwitchMITMManager` data plane compile into **both**
+flavours; the config `mode` (`hiddbg` or `mitm`, default `hiddbg`) picks one at runtime via
+`controllers::SetMode`. Only the MITM *server framework* differs per flavour, because
+libstratosphere is unavailable in the `ATMOSPHERE=0` build. The libnx MITM installs on `hid`
+through Atmosphère's `sm` tipc extensions (`sm_mitm.c`, a port of libstratosphere's
+`sm_ams.os.horizon.c`) — so Atmosphère is required at runtime for either flavour's MITM.
 
 `IFileManager` (`src/platform/IFileManager.h`) is the clean seam between them: one
 interface, two implementations, injected at startup by whichever `main` is compiled in.
@@ -193,11 +201,14 @@ adds `../platform` (shared by both) plus exactly one of `../platform/libnx` or
 `../platform/ams`, and each of those carries that flavour's entry point. Nothing has to be
 subtracted by name, and neither flavour compiles the other's code.
 
-Caveats worth knowing before you touch the ams path:
+Caveats worth knowing before you touch the MITM path:
 
-- The two flavours are not feature-equivalent: the MITM path hardcodes its npad identity
+- The two handlers are not feature-equivalent: the MITM path hardcodes its npad identity
   and ignores the per-controller colours and `controllerType` the HDL path honours.
 - `MITM_CONFIG_GC_ENABLED` is 0, so the shared-memory entry list is never pruned.
+- The libnx `HidMitmServer` forwards non-hooked commands without domain-object tracking
+  (unlike libstratosphere). This is fine for `hid` — clients do not domain-convert the hid
+  session — but is a genuine limitation if the hooked interface ever changes.
 
 ---
 

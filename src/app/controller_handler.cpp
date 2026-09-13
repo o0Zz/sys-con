@@ -1,11 +1,10 @@
 #include "controller_handler.h"
 #include <switch.h>
 
-#if ATMOSPHERE
-    #include "SwitchMITMHandler.h"
-#else
-    #include "SwitchHDLHandler.h"
-#endif
+// Both handlers are compiled into both build flavours; the active one is chosen at
+// runtime from the config `mode` (see SetMode / g_mode below).
+#include "SwitchMITMHandler.h"
+#include "SwitchHDLHandler.h"
 
 #include "SwitchUSBInterface.h"
 #include <algorithm>
@@ -29,6 +28,7 @@ namespace syscon::controllers
         std::mutex controllerMutex;
         int32_t polling_timeout_ms = 0;
         int8_t polling_thread_priority = 0x30;
+        config::VirtualPadMode virtual_pad_mode = config::VirtualPadMode::HIDDBG;
 
     } // namespace
 
@@ -40,11 +40,11 @@ namespace syscon::controllers
 
     Result Insert(std::unique_ptr<IController> &&controllerPtr)
     {
-#if ATMOSPHERE
-        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler = std::make_unique<SwitchMITMHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
-#else
-        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler = std::make_unique<SwitchHDLHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
-#endif
+        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler;
+        if (virtual_pad_mode == config::VirtualPadMode::MITM)
+            switchHandler = std::make_unique<SwitchMITMHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+        else
+            switchHandler = std::make_unique<SwitchHDLHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
 
         Result rc = switchHandler->Initialize();
         if (R_SUCCEEDED(rc))
@@ -110,6 +110,11 @@ namespace syscon::controllers
     {
         polling_timeout_ms = _polling_timeout_ms;
         polling_thread_priority = _polling_thread_priority;
+    }
+
+    void SetMode(config::VirtualPadMode mode)
+    {
+        virtual_pad_mode = mode;
     }
 
     void Initialize()
