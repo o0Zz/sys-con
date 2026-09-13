@@ -29,7 +29,7 @@ and becomes a fourth submodule, exactly as HIDDataInterpreter did.
 
 ```
                    ┌─────────────────────────────────────────────┐
-      src/app/     │  usb_module · controller_handler            │  discovery, lifetime
+      src/app/     │  main · usb_module · controller_handler     │  program body, discovery
                    │  config_handler · logger · psc_module       │  config, logging, sleep/wake
                    └───────────────┬─────────────────────────────┘
                                    │ IController, ILogger, IFileManager
@@ -43,8 +43,8 @@ src/controllerlib/ │  BaseController  +  9 drivers (drivers/)    │  standalo
                    │  SwitchVirtualGamepadHandler                │  the polling thread
                    │  SwitchHDLHandler · SwitchMITMHandler       │  both handlers, both flavours
                    ├─────────────────────────────────────────────┤
-     …/libnx/      │  main.cpp · sm_mitm · HidMitmServer         │  ATMOSPHERE=0 only
-     …/ams/        │  main_ams.cpp · HidMitmService/Module (AMS) │  ATMOSPHERE=1 only
+     …/libnx/      │  LibnxRuntime · sm_mitm · HidMitmServer     │  ATMOSPHERE=0 only
+     …/ams/        │  AmsRuntime · HidMitmService/Module (AMS)   │  ATMOSPHERE=1 only
                    └─────────────────────────────────────────────┘
 ```
 
@@ -180,10 +180,22 @@ builds and ships.**
 
 | | `ATMOSPHERE=0` | `ATMOSPHERE=1` |
 |---|---|---|
-| entry point | `main.cpp` | `main_ams.cpp` |
+| runtime overhead | `LibnxRuntime.cpp` | `AmsRuntime.cpp` |
+| entry point | `int main` (own `__appInit`) | `ams::Main` + `ams::init::*` |
 | runtime | libnx | libnx + libstratosphere |
 | file I/O | `StdFileManager` | `AMSFileManager` |
 | MITM server framework | hand-written (`sm_mitm` + `HidMitmServer`) | libstratosphere (`HidMitmService`/`Module`) |
+
+The flavour-agnostic program — the shared bring-up helpers (`ReadFirmwareVersion`,
+`InitializeModules`/`FinalizeModules`) and the application body (`RunApp`) — lives once in
+`src/app/main.cpp` (device-build only; `src/app/CMakeLists.txt` does not list it, so
+`<switch.h>` never reaches the host tests). Each flavour's runtime file is the *overhead* that
+genuinely differs and calls into it. The entry point is the important asymmetry: the libnx
+build owns `__appInit`/`main`, whereas the Atmosphère build must **not** — libstratosphere's
+`init_libnx_shim` already defines `__appInit`/`main` and calls `ams::Main()` plus the
+`ams::init::*` hooks, which `AmsRuntime.cpp` supplies. Both call the same
+`InitializeModules()` (hiddbg, usbHs, pscm) and `ReadFirmwareVersion()`, so only the SM/FS
+bring-up and the ams heap/allocator are written per flavour.
 
 Both virtual-pad handlers — `SwitchHDLHandler` (hiddbg HDLS) and `SwitchMITMHandler` (fake
 HID shared memory) — plus the shared `SwitchMITMManager` data plane compile into **both**
@@ -194,12 +206,15 @@ through Atmosphère's `sm` tipc extensions (`sm_mitm.c`, a port of libstratosphe
 `sm_ams.os.horizon.c`) — so Atmosphère is required at runtime for either flavour's MITM.
 
 `IFileManager` (`src/platform/IFileManager.h`) is the clean seam between them: one
-interface, two implementations, injected at startup by whichever `main` is compiled in.
+interface, two implementations, one of which each flavour's runtime file passes to `RunApp`
+as a factory at startup.
 
 The variant is selected **by directory**, not by filtering filenames. `src/app/Makefile`
 adds `../platform` (shared by both) plus exactly one of `../platform/libnx` or
-`../platform/ams`, and each of those carries that flavour's entry point. Nothing has to be
-subtracted by name, and neither flavour compiles the other's code.
+`../platform/ams`, and each of those carries that flavour's runtime file (`LibnxRuntime.cpp` /
+`AmsRuntime.cpp`) and its entry point. Nothing has to be subtracted by name, and neither
+flavour compiles the other's code — so the ams build never sees libnx's `__appInit`, and vice
+versa.
 
 Caveats worth knowing before you touch the MITM path:
 
