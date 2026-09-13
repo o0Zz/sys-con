@@ -1,9 +1,9 @@
 [submodule "lib/libnx"]
-	path = lib/libnx
+	path = external/libnx
 	url = https://github.com/switchbrew/libnx.git
 [submodule "lib/HIDDataInterpreter"]
-	path = lib/HIDDataInterpreter
+	path = external/HIDDataInterpreter
 	url = https://github.com/o0Zz/HIDDataInterpreter.git
 [submodule "lib/Atmosphere-libs"]
-	path = lib/Atmosphere-libs
+	path = external/Atmosphere-libs
 	url = https://github.com/Atmosphere-NX/Atmosphere-libs.git

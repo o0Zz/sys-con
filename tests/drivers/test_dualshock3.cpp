@@ -3,6 +3,12 @@
 #include "mocks/Device.h"
 #include "mocks/Logger.h"
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 TEST(Controller, test_dualshock3_dpad_right)
 {
     ControllerConfig config;
@@ -14,7 +20,7 @@ TEST(Controller, test_dualshock3_dpad_right)
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xEF, 0x14,
                           0x00, 0x00, 0x00, 0x00, 0x23, 0x18, 0x77, 0x01, 0x1D, 0x02, 0x00, 0x02, 0x00, 0x02, 0x00, 0x02,
                           0x00};
-    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), CONTROLLER_STATUS_SUCCESS);
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::Success);
 
     EXPECT_TRUE(rawData.buttons[DPAD_RIGHT_BUTTON_ID]);
 }

@@ -1,6 +1,12 @@
 #include <gtest/gtest.h>
 #include "drivers/BaseController.h"
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 TEST(BaseController, test_normalize)
 {
     //-32768, 32767

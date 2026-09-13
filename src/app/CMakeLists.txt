@@ -23,7 +23,7 @@ add_library(SysConModule ${SRC_FILES} ${HEADER_FILES})
 syscon_set_standard(SysConModule)
 target_link_libraries(SysConModule PRIVATE syscon::warnings)
 
-target_link_libraries(SysConModule PUBLIC SysConControllerLib)
+target_link_libraries(SysConModule PUBLIC ControllerLib)
 target_link_libraries(SysConModule PRIVATE SysConIni)
 
 target_include_directories(SysConModule PUBLIC

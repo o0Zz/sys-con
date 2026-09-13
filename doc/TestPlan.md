@@ -38,7 +38,7 @@ startup entries, at the default log level (Info).
 **If this test fails, investigate:**
 [logger.cpp](../src/app/logger.cpp) (`Initialize` / `LogWriteToFile` —
 directory creation and file open) and the file-manager backend
-[AMSFileManager.h](../src/app/AMSFileManager.h).
+[AMSFileManager.h](../src/platform/ams/AMSFileManager.h).
 
 ---
 
@@ -57,7 +57,7 @@ directory creation and file open) and the file-manager backend
 
 **If this test fails, investigate:**
 [config_handler.cpp](../src/app/config_handler.cpp) (auto-add path and
-the `.ini` write-back) and [ini.h](../lib/ini/ini.h).
+the `.ini` write-back) and [ini.h](../external/ini/ini.h).
 
 ---
 
@@ -74,7 +74,7 @@ Controller connects, all buttons/sticks/triggers map correctly per the `[xbox360
 no crash.
 
 **If this test fails, investigate:**
-[Xbox360Controller.cpp](../src/core/drivers/Xbox360Controller.cpp).
+[Xbox360Controller.cpp](../src/controllerlib/drivers/Xbox360Controller.cpp).
 
 ---
 
@@ -90,9 +90,9 @@ Controller is detected as a generic HID device, dpad and sticks work, buttons ar
 reported. No crash.
 
 **If this test fails, investigate:**
-[GenericHIDController.cpp](../src/core/drivers/GenericHIDController.cpp)
+[GenericHIDController.cpp](../src/controllerlib/drivers/GenericHIDController.cpp)
 (HID report-descriptor parsing) and the shared
-[BaseController.cpp](../src/core/drivers/BaseController.cpp).
+[BaseController.cpp](../src/controllerlib/drivers/BaseController.cpp).
 
 ---
 
@@ -108,7 +108,7 @@ reported. No crash.
 The paired pad appears as a connected controller and all inputs work. No crash.
 
 **If this test fails, investigate:**
-[Xbox360WirelessController.cpp](../src/core/drivers/Xbox360WirelessController.cpp)
+[Xbox360WirelessController.cpp](../src/controllerlib/drivers/Xbox360WirelessController.cpp)
 and the device-attach path in [usb_module.cpp](../src/app/usb_module.cpp).
 
 ---
@@ -141,7 +141,7 @@ The controller reconnects and works exactly as in TC5. No crash, no duplicate en
 **If this test fails, investigate:**
 [controller_handler.cpp](../src/app/controller_handler.cpp) (stale state
 not released on TC6) and
-[Xbox360WirelessController.cpp](../src/core/drivers/Xbox360WirelessController.cpp).
+[Xbox360WirelessController.cpp](../src/controllerlib/drivers/Xbox360WirelessController.cpp).
 
 ---
 
@@ -158,8 +158,8 @@ no truncated/garbled input.
 
 **If this test fails, investigate:**
 Report/buffer sizing in
-[GenericHIDController.cpp](../src/core/drivers/GenericHIDController.cpp)
-and [ControllerConfig.h](../src/core/ControllerConfig.h) (undersized input
+[GenericHIDController.cpp](../src/controllerlib/drivers/GenericHIDController.cpp)
+and [ControllerConfig.h](../src/controllerlib/ControllerConfig.h) (undersized input
 buffer would truncate the large DS4 report).
 
 ---
@@ -179,7 +179,7 @@ buffer would truncate the large DS4 report).
 
 **If this test fails, investigate:**
 [config_handler.cpp](../src/app/config_handler.cpp) (missing-file
-handling / fallback to defaults) and [ini.h](../lib/ini/ini.h).
+handling / fallback to defaults) and [ini.h](../external/ini/ini.h).
 
 ---
 

@@ -3,6 +3,12 @@
 #include "config_handler.h"
 #include "StdFileManager.h"
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 // CONFIG_FULLPATH_PROJECT is supplied by tests/CMakeLists.txt as an absolute path, so the
 // tests work from any build directory. The fallback keeps a hand-run build working.
 #ifndef CONFIG_FULLPATH_PROJECT

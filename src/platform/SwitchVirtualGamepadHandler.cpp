@@ -1,7 +1,14 @@
 #include "SwitchVirtualGamepadHandler.h"
+#include "HorizonResult.h"
 #include "SwitchLogger.h"
 #include <chrono>
 #include <cassert>
+
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
 
 SwitchVirtualGamepadHandler::SwitchVirtualGamepadHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
     : m_controller(std::move(controller)),
@@ -21,9 +28,12 @@ Result SwitchVirtualGamepadHandler::Initialize()
 {
     syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Initializing ...", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct());
 
-    Result rc = m_controller->Initialize();
-    if (R_FAILED(rc))
-        return rc;
+    Status status = m_controller->Initialize();
+    if (Failed(status))
+    {
+        syscon::logger::LogError("SwitchVirtualGamepadHandler[%04x-%04x] Controller initialization failed: %s", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), ToString(status));
+        return syscon::ToHorizonResult(status);
+    }
 
     return 0;
 }
@@ -49,7 +59,7 @@ void SwitchVirtualGamepadHandler::Exit()
 
 void SwitchVirtualGamepadHandler::OnRun()
 {
-    Result rc;
+    Status rc = Status::Success;
     ::syscon::logger::LogDebug("SwitchVirtualGamepadHandler InputThread running ...");
 
     /*
@@ -69,10 +79,10 @@ void SwitchVirtualGamepadHandler::OnRun()
 
         s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
 
-        if ((rc != CONTROLLER_STATUS_TIMEOUT) && (execution_time_us > 30000)) // 30ms
+        if ((rc != Status::Timeout) && (execution_time_us > 30000)) // 30ms
             ::syscon::logger::LogWarning("SwitchVirtualGamepadHandler UpdateInputOutput took: %d ms !", execution_time_us / 1000);
 
-        if (R_FAILED(rc) && rc != CONTROLLER_STATUS_TIMEOUT && rc != CONTROLLER_STATUS_NOTHING_TODO)
+        if (Failed(rc) && rc != Status::Timeout && rc != Status::NothingTodo)
         {
             /*
             This case is a "normal case" and happen when the controller is disconnected
@@ -116,7 +126,7 @@ void SwitchVirtualGamepadHandler::ExitThread()
     threadClose(&m_Thread);
 }
 
-Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
+Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 {
     uint16_t input_idx = 0;
     NormalizedButtonData buttonData{};
@@ -124,7 +134,7 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     HidAnalogStickState analog_stick_l;
     HidAnalogStickState analog_stick_r;
 
-    ControllerResult read_rc = m_controller->ReadInput(&buttonData, &input_idx, timeout_us);
+    Status read_rc = m_controller->ReadInput(&buttonData, &input_idx, timeout_us);
 
     if (input_idx >= CONTROLLER_MAX_INPUTS)
     {
@@ -133,7 +143,7 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
             This case happen with Steam Controller and puck that report 5 usb Endpoint
         */
         syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Invalid input index: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
-        return CONTROLLER_STATUS_INVALID_INDEX;
+        return Status::InvalidIndex;
     }
 
     /*
@@ -162,7 +172,7 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     if (m_controllerData[input_idx].m_is_connected == false)
         return read_rc; // No need to update the controller state if it's not connected
 
-    if (read_rc != CONTROLLER_STATUS_SUCCESS)
+    if (read_rc != Status::Success)
         return read_rc;
 
     auto startTimer = std::chrono::steady_clock::now();
@@ -224,7 +234,18 @@ Result SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
     syscon::logger::LogPerf("SwitchVirtualGamepadHandler[%04x-%04x] UpdateInput took: %d us for idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), execution_time_us, input_idx);
 
-    return res;
+    /*
+        UpdateControllerState talks to hiddbg/HID and so returns a Horizon Result, but this
+        function's caller works in Status. Log the Horizon code here, where it still carries
+        its module/description, and hand back a Status rather than reinterpreting the bits.
+    */
+    if (R_FAILED(res))
+    {
+        syscon::logger::LogError("SwitchVirtualGamepadHandler[%04x-%04x] Failed to update controller state on idx: %d - Error: 0x%08X (Module: 0x%X, Desc: 0x%X)", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, res, R_MODULE(res), R_DESCRIPTION(res));
+        return Status::WriteFailed;
+    }
+
+    return Status::Success;
 }
 
 Result SwitchVirtualGamepadHandler::UpdateOutput()

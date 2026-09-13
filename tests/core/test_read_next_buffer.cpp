@@ -9,6 +9,12 @@
 #include <cstring>
 #include <vector>
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 using testing::_;
 using testing::Invoke;
 using testing::Return;
@@ -22,7 +28,7 @@ public:
     ReadTestController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
         : BaseController(std::move(device), config, std::move(logger)) {}
 
-    ControllerResult ParseData(uint8_t *, size_t, RawInputData *, uint16_t *) override { return CONTROLLER_STATUS_SUCCESS; }
+    Status ParseData(uint8_t *, size_t, RawInputData *, uint16_t *) override { return Status::Success; }
 
     void AddEndpoint(IUSBEndpoint *endpoint) { m_inPipe.push_back(endpoint); }
     uint8_t GetCurrentIdx() const { return m_current_controller_idx; }
@@ -37,7 +43,7 @@ static auto ReturnReport(std::vector<uint8_t> data)
                   {
         memcpy(out, data.data(), data.size());
         *sz = data.size();
-        return CONTROLLER_STATUS_SUCCESS; });
+        return Status::Success; });
 }
 
 static IUSBEndpoint::EndpointDescriptor MakeDescriptor()
@@ -62,7 +68,7 @@ TEST(ReadNextBuffer, test_read_drains_to_latest_report)
         .WillOnce(ReturnReport({0x42, 0x01}))               // first report
         .WillOnce(ReturnReport({0x42, 0x02}))               // queued behind it
         .WillOnce(ReturnReport({0x42, 0x03}))               // newest queued
-        .WillRepeatedly(Return(CONTROLLER_STATUS_TIMEOUT)); // queue empty -> stop draining
+        .WillRepeatedly(Return(Status::Timeout)); // queue empty -> stop draining
 
     ReadTestController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.AddEndpoint(&endpoint);
@@ -71,7 +77,7 @@ TEST(ReadNextBuffer, test_read_drains_to_latest_report)
     size_t size = sizeof(buffer);
     uint16_t input_idx = 0xFFFF;
 
-    EXPECT_EQ(controller.ReadNextBuffer(buffer, &size, &input_idx, 1000), CONTROLLER_STATUS_SUCCESS);
+    EXPECT_EQ(controller.ReadNextBuffer(buffer, &size, &input_idx, 1000), Status::Success);
     EXPECT_EQ(input_idx, 0);
     ASSERT_EQ(size, 2u);
     EXPECT_EQ(buffer[1], 0x03); // freshest report wins
@@ -92,10 +98,10 @@ TEST(ReadNextBuffer, test_read_skips_idle_endpoint)
     EXPECT_CALL(activeEndpoint, GetDescriptor()).WillRepeatedly(Return(&desc));
     EXPECT_CALL(unusedEndpoint, GetDescriptor()).WillRepeatedly(Return(&desc));
 
-    EXPECT_CALL(idleEndpoint, Read(_, _, _)).WillRepeatedly(Return(CONTROLLER_STATUS_TIMEOUT));
+    EXPECT_CALL(idleEndpoint, Read(_, _, _)).WillRepeatedly(Return(Status::Timeout));
     EXPECT_CALL(activeEndpoint, Read(_, _, _))
         .WillOnce(ReturnReport({0x42, 0x55}))
-        .WillRepeatedly(Return(CONTROLLER_STATUS_TIMEOUT));
+        .WillRepeatedly(Return(Status::Timeout));
     // unusedEndpoint (index 2) must never be read: we return after servicing index 1.
     EXPECT_CALL(unusedEndpoint, Read(_, _, _)).Times(0);
 
@@ -108,7 +114,7 @@ TEST(ReadNextBuffer, test_read_skips_idle_endpoint)
     size_t size = sizeof(buffer);
     uint16_t input_idx = 0xFFFF;
 
-    EXPECT_EQ(controller.ReadNextBuffer(buffer, &size, &input_idx, 1000), CONTROLLER_STATUS_SUCCESS);
+    EXPECT_EQ(controller.ReadNextBuffer(buffer, &size, &input_idx, 1000), Status::Success);
     EXPECT_EQ(input_idx, 1);
     EXPECT_EQ(buffer[1], 0x55);
     EXPECT_EQ(controller.GetCurrentIdx(), 2); // cursor advanced past the serviced endpoint
@@ -126,8 +132,8 @@ TEST(ReadNextBuffer, test_read_all_idle)
 
     EXPECT_CALL(endpoint0, GetDescriptor()).WillRepeatedly(Return(&desc));
     EXPECT_CALL(endpoint1, GetDescriptor()).WillRepeatedly(Return(&desc));
-    EXPECT_CALL(endpoint0, Read(_, _, _)).WillRepeatedly(Return(CONTROLLER_STATUS_TIMEOUT));
-    EXPECT_CALL(endpoint1, Read(_, _, _)).WillRepeatedly(Return(CONTROLLER_STATUS_TIMEOUT));
+    EXPECT_CALL(endpoint0, Read(_, _, _)).WillRepeatedly(Return(Status::Timeout));
+    EXPECT_CALL(endpoint1, Read(_, _, _)).WillRepeatedly(Return(Status::Timeout));
 
     ReadTestController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.AddEndpoint(&endpoint0);
@@ -137,5 +143,5 @@ TEST(ReadNextBuffer, test_read_all_idle)
     size_t size = sizeof(buffer);
     uint16_t input_idx = 0xFFFF;
 
-    EXPECT_NE(controller.ReadNextBuffer(buffer, &size, &input_idx, 1000), CONTROLLER_STATUS_SUCCESS);
+    EXPECT_NE(controller.ReadNextBuffer(buffer, &size, &input_idx, 1000), Status::Success);
 }

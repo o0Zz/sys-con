@@ -3,7 +3,7 @@
 #include "IUSBDevice.h"
 #include "SwitchUSBInterface.h"
 
-class SwitchUSBDevice : public IUSBDevice
+class SwitchUSBDevice : public controllerlib::IUSBDevice
 {
 public:
     SwitchUSBDevice();
@@ -13,7 +13,7 @@ public:
     SwitchUSBDevice(UsbHsInterface interfaces[], int length);
 
     // There are no devices to open on the switch, so instead this returns success if there are any interfaces
-    virtual ControllerResult Open() override;
+    virtual controllerlib::Status Open() override;
     // Closes all the interfaces associated with the class
     virtual void Close() override;
 

@@ -10,7 +10,7 @@
 # C++20 is the floor for everything built here.
 #
 # It is not literally one value everywhere, and cannot be: the device build is pinned to
-# gnu++23 by lib/Atmosphere-libs/config/common.mk, which is a submodule and not ours to
+# gnu++23 by external/Atmosphere-libs/config/common.mk, which is a submodule and not ours to
 # change. Since gnu++23 is a superset, code written to the C++20 floor compiles in both,
 # and the harmful case -- the test target sitting *below* the libraries it links, so the
 # tests exercised the production code under weaker language rules -- is gone.

@@ -7,6 +7,12 @@
 #include "mocks/USBInterface.h"
 #include "mocks/USBEndpoint.h"
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 TEST(Controller, test_steam2026_input_report)
 {
     ControllerConfig config;
@@ -21,7 +27,7 @@ TEST(Controller, test_steam2026_input_report)
         0xD0, 0x6A, 0x0D, 0x00, 0x10, 0x14, 0xE7, 0x1B, 0xFE, 0x35, 0x27, 0x01, 0x6C, 0x00,
         0xEB, 0xFF, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), CONTROLLER_STATUS_SUCCESS);
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::Success);
 
     EXPECT_TRUE(controller.IsControllerConnected(input_idx));
     EXPECT_FALSE(rawData.buttons[1]);
@@ -38,7 +44,7 @@ TEST(Controller, test_steam2026_misc_report_ignored)
     SteamController2026 controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
 
     uint8_t buffer[9] = {0x41, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00};
-    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), CONTROLLER_STATUS_NOTHING_TODO);
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::NothingTodo);
     EXPECT_FALSE(controller.IsControllerConnected(input_idx));
 }
 
@@ -51,6 +57,6 @@ TEST(Controller, test_steam2026_wireless_disconnected)
     SteamController2026 controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
 
     uint8_t buffer[2] = {0x46, 0x01};
-    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), CONTROLLER_STATUS_NOTHING_TODO);
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::NothingTodo);
     EXPECT_FALSE(controller.IsControllerConnected(input_idx));
 }

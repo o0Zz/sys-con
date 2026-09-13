@@ -5,6 +5,12 @@
 #include <malloc.h>
 #include <cstring>
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 SwitchUSBInterface::SwitchUSBInterface(UsbHsInterface &interface)
     : m_interface(interface)
 {
@@ -14,7 +20,7 @@ SwitchUSBInterface::~SwitchUSBInterface()
 {
 }
 
-ControllerResult SwitchUSBInterface::Open()
+Status SwitchUSBInterface::Open()
 {
     SwitchUSBLock usbLock;
 
@@ -24,7 +30,7 @@ ControllerResult SwitchUSBInterface::Open()
     if (R_FAILED(rc))
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] Failed to acquire USB interface - Error: 0x%X (Module: 0x%X, Desc: 0x%X) !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        return CONTROLLER_STATUS_USB_INTERFACE_ACQUIRE;
+        return Status::UsbInterfaceAcquire;
     }
 
     for (int i = 0; i < SWITCH_USB_MAX_ENDPOINTS; i++)
@@ -55,7 +61,7 @@ ControllerResult SwitchUSBInterface::Open()
         }
     }
 
-    return CONTROLLER_STATUS_SUCCESS;
+    return Status::Success;
 }
 
 void SwitchUSBInterface::Close()
@@ -77,7 +83,7 @@ void SwitchUSBInterface::Close()
     ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Closed !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
 }
 
-ControllerResult SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, void *buffer, u16 *wLength)
+Status SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, void *buffer, u16 *wLength)
 {
     SwitchUSBLock usbLock;
 
@@ -86,7 +92,7 @@ ControllerResult SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 b
     if (!(bmRequestType & USB_ENDPOINT_IN))
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferInput: Trying to output data !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-        return CONTROLLER_STATUS_INVALID_ARGUMENT;
+        return Status::InvalidArgument;
     }
 
     u32 transferredSize = 0;
@@ -94,7 +100,7 @@ ControllerResult SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 b
     if (R_FAILED(usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, *wLength, m_usb_buffer, &transferredSize)))
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferInput: Failed to read data !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-        return CONTROLLER_STATUS_UNKNOWN_ERROR;
+        return Status::UnknownError;
     }
 
     if (bmRequestType & USB_ENDPOINT_IN)
@@ -107,14 +113,14 @@ ControllerResult SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 b
         else
         {
             ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferInput: Invalid buffer size !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-            return CONTROLLER_STATUS_INVALID_ARGUMENT;
+            return Status::InvalidArgument;
         }
     }
 
-    return CONTROLLER_STATUS_SUCCESS;
+    return Status::Success;
 }
 
-ControllerResult SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, const void *buffer, u16 wLength)
+Status SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, const void *buffer, u16 wLength)
 {
     SwitchUSBLock usbLock;
 
@@ -125,7 +131,7 @@ ControllerResult SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 
     if (bmRequestType & USB_ENDPOINT_IN)
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferOutput Trying to read data !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-        return CONTROLLER_STATUS_INVALID_ARGUMENT;
+        return Status::InvalidArgument;
     }
 
     if (buffer != NULL && wLength > 0)
@@ -134,10 +140,10 @@ ControllerResult SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 
     if (R_FAILED(usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, wLength, m_usb_buffer, &transferredSize)))
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferOutput: Failed to send data !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-        return CONTROLLER_STATUS_UNKNOWN_ERROR;
+        return Status::UnknownError;
     }
 
-    return CONTROLLER_STATUS_SUCCESS;
+    return Status::Success;
 }
 
 IUSBEndpoint *SwitchUSBInterface::GetEndpoint(IUSBEndpoint::Direction direction, uint8_t index)
@@ -151,7 +157,7 @@ IUSBEndpoint *SwitchUSBInterface::GetEndpoint(IUSBEndpoint::Direction direction,
         return m_outEndpoints[index].get();
 }
 
-ControllerResult SwitchUSBInterface::Reset()
+Status SwitchUSBInterface::Reset()
 {
     SwitchUSBLock usbLock;
 
@@ -159,5 +165,5 @@ ControllerResult SwitchUSBInterface::Reset()
 
     usbHsIfResetDevice(&m_session);
 
-    return CONTROLLER_STATUS_SUCCESS;
+    return Status::Success;
 }

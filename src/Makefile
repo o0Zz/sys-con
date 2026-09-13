@@ -6,7 +6,7 @@ VERSION_HEADER := app/version.h
 TARGETS := companion app
 TOPTARGETS := all clean mrproper
 
-ATMOSPHERE_GIT_HASH := $(shell git -C ../lib/Atmosphere-libs rev-parse --short HEAD)
+ATMOSPHERE_GIT_HASH := $(shell git -C ../external/Atmosphere-libs rev-parse --short HEAD)
 SYSCON_GIT_HASH := $(shell git rev-parse --short HEAD)
 SYSCON_GIT_TAG := $(shell git describe --tags `git rev-list --tags --max-count=1`)
 SYSCON_GIT_TAG_COMMIT_COUNT := $(shell git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)
@@ -19,12 +19,12 @@ all: $(VERSION_HEADER) $(TARGETS)
 libstratosphere:
 ifeq ($(ATMOSPHERE),1) 
 ifeq ($(ATMOSPHERE_BUILD_ENABLED),1) 
-	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere -j8 ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)
+	$(MAKE) -C ../external/Atmosphere-libs/libstratosphere -j8 ATMOSPHERE_BUILD_FOR_DEBUGGING=$(DEBUG)
 endif
 endif
 
 libhiddatainterpreter:
-	$(MAKE) -C ../lib/HIDDataInterpreter/build/switch
+	$(MAKE) -C ../external/HIDDataInterpreter/build/switch
 
 companion:
 	$(MAKE) -C companion
@@ -50,6 +50,6 @@ clean:
 	
 mrproper: clean
 ifeq ($(ATMOSPHERE),1)
-	$(MAKE) -C ../lib/Atmosphere-libs/libstratosphere clean
+	$(MAKE) -C ../external/Atmosphere-libs/libstratosphere clean
 endif
-	$(MAKE) -C ../lib/HIDDataInterpreter/build/switch clean
+	$(MAKE) -C ../external/HIDDataInterpreter/build/switch clean

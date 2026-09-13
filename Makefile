@@ -54,9 +54,9 @@ dist: clean all
 # of distclean, which silently destroyed any work in progress in that submodule.
 atmosphere_$(ATMOSPHERE_VERSION):
 ifeq ($(RESET_ATMOSPHERE),1)
-	cd lib/Atmosphere-libs && git reset --hard
+	cd external/Atmosphere-libs && git reset --hard
 else
-	@echo "[SKIP] Not resetting lib/Atmosphere-libs (pass RESET_ATMOSPHERE=1 to force)"
+	@echo "[SKIP] Not resetting external/Atmosphere-libs (pass RESET_ATMOSPHERE=1 to force)"
 endif
 
 distclean: mrproper atmosphere_$(ATMOSPHERE_VERSION) all

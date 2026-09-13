@@ -260,6 +260,12 @@ All contributions are welcome, you can be a simple user or developer, if you did
 Don't download the project as ZIP as it will not copy submodules properly, prefer a git clone:
 `git clone --recurse-submodules -j8 https://github.com/o0Zz/sys-con.git`
 
+> **Updating an existing clone?** The submodules moved from `lib/` to `external/`. After
+> pulling, run `git submodule sync --recursive && git submodule update --init --recursive`,
+> and delete any stale `build/` directory — a CMake cache from before the move still points
+> at the old paths and fails with a confusing "not found" error.
+> A leftover empty `lib/` directory can be removed by hand.
+
 Like all other switch projects, you will need [devkitA64](https://switchbrew.org/wiki/Setting_up_Development_Environment) set up on your system.
 
 ### Setup your environment on windows:
@@ -295,7 +301,7 @@ pacman -S git
 pacman -S switch-libjpeg-turbo
 pacman -S zip
 pacman -S diffutils
-make -C lib/libnx install
+make -C external/libnx install
 ```
 
 ### Build the project with Visual Studio Code
@@ -322,7 +328,7 @@ Open MSYS console, move to the project root directory and use one of the followi
 - `syscon.sh build`: Build and package sys-con (Similar to github release packages)
 
 Output folder will be there: `out/`
-For an in-depth explanation of how sys-con works, see [here](source).
+For an in-depth explanation of how sys-con works, see [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
 
 ### Debug the application
 In order to debug the applicaiton, you can directly refer to the logs available there: `/config/sys-con/log.txt`.

@@ -10,6 +10,12 @@
 
 #define MS_TO_NS(x) (x * 1000000ul)
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 namespace syscon::usb
 {
     namespace
@@ -254,7 +260,7 @@ namespace syscon::usb
                     syscon::logger::LogError("Unable to add future events ! (Max USB events reached !)");
                     isMaxEventLogged = true;
                 }
-                return CONTROLLER_STATUS_OUT_OF_MEMORY;
+                return Status::OutOfMemory;
             }
 
             syscon::logger::LogDebug("Adding event with filter: %s (%d/%d)...", name.c_str(), g_usbEventCount + 1, MaxUsbEvents);

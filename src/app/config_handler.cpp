@@ -9,6 +9,12 @@
 #include <filesystem>
 #include <chrono>
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 // _WIN32, not WIN32: MSVC always defines the former, while the latter only appears if
 // windows.h or the build system happens to define it. Under MSBuild it did; under Ninja
 // or a bare compiler invocation it does not, and the file then failed to link.
@@ -201,7 +207,7 @@ namespace syscon::config
             return !s.empty() && it == s.end();
         }
 
-        void parseBinding(const char *value, std::array<uint8_t, MAX_PIN_BY_BUTTONS> &button_pin, ControllerAnalogConfig *analogCfg)
+        void parseBinding(const char *value, std::array<PinId, MAX_PIN_BY_BUTTONS> &button_pin, ControllerAnalogConfig *analogCfg)
         {
             int button_pin_idx = 0;
             char *context;
@@ -211,7 +217,7 @@ namespace syscon::config
             analogCfg->bind = AnalogAxis::Unknown;
             analogCfg->sign = 0.0;
             for (int i = 0; i < MAX_PIN_BY_BUTTONS; i++)
-                button_pin[i] = 0;
+                button_pin[i] = PinId{};
 
             while (tok != NULL)
             {
@@ -221,10 +227,10 @@ namespace syscon::config
 
                     if (button_pin_idx < MAX_PIN_BY_BUTTONS)
                     {
-                        if (pin < MAX_CONTROLLER_BUTTONS)
+                        if (pin >= 0 && pin < static_cast<int>(MaxPinCount))
                             button_pin[button_pin_idx++] = pin;
                         else
-                            syscon::logger::LogError("Invalid PIN: %d (Max: %d) - Ignoring it !", pin, MAX_CONTROLLER_BUTTONS);
+                            syscon::logger::LogError("Invalid PIN: %d (Max: %d) - Ignoring it !", pin, static_cast<int>(MaxPinCount));
                     }
                     else
                         syscon::logger::LogError("Too many button pin configured (Max: %d) (Ignoring pin: %d)", MAX_PIN_BY_BUTTONS, pin);

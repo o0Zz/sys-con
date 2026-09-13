@@ -3,7 +3,7 @@
 #include "IUSBEndpoint.h"
 #include <memory>
 
-class SwitchUSBEndpoint : public IUSBEndpoint
+class SwitchUSBEndpoint : public controllerlib::IUSBEndpoint
 {
 private:
     UsbHsClientEpSession m_epSession{};
@@ -19,22 +19,22 @@ public:
     ~SwitchUSBEndpoint();
 
     // Open and close the endpoint
-    virtual ControllerResult Open(int maxPacketSize = 0) override;
+    virtual controllerlib::Status Open(int maxPacketSize = 0) override;
     virtual void Close() override;
 
     // buffer should point to the data array, and only the specified size will be read.
-    virtual ControllerResult Write(const uint8_t *inBuffer, size_t bufferSize) override;
+    virtual controllerlib::Status Write(const uint8_t *inBuffer, size_t bufferSize) override;
 
     // The data received will be put in the outBuffer array for the length of the specified size.
-    virtual ControllerResult Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs) override;
-    virtual ControllerResult ReadSync(uint8_t *outBuffer, size_t *bufferSizeInOut);
-    virtual ControllerResult ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs);
+    virtual controllerlib::Status Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs) override;
+    virtual controllerlib::Status ReadSync(uint8_t *outBuffer, size_t *bufferSizeInOut);
+    virtual controllerlib::Status ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs);
 
     // Gets the direction of this endpoint (IN or OUT)
-    virtual IUSBEndpoint::Direction GetDirection() override;
+    virtual controllerlib::IUSBEndpoint::Direction GetDirection() override;
 
     // get the endpoint descriptor
-    virtual IUSBEndpoint::EndpointDescriptor *GetDescriptor() override;
+    virtual controllerlib::IUSBEndpoint::EndpointDescriptor *GetDescriptor() override;
 
     // Get the current EpSession (after it was opened)
     inline UsbHsClientEpSession &GetSession() { return m_epSession; }

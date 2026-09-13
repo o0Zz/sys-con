@@ -2,10 +2,10 @@
 #include "IUSBDevice.h"
 #include "USBInterface.h"
 
-class MockDevice : public IUSBDevice
+class MockDevice : public controllerlib::IUSBDevice
 {
 public:
-    MockDevice(uint16_t vendorID = 0x000, uint16_t productID = 0x000, std::unique_ptr<IUSBInterface> &&interface = nullptr)
+    MockDevice(uint16_t vendorID = 0x000, uint16_t productID = 0x000, std::unique_ptr<controllerlib::IUSBInterface> &&interface = nullptr)
         : IUSBDevice()
     {
         m_vendorID = vendorID;
@@ -13,7 +13,7 @@ public:
         m_interfaces.push_back(std::move(interface));
     }
 
-    ControllerResult Open() { return CONTROLLER_STATUS_SUCCESS; }
+    controllerlib::Status Open() { return controllerlib::Status::Success; }
     void Close() {}
     void Reset() {}
 };

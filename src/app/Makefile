@@ -13,7 +13,7 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
 ifeq ($(ATMOSPHERE),1) #If ATMOSPHERE BUILD
-	include $(CURRENT_DIRECTORY)/../../lib/Atmosphere-libs/config/templates/stratosphere.mk
+	include $(CURRENT_DIRECTORY)/../../external/Atmosphere-libs/config/templates/stratosphere.mk
 endif
 
 #---------------------------------------------------------------------------------
@@ -49,14 +49,14 @@ BUILD		:=	build
 # Variant selection is a directory swap, not a filename filter. Everything under
 # ../platform is libnx code both flavours need; only the flavour-specific directory
 # differs, and it carries that flavour's entry point too.
-SOURCES		:=	. ../core ../core/drivers ../platform ../../lib/ini
+SOURCES		:=	. ../controllerlib ../controllerlib/drivers ../platform ../../external/ini
 ifeq ($(ATMOSPHERE),1)
 SOURCES		+=	../platform/ams
 else
 SOURCES		+=	../platform/libnx
 endif
 DATA		:=	data
-INCLUDES	:=	. ../core ../platform ../../lib/ini ../../lib/HIDDataInterpreter/inc
+INCLUDES	:=	. ../controllerlib ../platform ../../external/ini ../../external/HIDDataInterpreter/inc
 ifeq ($(ATMOSPHERE),1)
 INCLUDES	+=	../platform/ams
 else
@@ -83,7 +83,7 @@ ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 WARNFLAGS	:=	-Wall -Wextra -Wshadow -Wundef -Wformat=2 -Wno-unused-parameter
 CFLAGS	:=	-g $(WARNFLAGS) -O2 -ffunction-sections $(ARCH) $(DEFINES)
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__
-# gnu++23 is not an arbitrary choice: lib/Atmosphere-libs/config/common.mk pins the
+# gnu++23 is not an arbitrary choice: external/Atmosphere-libs/config/common.mk pins the
 # ATMOSPHERE=1 build to it, so this branch matches to keep the two flavours identical.
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++23
 ASFLAGS	:=	-g $(ARCH)
@@ -95,7 +95,7 @@ endif
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:= $(PORTLIBS) $(LIBNX) ../../../lib/HIDDataInterpreter/build/switch
+LIBDIRS	:= $(PORTLIBS) $(LIBNX) ../../../external/HIDDataInterpreter/build/switch
 
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional

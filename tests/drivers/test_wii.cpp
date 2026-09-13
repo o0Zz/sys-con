@@ -3,6 +3,12 @@
 #include "mocks/Device.h"
 #include "mocks/Logger.h"
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 TEST(Controller, test_wii_controller_button_5)
 {
     ControllerConfig config;
@@ -17,7 +23,7 @@ TEST(Controller, test_wii_controller_button_5)
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-    EXPECT_EQ(controller.ParseData(buffer + 1, 9, &rawData, &input_idx), CONTROLLER_STATUS_SUCCESS);
+    EXPECT_EQ(controller.ParseData(buffer + 1, 9, &rawData, &input_idx), Status::Success);
 
     EXPECT_TRUE(rawData.buttons[5]);
 }
@@ -36,5 +42,5 @@ TEST(Controller, test_wii_controller_disconnected)
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-    EXPECT_EQ(controller.ParseData(buffer + 1 + 9, 9, &rawData, &input_idx), CONTROLLER_STATUS_NOTHING_TODO);
+    EXPECT_EQ(controller.ParseData(buffer + 1 + 9, 9, &rawData, &input_idx), Status::NothingTodo);
 }

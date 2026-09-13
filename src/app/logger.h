@@ -12,7 +12,7 @@ namespace syscon::logger
     void Initialize(const std::string &logPath, std::unique_ptr<IFileManager> &&file);
     void Exit();
 
-    void SetLogLevel(LogLevel level);
+    void SetLogLevel(controllerlib::LogLevel level);
 
     void LogTrace(const char *format, ...);
     void LogDebug(const char *format, ...);
@@ -21,14 +21,14 @@ namespace syscon::logger
     void LogWarning(const char *format, ...);
     void LogError(const char *format, ...);
 
-    void Log(LogLevel lvl, const char *fmt, ::std::va_list vl);
-    void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size);
+    void Log(controllerlib::LogLevel lvl, const char *fmt, ::std::va_list vl);
+    void LogBuffer(controllerlib::LogLevel lvl, const uint8_t *buffer, size_t size);
 
-    class Logger : public ILogger
+    class Logger : public controllerlib::ILogger
     {
     public:
-        void Log(LogLevel lvl, const char *format, ...) override;
-        void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size) override;
-        bool IsEnabled(LogLevel lvl) override;
+        void Log(controllerlib::LogLevel lvl, const char *format, ...) override;
+        void LogBuffer(controllerlib::LogLevel lvl, const uint8_t *buffer, size_t size) override;
+        bool IsEnabled(controllerlib::LogLevel lvl) override;
     };
 } // namespace syscon::logger

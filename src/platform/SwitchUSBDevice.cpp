@@ -2,6 +2,12 @@
 #include "SwitchLogger.h"
 #include <cstring> //for memset
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 SwitchUSBDevice::SwitchUSBDevice(UsbHsInterface interfaces[], int size)
 {
     if (size > 0)
@@ -22,12 +28,12 @@ SwitchUSBDevice::SwitchUSBDevice()
 {
 }
 
-ControllerResult SwitchUSBDevice::Open()
+Status SwitchUSBDevice::Open()
 {
     if (m_interfaces.size() == 0)
-        return CONTROLLER_STATUS_NO_INTERFACES;
+        return Status::NoInterfaces;
 
-    return CONTROLLER_STATUS_SUCCESS;
+    return Status::Success;
 }
 
 void SwitchUSBDevice::Close()

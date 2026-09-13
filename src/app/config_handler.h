@@ -62,7 +62,7 @@ namespace syscon::config
     public:
         uint16_t polling_timeout_ms{10};
         int8_t polling_thread_priority{30};
-        LogLevel log_level{LogLevel::Info};
+        controllerlib::LogLevel log_level{controllerlib::LogLevel::Info};
         DiscoveryMode discovery_mode{DiscoveryMode::HID_AND_XBOX};
         std::vector<ControllerVidPid> discovery_vidpid;
         bool auto_add_controller{true};
@@ -72,6 +72,6 @@ namespace syscon::config
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config);
 
-    int LoadControllerConfig(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile);
+    int LoadControllerConfig(const std::string &configFullPath, controllerlib::ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile);
 
 }; // namespace syscon::config

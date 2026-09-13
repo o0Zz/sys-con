@@ -38,7 +38,7 @@ protected:
 
 public:
     // Initialize the class with specified controller
-    SwitchHDLHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
+    SwitchHDLHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
     virtual ~SwitchHDLHandler();
 
     // Initialize controller handler, HDL state

@@ -11,6 +11,12 @@
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 namespace syscon::logger
 {
     namespace

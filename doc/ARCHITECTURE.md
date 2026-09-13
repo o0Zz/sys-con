@@ -4,34 +4,76 @@ How the sysmodule is put together, and where to look when something breaks.
 
 ---
 
+## Where things live
+
+The tree is split by **origin**, not by what kind of code something is:
+
+```
+src/         code authored in this repository
+external/    code that comes from another repository
+```
+
+`external/` holds the three git submodules (`libnx`, `Atmosphere-libs`,
+`HIDDataInterpreter`) and the vendored copy of `inih`. Note that HIDDataInterpreter is a
+sys-con library too — it simply already lives in its own repo, which is precisely why it is
+in `external/` rather than `src/`. The directory name is about *where the code lives*, not
+about who wrote it.
+
+That rule also describes the one thing likely to change here: `src/controllerlib/` is a
+standalone library that has not been extracted yet. The day it is, it moves to `external/`
+and becomes a fourth submodule, exactly as HIDDataInterpreter did.
+
+---
+
 ## The layers
 
 ```
-                 ┌─────────────────────────────────────────────┐
-     src/app/    │  usb_module · controller_handler            │  discovery, lifetime
-                 │  config_handler · logger · psc_module       │  config, logging, sleep/wake
-                 └───────────────┬─────────────────────────────┘
-                                 │ IController, ILogger, IFileManager
-                 ┌───────────────┴─────────────────────────────┐
-     src/core/   │  BaseController  +  9 drivers (drivers/)    │  portable. No libnx, no ams.
-                 │  IUSBDevice · IUSBInterface · IUSBEndpoint  │
-                 └───────────────┬─────────────────────────────┘
-                                 │ implemented by
-                 ┌───────────────┴─────────────────────────────┐
- src/platform/   │  SwitchUSBDevice/Interface/Endpoint         │  libnx, both flavours
-                 │  SwitchVirtualGamepadHandler                │  the polling thread
-                 ├─────────────────────────────────────────────┤
-   …/libnx/      │  SwitchHDLHandler · main.cpp                │  ATMOSPHERE=0 only
-   …/ams/        │  SwitchMITMHandler · main_ams.cpp · MITM    │  ATMOSPHERE=1 only
-                 └─────────────────────────────────────────────┘
+                   ┌─────────────────────────────────────────────┐
+      src/app/     │  usb_module · controller_handler            │  discovery, lifetime
+                   │  config_handler · logger · psc_module       │  config, logging, sleep/wake
+                   └───────────────┬─────────────────────────────┘
+                                   │ IController, ILogger, IFileManager
+                   ┌───────────────┴─────────────────────────────┐
+src/controllerlib/ │  BaseController  +  9 drivers (drivers/)    │  standalone library.
+                   │  IUSBDevice · IUSBInterface · IUSBEndpoint  │  No libnx, no ams, no sys-con.
+                   └───────────────┬─────────────────────────────┘
+                                   │ implemented by
+                   ┌───────────────┴─────────────────────────────┐
+   src/platform/   │  SwitchUSBDevice/Interface/Endpoint         │  libnx, both flavours
+                   │  SwitchVirtualGamepadHandler                │  the polling thread
+                   ├─────────────────────────────────────────────┤
+     …/libnx/      │  SwitchHDLHandler · main.cpp                │  ATMOSPHERE=0 only
+     …/ams/        │  SwitchMITMHandler · main_ams.cpp · MITM    │  ATMOSPHERE=1 only
+                   └─────────────────────────────────────────────┘
 ```
 
-**`src/core/` is deliberately platform-free.** It contains no `#include <switch.h>`;
-everything it needs from the outside world arrives through four pure interfaces
-(`IUSBDevice`, `IUSBInterface`, `IUSBEndpoint`, `ILogger`). That is the single most
-important property of this codebase: it is why the drivers can be unit-tested on a PC with
-ordinary gtest mocks, with no emulator and no hardware. **Do not introduce a libnx
-dependency into `src/core/`.**
+**`src/controllerlib/` is a standalone library, not a layer of sys-con.** It sits under
+`src/` only because it has not been extracted to its own repository yet — not because it is
+part of the sysmodule. It knows nothing about sys-con, Horizon, libnx or Atmosphere, it
+configures and builds entirely on its own
+(`cmake -S src/controllerlib -B build-controllerlib`, no flags), and it owns its language
+standard, warning set and dependencies. Everything it needs from the outside world arrives
+through four pure interfaces (`IUSBDevice`, `IUSBInterface`, `IUSBEndpoint`, `ILogger`),
+which `src/platform/` implements.
+
+Sitting next to sys-con's own code makes that easy to erode, so CI builds the library
+standalone on every push. Give it a dependency on anything in `src/app/` or `src/platform/`
+and that job fails.
+
+Everything the library declares lives in `namespace controllerlib`. sys-con's headers
+qualify (`controllerlib::Status`, `controllerlib::IController`); its `.cpp` files open the
+namespace with `using namespace controllerlib;` after their includes, so a sys-con header
+never re-exports the library into whatever includes it. `src/platform/HorizonResult.h` is
+where `controllerlib::Status` becomes a Horizon `Result`, and it is the only place the two
+error domains meet.
+
+That is the single most important property of this codebase: it is why the drivers can be
+unit-tested on a PC with ordinary gtest mocks, with no emulator and no hardware, and why
+the library could be lifted into its own repository without touching a line of it. **Do not
+introduce a libnx — or a sys-con — dependency into `src/controllerlib/`.** In particular the
+root `CMakeLists.txt` must not reach into it with `syscon_*` helpers; it only says where
+HIDDataInterpreter lives, calls `add_subdirectory()`, and links the `ControllerLib` target.
+See [src/controllerlib/README.md](../src/controllerlib/README.md).
 
 `src/companion/` is a separate homebrew NRO used to eyeball raw stick/rumble values while
 debugging. It shares nothing with the sysmodule but the repo.
@@ -125,7 +167,7 @@ overriding the last:
 ```
 
 `LoadControllerConfig()` walks these in order. The file is parsed by `inih`
-(vendored at `lib/ini/`) through `IFileManager`, never through `fopen` directly — which
+(vendored at `external/ini/`) through `IFileManager`, never through `fopen` directly — which
 is what lets the host test build feed it an in-memory file.
 
 ---
@@ -184,7 +226,7 @@ against `sys-con.elf`.
 
 ## Testing
 
-The host build (CMake) compiles `src/core/` plus `config_handler`/`logger`/`ini` and
+The host build (CMake) compiles `src/controllerlib/` plus `config_handler`/`logger`/`ini` and
 runs them under gtest — no hardware, no emulator:
 
 ```bash

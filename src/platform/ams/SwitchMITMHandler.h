@@ -16,7 +16,7 @@ protected:
 
 public:
     // Initialize the class with specified controller
-    SwitchMITMHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
+    SwitchMITMHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
     ~SwitchMITMHandler();
 
     // Initialize controller handler, HDL state

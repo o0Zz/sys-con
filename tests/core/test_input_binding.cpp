@@ -3,13 +3,19 @@
 #include "mocks/Device.h"
 #include "mocks/Logger.h"
 
+// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
+// namespace scope in a header, so including a sys-con header does not drag the
+// library into the global namespace of everything downstream.
+using namespace controllerlib;
+
+
 /* --------------------------- Test setup --------------------------- */
 
 class MockBaseController : public BaseController
 {
 public:
     MockBaseController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger) : BaseController(std::move(device), config, std::move(logger)) {}
-    ControllerResult ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override { return CONTROLLER_STATUS_SUCCESS; }
+    Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override { return Status::Success; }
     using BaseController::MapRawInputToNormalized; // Move protected method to public for testing
 };
 
