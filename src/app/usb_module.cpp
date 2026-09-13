@@ -5,6 +5,7 @@
 
 #include "SwitchUSBDevice.h"
 #include "SwitchUSBLock.h"
+#include "HorizonResult.h"
 #include "logger.h"
 #include <string.h>
 
@@ -260,7 +261,7 @@ namespace syscon::usb
                     syscon::logger::LogError("Unable to add future events ! (Max USB events reached !)");
                     isMaxEventLogged = true;
                 }
-                return Status::OutOfMemory;
+                return syscon::ToHorizonResult(Status::OutOfMemory);
             }
 
             syscon::logger::LogDebug("Adding event with filter: %s (%d/%d)...", name.c_str(), g_usbEventCount + 1, MaxUsbEvents);
