@@ -49,7 +49,7 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
-# Warning set matches the sysmodule and cmake/SysConWarnings.cmake.
+# Warning set matches the sysmodule and the syscon::warnings target in CMakeLists.txt.
 WARNFLAGS	:=	-Wall -Wextra -Wshadow -Wundef -Wformat=2 -Wno-unused-parameter
 
 CFLAGS	:=	-g $(WARNFLAGS) -O2 -ffunction-sections \

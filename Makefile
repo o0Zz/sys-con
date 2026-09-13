@@ -1,4 +1,4 @@
-.PHONY: all build clean mrproper dist distclean print-version
+.PHONY: all build clean mrproper dist distclean print-version print-title-id
 
 GIT_TAG := $(shell git describe --tags `git rev-list --tags --max-count=1`)
 GIT_TAG_COMMIT_COUNT := +$(shell git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)
@@ -6,9 +6,10 @@ ifeq ($(GIT_TAG_COMMIT_COUNT),+0)
 	GIT_TAG_COMMIT_COUNT := 
 endif
 
-# The sysmodule's Atmosphere title ID. Also hardcoded, unavoidably, in two files the
-# toolchain reads directly: src/app/sys-con.json (the NPDM config, three times)
-# and dist/atmosphere/contents/<TITLE_ID>/ (a directory name). Change all three together.
+# The sysmodule's Atmosphere title ID. Also hardcoded, unavoidably, in one file the
+# toolchain reads directly: src/app/sys-con.json (the NPDM config, three times).
+# Change both together. Everything else derives it from here -- including tools/sys-con.sh,
+# via the print-title-id target below.
 TITLE_ID			:= 690000000000000D
 
 ATMOSPHERE			?= 0
@@ -16,7 +17,6 @@ ATMOSPHERE_BUILD_ENABLED ?= 0
 ATMOSPHERE_VERSION	?= 1.7.x
 SOURCE_DIR			:= src
 OUT_DIR				:= out
-DIST_DIR			:= dist
 OUT_ZIP				:= sys-con-$(GIT_TAG)$(GIT_TAG_COMMIT_COUNT).zip
 
 all: build
@@ -27,7 +27,8 @@ all: build
 	touch $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/flags/boot2.flag
 	cp $(SOURCE_DIR)/app/sys-con.nsp $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/exefs.nsp
 	cp $(SOURCE_DIR)/companion/sys-con.nro $(OUT_DIR)/switch/sys-con.nro
-	cp -r $(DIST_DIR)/. $(OUT_DIR)/
+	cp $(SOURCE_DIR)/app/toolbox.json $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/toolbox.json
+	cp $(SOURCE_DIR)/app/config.ini $(OUT_DIR)/config/sys-con/config.ini
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
 
 build:
@@ -37,6 +38,11 @@ build:
 # than reimplementing the `git describe` logic above, which it used to duplicate verbatim.
 print-version:
 	@echo $(GIT_TAG)$(GIT_TAG_COMMIT_COUNT)
+
+# Single source of truth for the title ID, read by tools/sys-con.sh so the console-side
+# paths it builds cannot drift from what `make all` actually lays out.
+print-title-id:
+	@echo $(TITLE_ID)
 
 clean:
 	$(MAKE) -C $(SOURCE_DIR) clean

@@ -77,7 +77,8 @@ CFLAGS	+= -DATMOSPHERE=$(ATMOSPHERE)
 else
 
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
-# Warning set matches cmake/SysConWarnings.cmake, so the host and device builds agree.
+# Warning set matches the syscon::warnings target in CMakeLists.txt, so the host and
+# device builds agree.
 # -Wundef in particular catches `#if ATMOSPHERE` in a build where ATMOSPHERE is undefined,
 # and -Wformat=2 the printf/argument mismatches in the logger call sites.
 WARNFLAGS	:=	-Wall -Wextra -Wshadow -Wundef -Wformat=2 -Wno-unused-parameter

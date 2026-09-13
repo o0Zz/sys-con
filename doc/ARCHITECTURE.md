@@ -230,7 +230,7 @@ Condensed from [TestPlan.md](TestPlan.md), which carries the full manual test ma
 | Missing `config.ini` doesn't fall back | `config_handler.cpp`, `ini.h` |
 | **Crash or hang on sleep/wake** | `psc_module.cpp`. Each power transition runs `controllers::Clear()` on `psc_thread_stack`; teardown chains through every controller plus stack-heavy `Log*()`/`vsnprintf`. A crash here usually means that stack is undersized. |
 
-For crashes, `sys-con.sh` can pull the Atmosphère report off the console and symbolise it
+For crashes, `tools/sys-con.sh` can pull the Atmosphère report off the console and symbolise it
 against `sys-con.elf`.
 
 ---
@@ -249,7 +249,7 @@ ctest --test-dir build --output-on-failure
 What is and is not covered:
 
 - **Covered:** every driver's `ParseData`, the normalization pipeline, deadzone/factor,
-  config parsing (against the *real shipped* `dist/config/sys-con/config.ini`), and the
+  config parsing (against the *real shipped* `src/app/config.ini`), and the
   INI line reader.
 - **Not covered:** `usb_module`, `controller_handler`, `psc_module` and all of
   `src/platform/` — they pull in libnx and are only compiled by the device build. Changes

@@ -49,7 +49,7 @@ target_link_libraries(SysConTests PRIVATE syscon::warnings)
 
 
 target_compile_definitions(SysConTests PRIVATE
-    CONFIG_FULLPATH_PROJECT="${CMAKE_CURRENT_SOURCE_DIR}/../dist/config/sys-con/config.ini"
+    CONFIG_FULLPATH_PROJECT="${CMAKE_CURRENT_SOURCE_DIR}/../src/app/config.ini"
 )
 
 target_include_directories(SysConTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -12,7 +12,7 @@ using namespace controllerlib;
 // CONFIG_FULLPATH_PROJECT is supplied by tests/CMakeLists.txt as an absolute path, so the
 // tests work from any build directory. The fallback keeps a hand-run build working.
 #ifndef CONFIG_FULLPATH_PROJECT
-    #define CONFIG_FULLPATH_PROJECT "../../dist/config/sys-con/config.ini"
+    #define CONFIG_FULLPATH_PROJECT "../../src/app/config.ini"
 #endif
 
 TEST(Configuration, test_load_config_unknown)
