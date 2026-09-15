@@ -16,6 +16,7 @@ import build as build_mod
 import config
 import pad as pad_mod
 import repo
+import watchdog
 import symbolize as symbolize_mod
 
 OUTCOMES = ("HEALTHY", "CRASHED", "BOOT_HANG", "UNSTABLE", "DEPLOY_FAILED",
@@ -351,15 +352,29 @@ def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2,
         envelope["outcome"] = outcome
 
         # A repeated signature means the last fix did not work. Retrying is
-        # pure cost: the answer is a code change, not another reboot.
-        sig = envelope.get("crash", {}).get("signature_hash")
-        retryable = outcome in ("CRASHED", "UNSTABLE")
-        if retryable and attempt <= max_retries and sig != envelope.get("_last_sig"):
-            envelope["_last_sig"] = sig
-            log("outcome %s (attempt %d); retrying" % (outcome, attempt))
+        # pure cost: the answer is a code change, not another reboot. The
+        # comparison is against state on disk, not just this invocation --
+        # the usual way this runs is a series of separate commands, and a
+        # rule that resets every time would never fire.
+        sig = (envelope.get("crash") or {}).get("signature_hash")
+        state = watchdog.load()
+        retry, reason = watchdog.should_retry(state, outcome, sig)
+        watchdog.record(state, outcome, sig, build_id)
+        watchdog.save(state)
+
+        envelope["retry_decision"] = reason
+        envelope["watchdog"] = {
+            "consecutive_failures": state["consecutive_failures"],
+            "consecutive_healthy": state["consecutive_healthy"],
+            "signature_streak": state["signature_streak"],
+            "last_signature_hash": state["last_signature_hash"],
+        }
+
+        if retry and attempt <= max_retries:
+            log("outcome %s (attempt %d/%d): %s" % (outcome, attempt,
+                                                    max_retries, reason))
             continue
 
-        envelope.pop("_last_sig", None)
         it.record(envelope)
         return envelope
 

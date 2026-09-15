@@ -23,10 +23,14 @@ import build as build_mod
 import config
 import doctor as doctor_mod
 import fences
+import prune
 import iterate as iterate_mod
+import lock as lock_mod
 import pad as pad_mod
+import render
 import repo
 import symbolize as symbolize_mod
+import watchdog
 
 EXIT = {
     "HEALTHY": 0,
@@ -41,6 +45,7 @@ EXIT_TRANSPORT = 30
 EXIT_USAGE = 40
 EXIT_FENCE = 41
 EXIT_NEEDS_HUMAN = 42
+EXIT_BUSY = 43
 EXIT_INTERNAL = 70
 
 
@@ -48,9 +53,18 @@ def log(message):
     print(message, file=sys.stderr, flush=True)
 
 
+FORMAT = "json"
+
+
 def emit(envelope, exit_code):
-    json.dump(envelope, sys.stdout, indent=2, default=str)
-    sys.stdout.write("\n")
+    """stdout carries exactly one representation of the result: the JSON
+    envelope an agent parses, or the human rendering of that same envelope.
+    Both are built from the same dict, so the two views cannot disagree."""
+    if FORMAT == "human":
+        sys.stdout.write(render.render(envelope.get("cmd", ""), envelope) + "\n")
+    else:
+        json.dump(envelope, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
     sys.stdout.flush()
     return exit_code
 
@@ -284,11 +298,22 @@ def cmd_input(cfg, args):
     Requires network_controller=1 on the console; without it the packets go
     nowhere and sys-con never registers a pad, which `doctor` reports.
     """
+    # UDP sendto succeeds against a switched-off console, so without a probe
+    # this command would cheerfully report that it pressed buttons into the
+    # void. Confirm something is actually there first.
+    if not autopilot.Autopilot(cfg).alive():
+        raise autopilot.Unreachable(
+            "%s did not respond; not sending input to a console that is not "
+            "there" % cfg.url)
+
     host = pad_mod.host_from_url(cfg.url)
     names = args.buttons or config.SMOKE_BUTTONS
     sent = pad_mod.tap_sequence(host, names, port=args.port, hold=args.hold)
     return {"host": host, "port": args.port or config.NETWORK_PAD_PORT,
-            "sent": sent}, 0
+            "sent": sent,
+            "note": "UDP is unacknowledged; check sys-con's log for "
+                    "'Controller[%s] plugged !' to confirm it arrived"
+                    % config.NETWORK_PAD_VIDPID}, 0
 
 
 def cmd_screenshot(cfg, args):
@@ -314,12 +339,87 @@ def cmd_iterate(cfg, args):
     return envelope, code
 
 
+def cmd_loop(cfg, args):
+    """Repeat iterations until something conclusive happens.
+
+    The stop conditions are the point: a loop that never stops is not
+    autonomy, it is a machine burning a console overnight to relearn the same
+    fact. Three identical crash signatures means the fix is a code change, and
+    a build or host-test failure means the loop cannot make progress at all.
+    """
+    runs = []
+    stop_reason = "reached --iterations"
+    last_code = 0
+    healthy_streak = 0
+    sig_counts = {}
+
+    for n in range(1, args.iterations + 1):
+        log("--- iteration %d/%d ---" % (n, args.iterations))
+        env = iterate_mod.run(cfg, log, soak=args.soak,
+                              do_build=not args.no_build,
+                              do_test=not args.no_test,
+                              max_retries=args.max_retries,
+                              exercise_input=args.exercise_input)
+        outcome = env.get("outcome")
+        sig = (env.get("crash") or {}).get("signature_hash")
+        last_code = EXIT.get(outcome, EXIT_INTERNAL)
+        runs.append({"n": n, "outcome": outcome,
+                     "signature": (env.get("crash") or {}).get("signature"),
+                     "signature_hash": sig,
+                     "artifacts_dir": env.get("artifacts_dir")})
+
+        if env.get("needs_human"):
+            stop_reason = "needs a human: %s" % env["needs_human"]
+            last_code = EXIT_NEEDS_HUMAN
+            break
+        if outcome in ("BUILD_FAILED", "HOST_TESTS_FAILED"):
+            stop_reason = "%s -- fix the code before running again" % outcome
+            break
+        if outcome == "DEPLOY_FAILED":
+            stop_reason = "DEPLOY_FAILED -- transport problem, not a code problem"
+            break
+
+        if outcome == "HEALTHY":
+            healthy_streak += 1
+            if healthy_streak >= args.until_healthy:
+                stop_reason = "%d consecutive HEALTHY runs" % healthy_streak
+                break
+        else:
+            healthy_streak = 0
+
+        if sig:
+            sig_counts[sig] = sig_counts.get(sig, 0) + 1
+            if sig_counts[sig] >= args.same_crash_limit:
+                stop_reason = ("the same crash signature %s came back %d times; "
+                               "this is a code bug, not a flaky console"
+                               % (sig, sig_counts[sig]))
+                break
+
+    return {"iterations": len(runs), "runs": runs, "stop_reason": stop_reason,
+            "watchdog": watchdog.load()}, last_code
+
+
+def cmd_gc(cfg, args):
+    return prune.run(keep_builds=args.keep_builds,
+                      keep_iterations=args.keep_iterations,
+                      dry_run=args.dry_run), 0
+
+
 # --- argument parsing --------------------------------------------------------
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="devtools", description=__doc__)
-    p.add_argument("--format", choices=["json", "human"], default="json")
-    sub = p.add_subparsers(dest="command", required=True)
+    # --format is declared twice on purpose: once globally and once on every
+    # subcommand, so both `devtools --format human doctor` and
+    # `devtools doctor --format human` work. The trailing form is the one
+    # people reach for, and having it silently ignored is worse than not
+    # offering it.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--format", choices=["json", "human"], default=None)
+
+    p = argparse.ArgumentParser(prog="devtools", description=__doc__,
+                                parents=[common])
+    sub = p.add_subparsers(dest="command", required=True, parser_class=(
+        lambda **kw: argparse.ArgumentParser(parents=[common], **kw)))
 
     sub.add_parser("doctor", help="environment + console preflight (read-only)")
 
@@ -368,6 +468,23 @@ def build_parser():
     ss = sub.add_parser("screenshot", help="capture the screen")
     ss.add_argument("--out")
 
+    lp = sub.add_parser("loop", help="repeat iterate until a stop condition")
+    lp.add_argument("--iterations", type=int, default=10)
+    lp.add_argument("--soak", type=int, default=config.SOAK_DEFAULT)
+    lp.add_argument("--max-retries", type=int, default=2)
+    lp.add_argument("--until-healthy", type=int, default=3,
+                    help="stop after this many consecutive HEALTHY runs")
+    lp.add_argument("--same-crash-limit", type=int, default=3,
+                    help="stop after this many runs with the same crash signature")
+    lp.add_argument("--no-build", action="store_true")
+    lp.add_argument("--no-test", action="store_true")
+    lp.add_argument("--exercise-input", action="store_true")
+
+    g = sub.add_parser("gc", help="prune debug/ without orphaning a crash report")
+    g.add_argument("--keep-builds", type=int, default=20)
+    g.add_argument("--keep-iterations", type=int, default=50)
+    g.add_argument("--dry-run", action="store_true")
+
     it = sub.add_parser("iterate", help="one full build/deploy/run cycle")
     it.add_argument("--soak", type=int, default=config.SOAK_DEFAULT)
     it.add_argument("--max-retries", type=int, default=2)
@@ -397,22 +514,40 @@ HANDLERS = {
     "input": cmd_input,
     "screenshot": cmd_screenshot,
     "iterate": cmd_iterate,
+    "loop": cmd_loop,
+    "gc": cmd_gc,
 }
 
 
+CONSOLE_MUTATING = {"deploy", "start", "stop", "restart", "iterate", "loop",
+                    "setup-console", "input"}
+
+
 def main(argv):
+    global FORMAT
     args = build_parser().parse_args(argv)
+    FORMAT = args.format or "json"
     cfg = config.Config()
 
     envelope = {"schema": 1, "cmd": args.command, "ok": True,
                 "started_at": now(), "url": cfg.url}
 
     try:
-        result, code = HANDLERS[args.command](cfg, args)
+        if args.command in CONSOLE_MUTATING:
+            with lock_mod.Lock(repo.LOCK_PATH, purpose=args.command):
+                result, code = HANDLERS[args.command](cfg, args)
+        else:
+            result, code = HANDLERS[args.command](cfg, args)
         envelope.update(result if isinstance(result, dict) else {"result": result})
         envelope["ok"] = code == 0 or "outcome" in envelope
         envelope["exit_code"] = code
         return emit(envelope, code)
+
+    except lock_mod.Busy as e:
+        envelope.update(ok=False, error=str(e), error_kind="busy",
+                        exit_code=EXIT_BUSY)
+        log("busy: %s" % e)
+        return emit(envelope, EXIT_BUSY)
 
     except fences.FenceError as e:
         envelope.update(ok=False, error=str(e), error_kind="guardrail",

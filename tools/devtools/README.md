@@ -96,11 +96,49 @@ crash and proving it works.
 `HOME` and `CAPTURE` are left out of the smoke set on purpose: one backgrounds
 whatever is running, the other writes to the album.
 
+## Commands
+
+```
+doctor                       environment + console preflight, read-only
+setup-console --write        fatal_auto_reboot_interval, remove sys-con boot2.flag
+build / test                 device build (+ archive) / host ctest
+deploy                       upload exefs.nsp, verify by on-console SHA-256
+start / stop / restart / status
+logs / crashes / dumps       pull artifacts off the console
+symbolize --report FILE      crash report -> symbolized stack trace
+input [BUTTONS...]           press buttons via the UDP pad
+screenshot                   capture the screen
+iterate                      one build -> deploy -> run -> classify cycle
+loop                         repeat iterate until a stop condition
+gc                           prune debug/ without orphaning a crash report
+```
+
+`loop` stops on the first thing that makes further runs pointless: a build or
+host-test failure, a deploy failure, `--until-healthy` consecutive HEALTHY runs
+(default 3), or the same crash signature `--same-crash-limit` times (default 3).
+That last one matters most — the same crash twice is a code bug, and another
+reboot produces no new information.
+
+Commands that change console state take a lock (`debug/.lock`) so two runs
+cannot interleave a stop with an upload and leave a half-written `exefs.nsp`.
+A second run exits 43 rather than waiting; a lock older than an hour is
+treated as stale and taken.
+
+`gc` never deletes the build named by `builds/current.txt` or one an
+iteration still references, because symbolizing against the wrong ELF produces
+confident wrong answers. `--dry-run` shows what would go.
+
+Recovery state lives in `debug/watchdog.json` and persists across invocations —
+the "don't retry the same signature" rule is useless if it resets every time,
+since the normal way this runs is a series of separate commands.
+
 ## Output contract
 
-stdout is exactly one JSON object, always, including on failure. Progress and
-human text go to stderr, so an agent can run
-`python tools/devtools iterate 2>/dev/null` and branch on the result.
+stdout carries exactly one representation of the result: the JSON envelope by
+default, or a human rendering of that same envelope with `--format human`
+(accepted before or after the subcommand). Progress goes to stderr either way,
+so an agent can run `python tools/devtools iterate 2>/dev/null` and branch on
+the result.
 
 `ok` says whether the tool worked; `outcome` says what the experiment found —
 `{"ok": true, "outcome": "CRASHED"}` is a successful run that caught a bug.
@@ -113,6 +151,7 @@ human text go to stderr, so an agent can run
 | 20 | host tests failed (never deploys) |
 | 30 | console unreachable — *not* a crash |
 | 40 / 41 / 42 | usage / guardrail refused / needs a human |
+| 43 | another run holds the console |
 
 ## How an iteration decides
 
