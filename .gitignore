@@ -32,6 +32,10 @@ src/app/version.h
 *.dmp
 
 # --- Tooling ---
+# Personal permission allowlist. The skills under .claude/skills/ are
+# shared; this file pre-approves writing to a console's SD card, so it
+# stays local rather than being inherited by anyone who clones.
+.claude/settings.local.json
 __pycache__/
 *.pyc
 tools/*/out/
