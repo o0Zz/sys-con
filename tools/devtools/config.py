@@ -71,6 +71,23 @@ SOAK_DEFAULT = 120
 SOAK_LONG = 600
 
 
+# --- scripted input ----------------------------------------------------------
+# sys-con's own UDP-driven virtual pad (network_controller=1 in config.ini).
+# The VID/PID is synthetic -- it exists only so the pad picks up the [network]
+# profile like any real device -- which is what makes the log line below a
+# reliable marker that input actually reached the sysmodule.
+
+NETWORK_PAD_PORT = 56789
+NETWORK_PAD_VIDPID = "ffff-0001"
+NETWORK_INIT_MARKER = "Initializing network controller"
+NETWORK_PAD_PLUGGED = "Controller[%s] plugged !" % NETWORK_PAD_VIDPID
+
+# Buttons an input smoke test presses. Deliberately harmless: no HOME (which
+# would background whatever is running) and no CAPTURE (which writes to the
+# album).
+SMOKE_BUTTONS = ["A", "B", "X", "Y", "DPAD_UP", "DPAD_DOWN", "L", "R"]
+
+
 # --- log parsing -------------------------------------------------------------
 # Logger line format is "|L|HH:MM:SS.mmm|TTTTTTTT| message" (src/app/logger.cpp).
 

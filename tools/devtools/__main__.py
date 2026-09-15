@@ -24,6 +24,7 @@ import config
 import doctor as doctor_mod
 import fences
 import iterate as iterate_mod
+import pad as pad_mod
 import repo
 import symbolize as symbolize_mod
 
@@ -277,6 +278,19 @@ def cmd_symbolize(cfg, args):
     return result, 0
 
 
+def cmd_input(cfg, args):
+    """Press buttons on sys-con's UDP pad.
+
+    Requires network_controller=1 on the console; without it the packets go
+    nowhere and sys-con never registers a pad, which `doctor` reports.
+    """
+    host = pad_mod.host_from_url(cfg.url)
+    names = args.buttons or config.SMOKE_BUTTONS
+    sent = pad_mod.tap_sequence(host, names, port=args.port, hold=args.hold)
+    return {"host": host, "port": args.port or config.NETWORK_PAD_PORT,
+            "sent": sent}, 0
+
+
 def cmd_screenshot(cfg, args):
     api = autopilot.Autopilot(cfg)
     data = api.screenshot()
@@ -291,7 +305,8 @@ def cmd_iterate(cfg, args):
     envelope = iterate_mod.run(cfg, log, soak=args.soak,
                                do_build=not args.no_build,
                                do_test=not args.no_test,
-                               max_retries=args.max_retries)
+                               max_retries=args.max_retries,
+                               exercise_input=args.exercise_input)
     code = EXIT.get(envelope.get("outcome"), EXIT_INTERNAL)
     if envelope.get("needs_human"):
         code = EXIT_NEEDS_HUMAN
@@ -344,6 +359,12 @@ def build_parser():
     sy.add_argument("--module-base")
     sy.add_argument("--out")
 
+    inp = sub.add_parser("input", help="press buttons via sys-con's UDP pad")
+    inp.add_argument("buttons", nargs="*",
+                     help="button names; defaults to the smoke-test set")
+    inp.add_argument("--port", type=int)
+    inp.add_argument("--hold", type=float, default=0.12)
+
     ss = sub.add_parser("screenshot", help="capture the screen")
     ss.add_argument("--out")
 
@@ -352,6 +373,9 @@ def build_parser():
     it.add_argument("--max-retries", type=int, default=2)
     it.add_argument("--no-build", action="store_true")
     it.add_argument("--no-test", action="store_true")
+    it.add_argument("--exercise-input", action="store_true",
+                    help="after startup, drive the UDP pad and confirm "
+                         "sys-con registered it")
 
     return p
 
@@ -370,6 +394,7 @@ HANDLERS = {
     "crashes": cmd_crashes,
     "dumps": cmd_dumps,
     "symbolize": cmd_symbolize,
+    "input": cmd_input,
     "screenshot": cmd_screenshot,
     "iterate": cmd_iterate,
 }

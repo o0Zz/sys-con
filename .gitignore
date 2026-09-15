@@ -32,6 +32,8 @@ src/app/version.h
 *.dmp
 
 # --- Tooling ---
+__pycache__/
+*.pyc
 tools/*/out/
 .vscode/ipch/
 .vs/

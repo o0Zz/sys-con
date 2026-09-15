@@ -107,6 +107,7 @@ def check_console(cfg, tid):
 
     checks.append(_check_fatal_reboot(api))
     checks.append(_check_log_level(api))
+    checks.append(_check_network_pad(api))
     return checks, True
 
 
@@ -213,6 +214,43 @@ def _check_log_level(api):
             "hang cannot be localized",
             level="warn")
     return _check("log_level", True, "log_level=0 (Trace)")
+
+
+def _check_network_pad(api):
+    """Scripted input needs sys-con's UDP pad switched on.
+
+    It is off by default, and deliberately so -- config.ini notes that anyone
+    on the network can press buttons while it is enabled. That is fine for a
+    test console and wrong for a daily driver, so this is a warning rather
+    than a failure: the loop still works without it, it just cannot prove
+    input reached the sysmodule.
+    """
+    try:
+        raw = api.read_file(config.CONFIG_PATH)
+    except autopilot.ApiError:
+        return _check("network_pad", False, "could not read config.ini",
+                      "needed only for scripted input", level="warn")
+
+    text = raw.decode("utf-8", "replace")
+    enabled = re.search(r"^\s*network_controller\s*=\s*(\d+)", text, re.M)
+    port = re.search(r"^\s*network_controller_port\s*=\s*(\d+)", text, re.M)
+    port_value = int(port.group(1)) if port else config.NETWORK_PAD_PORT
+
+    if not enabled or enabled.group(1) == "0":
+        return _check(
+            "network_pad", False, "network_controller=0 (scripted input off)",
+            "set network_controller=1 in /config/sys-con/config.ini to let "
+            "`devtools input` and `iterate --exercise-input` drive a pad",
+            level="warn")
+
+    detail = "enabled on UDP port %d" % port_value
+    if port_value != config.NETWORK_PAD_PORT:
+        return _check("network_pad", False,
+                      detail + ", but devtools defaults to %d"
+                      % config.NETWORK_PAD_PORT,
+                      "pass --port %d, or align the two" % port_value,
+                      level="warn")
+    return _check("network_pad", True, detail)
 
 
 # --- entry point -------------------------------------------------------------

@@ -14,6 +14,7 @@ import time
 import autopilot
 import build as build_mod
 import config
+import pad as pad_mod
 import repo
 import symbolize as symbolize_mod
 
@@ -101,6 +102,22 @@ class Iteration:
         self.log("starting sys-con")
         self.api.process_start(self.tid)
         return self.api.wait_running(self.tid, True, config.START_SETTLE)
+
+    def exercise_input(self):
+        """Drive sys-con's UDP pad and let the log say whether it landed.
+
+        This is what separates "did not crash" from "actually processed
+        input", and it needs no physical controller plugged into the console.
+        Failures here are reported, never raised: a pad that does not answer
+        is a finding about the build, not a reason to abandon the run.
+        """
+        try:
+            host = pad_mod.host_from_url(self.cfg.url)
+            self.log("driving the UDP pad: %s" % " ".join(config.SMOKE_BUTTONS))
+            return {"sent": pad_mod.tap_sequence(host, config.SMOKE_BUTTONS),
+                    "error": None}
+        except (repo.Fatal, OSError, ValueError) as e:
+            return {"sent": [], "error": str(e)}
 
     def observe(self, soak):
         """Watch until the soak elapses or something goes wrong.
@@ -215,7 +232,8 @@ class Iteration:
             }) + "\n")
 
 
-def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2):
+def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2,
+        exercise_input=False):
     """Runs iterations until one concludes, retrying across a crash-reboot."""
     soak = soak if soak is not None else config.SOAK_DEFAULT
     started = datetime.datetime.now(datetime.timezone.utc).strftime(
@@ -283,6 +301,7 @@ def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2):
 
         except autopilot.Unreachable as e:
             state, why = "console_gone", str(e)
+            input_result = locals().get("input_result")
         except autopilot.ApiError as e:
             envelope.update(outcome="DEPLOY_FAILED", error=str(e))
             it.record(envelope)
@@ -311,7 +330,19 @@ def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2):
             "error_lines": it.error_lines(log_path),
             "new_crash_reports": found.get("crash_reports", []),
             "new_fatal_errors": found.get("fatal_errors", []),
+            "input_expected": bool(exercise_input),
         }
+        if input_result is not None:
+            log_text = ""
+            if log_path and os.path.isfile(log_path):
+                with open(log_path, encoding="utf-8", errors="replace") as f:
+                    log_text = f.read()
+            envelope["signals"].update({
+                "input_sent": input_result["sent"],
+                "input_error": input_result["error"],
+                "network_module_up": config.NETWORK_INIT_MARKER in log_text,
+                "input_pad_registered": config.NETWORK_PAD_PLUGGED in log_text,
+            })
         if crashes:
             envelope["crash"] = crashes[0]
             envelope["crashes"] = crashes
@@ -348,5 +379,9 @@ def classify(envelope):
         # at log_level=0; doctor warns when the console is above Trace.
         return "BOOT_HANG"
     if s["error_lines"] > 0:
+        return "UNSTABLE"
+    # Asked to prove input works and it did not: the sysmodule is up but not
+    # doing its job, which is a finding, not a pass.
+    if s.get("input_expected") and not s.get("input_pad_registered"):
         return "UNSTABLE"
     return "HEALTHY"

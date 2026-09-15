@@ -5,7 +5,7 @@ Enable it first, in /config/sys-con/config.ini on the console's SD card:
 
     [global]
     network_controller=1
-    network_controller_port=26780
+    network_controller_port=56789
 
 then reboot. The pad appears to the console the moment the first packet arrives, and
 disappears when you send one with connected=0 (or `disconnect` below).
@@ -37,7 +37,7 @@ import time
 
 MAGIC = 0x504E4353  # 'SCNP'
 VERSION = 1
-DEFAULT_PORT = 26780
+DEFAULT_PORT = 56789
 
 # GamepadButton, from src/controllerlib/GamepadButton.h. The value is both the bit
 # position in the packet and the pin number the [network] profile maps.

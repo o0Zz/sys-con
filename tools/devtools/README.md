@@ -62,6 +62,40 @@ The device build runs through MSYS2 because `make` and devkitPro are not on the
 Windows PATH. The title ID always comes from `make print-title-id`, with the
 Makefile literal as a fallback so this works without a toolchain.
 
+## Scripted input
+
+sys-con can create a virtual pad driven over UDP, so the loop can press buttons
+with no controller plugged into the console:
+
+```sh
+python tools/devtools input                 # the smoke-test set
+python tools/devtools input A B DPAD_UP --hold 0.2
+python tools/devtools iterate --exercise-input
+```
+
+Enable it first on the console — it is off by default, and deliberately so,
+since anyone on the network can press buttons while it is on:
+
+```ini
+[global]
+network_controller=1
+network_controller_port=56789
+```
+
+`doctor` warns when it is disabled or on a different port. The wire format
+comes from `tools/networkpad.py`, which is imported rather than reimplemented:
+the packet layout has to agree with `NetworkController.h`, and two copies would
+drift.
+
+With `--exercise-input`, an iteration presses the smoke-test set after startup
+and then checks the log for `Controller[ffff-0001] plugged !`. If the pad never
+registers, the outcome is `UNSTABLE` rather than `HEALTHY` — the sysmodule is
+up but not doing its job. That is the difference between proving it did not
+crash and proving it works.
+
+`HOME` and `CAPTURE` are left out of the smoke set on purpose: one backgrounds
+whatever is running, the other writes to the album.
+
 ## Output contract
 
 stdout is exactly one JSON object, always, including on failure. Progress and
