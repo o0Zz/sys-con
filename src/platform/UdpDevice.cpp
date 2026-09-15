@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>   // htons/htonl: <netinet/in.h> is not required to declare them, and newlib does not.
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>

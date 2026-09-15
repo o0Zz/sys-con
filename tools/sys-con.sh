@@ -57,7 +57,7 @@ read_title_id() {
 TITLE_ID="$(read_title_id | tr -d '\r')"
 [ -n "$TITLE_ID" ] || die "could not determine TITLE_ID from $REPO_ROOT/Makefile"
 
-ELF_FILE="$REPO_ROOT/src/app/sys-con.elf"
+ELF_FILE="$REPO_ROOT/src/app/build/sys-con.elf"
 NSP_FILE="$REPO_ROOT/out/atmosphere/contents/$TITLE_ID/exefs.nsp"
 NRO_FILE="$REPO_ROOT/out/switch/sys-con.nro"
 

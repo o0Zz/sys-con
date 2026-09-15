@@ -25,8 +25,8 @@ all: build
 	mkdir -p $(OUT_DIR)/config/sys-con
 	mkdir -p $(OUT_DIR)/switch/
 	touch $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/flags/boot2.flag
-	cp $(SOURCE_DIR)/app/sys-con.nsp $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/exefs.nsp
-	cp $(SOURCE_DIR)/companion/sys-con.nro $(OUT_DIR)/switch/sys-con.nro
+	cp $(SOURCE_DIR)/app/build/sys-con.nsp $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/exefs.nsp
+	cp $(SOURCE_DIR)/companion/build/sys-con.nro $(OUT_DIR)/switch/sys-con.nro
 	cp $(SOURCE_DIR)/app/toolbox.json $(OUT_DIR)/atmosphere/contents/$(TITLE_ID)/toolbox.json
 	cp $(SOURCE_DIR)/app/config.ini $(OUT_DIR)/config/sys-con/config.ini
 	@echo [DONE] sys-con compiled successfully. All files have been placed in $(OUT_DIR)/
