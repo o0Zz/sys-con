@@ -247,8 +247,13 @@ Condensed from [TestPlan.md](TestPlan.md), which carries the full manual test ma
 | Missing `config.ini` doesn't fall back | `config_handler.cpp`, `ini.h` |
 | **Crash or hang on sleep/wake** | `psc_module.cpp`. Each power transition runs `controllers::Clear()` on `psc_thread_stack`; teardown chains through every controller plus stack-heavy `Log*()`/`vsnprintf`. A crash here usually means that stack is undersized. |
 
-For crashes, `tools/sys-con.sh` can pull the Atmosphère report off the console and symbolise it
-against `sys-con.elf`.
+For crashes, `tools/devtools` pulls the Atmosphère report off the console and symbolises it
+against the build's archived `sys-con.elf`:
+
+```sh
+python tools/devtools crashes --pull
+python tools/devtools symbolize --report debug/crashes/<report>.log
+```
 
 ---
 

@@ -8,7 +8,7 @@ endif
 
 # The sysmodule's Atmosphere title ID. Also hardcoded, unavoidably, in one file the
 # toolchain reads directly: src/app/sys-con.json (the NPDM config, three times).
-# Change both together. Everything else derives it from here -- including tools/sys-con.sh,
+# Change both together. Everything else derives it from here -- including tools/devtools,
 # via the print-title-id target below.
 TITLE_ID			:= 690000000000000D
 
@@ -39,7 +39,7 @@ build:
 print-version:
 	@echo $(GIT_TAG)$(GIT_TAG_COMMIT_COUNT)
 
-# Single source of truth for the title ID, read by tools/sys-con.sh so the console-side
+# Single source of truth for the title ID, read by tools/devtools so the console-side
 # paths it builds cannot drift from what `make all` actually lays out.
 print-title-id:
 	@echo $(TITLE_ID)
