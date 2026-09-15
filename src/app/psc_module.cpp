@@ -2,6 +2,7 @@
 #include "usb_module.h"
 #include "config_handler.h"
 #include "controller_handler.h"
+#include "network_module.h"
 #include "logger.h"
 
 namespace syscon::psc
@@ -40,6 +41,8 @@ namespace syscon::psc
                             case PscPmState_Awake:
                             case PscPmState_ReadyAwaken:
                                 ::syscon::logger::LogDebug("Power management: Awake");
+                                if (pscState == PscPmState_Awake)
+                                    ::syscon::networkpad::OnWake();
                                 break;
                             case PscPmState_ReadyShutdown:
                                 ::syscon::logger::LogDebug("Power management: Shutdown");

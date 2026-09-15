@@ -14,7 +14,6 @@
 // library into the global namespace of everything downstream.
 using namespace controllerlib;
 
-
 // _WIN32, not WIN32: MSVC always defines the former, while the latter only appears if
 // windows.h or the build system happens to define it. Under MSBuild it did; under Ninja
 // or a bare compiler invocation it does not, and the file then failed to link.
@@ -297,6 +296,10 @@ namespace syscon::config
                 ini_data->global_config->discovery_mode = static_cast<DiscoveryMode>(atoi(value));
             else if (nameStr == "auto_add_controller")
                 ini_data->global_config->auto_add_controller = (atoi(value) == 0) ? false : true;
+            else if (nameStr == "network_controller")
+                ini_data->global_config->network_controller = (atoi(value) == 0) ? false : true;
+            else if (nameStr == "network_controller_port")
+                ini_data->global_config->network_controller_port = static_cast<uint16_t>(atoi(value));
             else if (nameStr == "mode")
             {
                 std::string modeStr = convertToLowercase(value);
@@ -549,13 +552,6 @@ namespace syscon::config
         struct tm timeinfo;
         localtime_r(&timeT, &timeinfo);
 
-        /*
-            This must go through file_manager like every other access in this file. Using
-            std::filesystem/std::ofstream directly only works under the libnx build, which
-            mounts the SD card with fsdevMountSdmc(); the Atmosphere build mounts it with
-            ams::fs::MountSdCard("sdmc") and so has no devoptab for this path, which made
-            auto_add_controller fail with "Configuration file does not exist" every time.
-        */
         if (file_manager == nullptr)
         {
             syscon::logger::LogError("Error: Configuration is not initialized !");

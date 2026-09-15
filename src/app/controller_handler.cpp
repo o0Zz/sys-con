@@ -38,13 +38,15 @@ namespace syscon::controllers
         return controllerHandlers.size() >= MaxControllerHandlersSize;
     }
 
-    Result Insert(std::unique_ptr<IController> &&controllerPtr)
+    Result Insert(std::unique_ptr<IController> &&controllerPtr, bool removable)
     {
         std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler;
         if (virtual_pad_mode == config::VirtualPadMode::MITM)
             switchHandler = std::make_unique<SwitchMITMHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
         else
             switchHandler = std::make_unique<SwitchHDLHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+
+        switchHandler->SetRemovable(removable);
 
         Result rc = switchHandler->Initialize();
         if (R_SUCCEEDED(rc))
@@ -76,6 +78,12 @@ namespace syscon::controllers
 
             for (auto it = controllerHandlers.begin(); it != controllerHandlers.end();)
             {
+                if (!(*it)->IsRemovable())
+                {
+                    ++it;
+                    continue;
+                }
+
                 bool found = false;
 
                 for (auto &&ptr : (*it)->GetController()->GetDevice()->GetInterfaces())

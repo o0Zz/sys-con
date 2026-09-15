@@ -108,6 +108,7 @@ set(SRC_FILES
     drivers/BaseController.cpp
     drivers/Dualshock3Controller.cpp
     drivers/GenericHIDController.cpp
+    drivers/NetworkController.cpp
     drivers/SteamController2026.cpp
     drivers/SwitchController.cpp
     drivers/WiiController.cpp
@@ -135,6 +136,7 @@ set(HEADER_FILES
     drivers/BaseController.h
     drivers/Dualshock3Controller.h
     drivers/GenericHIDController.h
+    drivers/NetworkController.h
     drivers/SteamController2026.h
     drivers/SwitchController.h
     drivers/WiiController.h

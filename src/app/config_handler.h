@@ -78,6 +78,13 @@ namespace syscon::config
         std::vector<ControllerVidPid> discovery_vidpid;
         bool auto_add_controller{true};
         VirtualPadMode mode{VirtualPadMode::HIDDBG};
+
+        // Network controller driven over UDP, for scripted input during testing. Off by default:
+        // it opens a listening socket that anyone on the LAN can push button presses into, and
+        // it costs a bsd:u session plus ~12 KiB of transfer memory when on. See
+        // src/app/network_module.h and tools/networkpad.py.
+        bool network_controller{false};
+        uint16_t network_controller_port{56789};
     };
 
     int Initialize(std::unique_ptr<IFileManager> &&fileManager);

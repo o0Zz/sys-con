@@ -7,7 +7,10 @@ namespace syscon::controllers
 {
     bool IsAtControllerLimit();
 
-    Result Insert(std::unique_ptr<controllerlib::IController> &&controllerPtr);
+    // removable=false keeps RemoveAllNonPlugged() away from the handler, for a controller that
+    // did not come from USB and so has no usbHs interface to be found among the plugged ones.
+    // See SwitchVirtualGamepadHandler::SetRemovable.
+    Result Insert(std::unique_ptr<controllerlib::IController> &&controllerPtr, bool removable = true);
     void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged);
 
     void SetPollingParameters(int32_t _polling_timeout_ms, s8 _thread_priority);

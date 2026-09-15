@@ -46,6 +46,7 @@ Reboot the Nintendo Switch.
 - [x] Configurable deadzone
 - [x] Configurable polling frequency
 - [x] Configurable controller color using #RGBA
+- [x] Network controller over UDP, for scripted input during testing (off by default)
 - [ ] Rumble
 - [ ] Motion controls
 - [ ] HID keyboard / mouse support
@@ -248,6 +249,43 @@ simulate_A=L+R
 simulate_rstick_click=ZL
 ```
 This configuration allows you to trigger specific buttons using combinations of other buttons, offering more flexibility in custom mappings.
+
+## Network controller (for testing)
+sys-con can present a controller that is driven from a PC over the network instead of by
+hardware, so input can be scripted without anything plugged in. It is **disabled by default**.
+
+Edit `/config/sys-con/config.ini`:
+
+```
+[global]
+network_controller=1
+network_controller_port=26780
+```
+
+Reboot the Nintendo Switch, then from a PC on the same network:
+
+```bash
+python tools/networkpad.py --host <switch-ip> tap A
+python tools/networkpad.py --host <switch-ip> stick left 0 1 --hold 1
+python tools/networkpad.py --host <switch-ip> buttons      # list the button names
+```
+
+The pad appears on the console when the first packet arrives, and holds whatever state it was
+last sent — so a button stays pressed until something releases it. `tools/networkpad.py` is also
+importable if you would rather script it:
+
+```python
+from networkpad import NetworkPad
+with NetworkPad("192.168.1.42") as pad:
+    pad.tap("A")
+    pad.stick("left", 0.0, 1.0, hold=0.5)
+```
+
+Its button mapping lives in the `[network]` profile in `config.ini` and can be remapped like any
+other controller.
+
+> **This opens a UDP port that anyone on your network can send button presses to.** There is no
+> authentication. Leave `network_controller=0` unless you are actively testing.
 
 ## Troubleshooting
 For common issues a troubleshooting guide is available: [Troubleshooting](https://github.com/o0Zz/sys-con/blob/master/doc/Troubleshooting.md)

@@ -6,6 +6,7 @@
 #include "controller_handler.h"
 #include "config_handler.h"
 #include "psc_module.h"
+#include "network_module.h"
 #include "version.h"
 #include "SwitchHDLHandler.h"
 #include "HidMitm.h"
@@ -96,6 +97,7 @@ namespace syscon
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
         ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
+        ::syscon::networkpad::Initialize(globalConfig);
 
         ::syscon::logger::LogDebug("Initializing power supply managment ...");
         ::syscon::psc::Initialize();
@@ -109,6 +111,7 @@ namespace syscon
         ::syscon::psc::Exit();
         ::syscon::usb::Exit();
         ::syscon::controllers::Exit();
+        ::syscon::networkpad::Exit();
 
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
             ::syscon::hid::mitm::Finalize();

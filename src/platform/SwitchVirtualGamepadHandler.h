@@ -26,6 +26,7 @@ protected:
     alignas(0x1000) u8 thread_stack[0x2000];
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
+    bool m_removable = true; // see SetRemovable()
 
     // Fills out the HDL state with the specified button data and passes it to HID
     virtual bool IsControllerAttached(uint16_t input_idx) = 0;
@@ -60,4 +61,7 @@ public:
 
     // Get the raw controller pointer
     inline controllerlib::IController *GetController() { return m_controller.get(); }
+
+    inline void SetRemovable(bool removable) { m_removable = removable; }
+    inline bool IsRemovable() const { return m_removable; }
 };

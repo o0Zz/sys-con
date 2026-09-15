@@ -31,15 +31,17 @@ and becomes a fourth submodule, exactly as HIDDataInterpreter did.
                    ┌─────────────────────────────────────────────┐
       src/app/     │  main · usb_module · controller_handler     │  program body, discovery
                    │  config_handler · logger · psc_module       │  config, logging, sleep/wake
+                   │  network_module                             │  the network pad (opt-in)
                    └───────────────┬─────────────────────────────┘
                                    │ IController, ILogger, IFileManager
                    ┌───────────────┴─────────────────────────────┐
-src/controllerlib/ │  BaseController  +  9 drivers (drivers/)    │  standalone library.
+src/controllerlib/ │  BaseController  +  10 drivers (drivers/)   │  standalone library.
                    │  IUSBDevice · IUSBInterface · IUSBEndpoint  │  No libnx, no ams, no sys-con.
                    └───────────────┬─────────────────────────────┘
                                    │ implemented by
                    ┌───────────────┴─────────────────────────────┐
    src/platform/   │  SwitchUSBDevice/Interface/Endpoint         │  libnx, both flavours
+                   │  UdpDevice · UdpInterface · UdpEndpoint     │  a socket, shaped like USB
                    │  SwitchVirtualGamepadHandler                │  the polling thread
                    │  SwitchHDLHandler · SwitchMITMHandler       │  both handlers, both flavours
                    ├─────────────────────────────────────────────┤
@@ -266,9 +268,42 @@ What is and is not covered:
 - **Covered:** every driver's `ParseData`, the normalization pipeline, deadzone/factor,
   config parsing (against the *real shipped* `src/app/config.ini`), and the
   INI line reader.
-- **Not covered:** `usb_module`, `controller_handler`, `psc_module` and all of
+- **Not covered:** `usb_module`, `controller_handler`, `psc_module`, `network_module` and all of
   `src/platform/` — they pull in libnx and are only compiled by the device build. Changes
   there can only be verified by building the NSP and testing on hardware.
 
 Test doubles live in `tests/mocks/`: `MockDevice`/`MockUSBInterface`/`MockUSBEndpoint` for
 the USB interfaces, `MockLogger`, and `MemoryFileManager` for an in-memory `IFileManager`.
+
+---
+
+## The network controller (UDP)
+
+Turned on with `network_controller=1` in `[global]`, off otherwise. It exists so that input can
+be scripted from a PC — see [tools/networkpad.py](../tools/networkpad.py) — without a controller
+plugged in, which is the only way to test anything below `src/controllerlib/` automatically.
+
+It is **not** a special case in the pipeline. It is a UDP socket wearing the `IUSBDevice` /
+`IUSBInterface` / `IUSBEndpoint` interfaces (`src/platform/UdpDevice.h`), feeding an
+ordinary `BaseController` subclass (`src/controllerlib/drivers/NetworkController.h`) that
+decodes a 20-byte packet. So it goes through the same `ReadNextBuffer` → `ParseData` →
+`MapRawInputToNormalized` → handler path as a real pad, and `usb_module`, `controller_handler`
+and both virtual-pad handlers need to know nothing about it.
+
+Its pin numbers are the identity — bit N of the packet is pin N, and N is a `GamepadButton`
+value — because nothing physical dictates them. The shipped `[network]` profile writes that
+mapping out in full, and `tests/app/test_network_profile.cpp` checks the profile and the decoder
+still agree, against the real `config.ini`.
+
+Three things about it are easy to get wrong:
+
+- **The socket is UDP-only on purpose.** `socketInitializeDefault()` asks bsd for ~2.2 MiB of
+  transfer memory and `tmemCreate` takes it from the process heap, which is 512 KiB in total —
+  so it does not merely waste memory, it fails. Zeroing the TCP buffers and setting
+  `sb_efficiency = 1` brings it to 12 KiB. Do not "fix" a socket problem by enlarging this.
+- **The pad opts out of `RemoveAllNonPlugged`** (`SwitchVirtualGamepadHandler::SetRemovable`).
+  That function decides "unplugged" by looking for usbHs interface IDs, which this pad has
+  none of, so it would otherwise be destroyed the first time a real device was plugged in.
+- **Sleep destroys it and nothing re-creates it.** Real controllers come back because
+  re-acquiring them raises a USB event; this one has no such event, so `psc_module` calls
+  `networkpad::OnWake()` explicitly.

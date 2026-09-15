@@ -22,12 +22,14 @@ set(TEST_FILES
     core/test_read_next_buffer.cpp
     core/test_status.cpp
     drivers/test_dualshock3.cpp
+    drivers/test_network_controller.cpp
     drivers/test_report_bounds.cpp
     drivers/test_steam2026.cpp
     drivers/test_switch.cpp
     drivers/test_wii.cpp
     drivers/test_xboxone.cpp
     app/test_config_store.cpp
+    app/test_network_profile.cpp
     app/test_ini_reader.cpp
 )
 
