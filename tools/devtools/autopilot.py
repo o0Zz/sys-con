@@ -94,10 +94,11 @@ class Autopilot:
                     time.sleep(1.0)
         raise Unreachable("%s %s: %s" % (method, url, last))
 
-    def _json(self, method, path, query=None, body=None, **kw):
+    def _json(self, method, path, query=None, body=None, content_type=None, **kw):
+        if content_type is None and body is not None:
+            content_type = "application/json"
         _, raw = self._request(method, path, query=query, body=body,
-                               content_type="application/json" if body else None,
-                               **kw)
+                               content_type=content_type, **kw)
         if not raw:
             return {}
         try:

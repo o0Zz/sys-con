@@ -52,7 +52,7 @@ All configuration is environment variables:
 
 | Variable | Default |
 |---|---|
-| `SYSCON_AUTOPILOT_URL` | `http://192.168.10.238:4150` |
+| `SYSCON_AUTOPILOT_URL` | `http://192.168.10.253:4150` |
 | `SYSCON_AUTOPILOT_TOKEN` | *(none)* |
 | `SYSCON_AUTOPILOT_USER` / `_PASS` | *(none; used for HTTP Basic)* |
 | `SYSCON_MSYS2_BASH` | `C:\msys64\usr\bin\bash.exe` |

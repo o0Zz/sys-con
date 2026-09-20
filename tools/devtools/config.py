@@ -8,7 +8,7 @@ import os
 
 # --- connection --------------------------------------------------------------
 
-DEFAULT_URL = "http://192.168.10.238:4150"
+DEFAULT_URL = "http://192.168.10.253:4150"
 
 
 class Config:
@@ -20,9 +20,11 @@ class Config:
         # devkitPro lives inside MSYS2 on this machine and `make` is not on the
         # Git Bash PATH, so the device build has to be launched through it.
         self.msys2_bash = os.environ.get(
-            "SYSCON_MSYS2_BASH", r"C:\msys64\usr\bin\bash.exe")
+            "SYSCON_MSYS2_BASH", r"C:\msys64\usr\bin\bash.exe"
+        )
         self.devkitpro_win = os.environ.get(
-            "SYSCON_DEVKITPRO_WIN", r"C:\msys64\opt\devkitpro")
+            "SYSCON_DEVKITPRO_WIN", r"C:\msys64\opt\devkitpro"
+        )
 
 
 # --- console-side paths ------------------------------------------------------
@@ -60,9 +62,9 @@ HTTP_ATTEMPTS = 3
 CTEST = 180
 BUILD = 300
 
-STOP_SETTLE = 5      # stop -> /process reports running=false
-START_SETTLE = 10    # start -> /process reports running=true
-REBOOT_WAIT = 180    # fatal screen -> auto-reboot -> /status answers again
+STOP_SETTLE = 5  # stop -> /process reports running=false
+START_SETTLE = 10  # start -> /process reports running=true
+REBOOT_WAIT = 180  # fatal screen -> auto-reboot -> /status answers again
 REBOOT_POLL = 5
 
 SOAK_DEFAULT = 120

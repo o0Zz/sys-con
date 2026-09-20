@@ -15,8 +15,14 @@ import argparse
 import datetime
 import json
 import os
+import re
 import sys
 import traceback
+
+# `python tools/devtools` puts this directory on sys.path; `python -m devtools`
+# puts its parent there instead. Add it explicitly so the sibling imports below
+# resolve either way.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import autopilot
 import build as build_mod
@@ -122,15 +128,17 @@ def cmd_setup_console(cfg, args):
             f.write(text)
         actions.append({"backed_up": backup})
 
-    if "fatal_auto_reboot_interval" in text:
-        actions.append({"fatal_auto_reboot_interval": "already present, left alone"})
+    # Atmosphere ships this key commented out, so a substring test matches the
+    # template line and skips the write on every fresh console.
+    if re.search(r"^\s*fatal_auto_reboot_interval\s*=", text, re.M):
+        actions.append({"fatal_auto_reboot_interval": "already set, left alone"})
     else:
-        if "[atmosphere]" in text:
-            text = text.replace(
-                "[atmosphere]",
-                "[atmosphere]\nfatal_auto_reboot_interval = u64!0x2710", 1)
+        setting = "fatal_auto_reboot_interval = u64!0x2710"
+        if re.search(r"^\s*\[atmosphere\]\s*$", text, re.M):
+            text = re.sub(r"^(\s*\[atmosphere\]\s*)$", lambda m: m.group(1) + "\n" + setting,
+                          text, count=1, flags=re.M)
         else:
-            text += "\n[atmosphere]\nfatal_auto_reboot_interval = u64!0x2710\n"
+            text += "\n[atmosphere]\n" + setting + "\n"
         api.write_file(config.SYSTEM_SETTINGS_PATH, text.encode(), tid,
                        allow_system_settings=True)
         actions.append({"fatal_auto_reboot_interval": "set to 10000 ms"})
@@ -143,6 +151,41 @@ def cmd_setup_console(cfg, args):
         actions.append({"boot2_flag": "removed"})
     else:
         actions.append({"boot2_flag": "already absent"})
+
+    # 3. scripted input needs sys-con's UDP pad
+    try:
+        cfg_text = api.read_file(config.CONFIG_PATH).decode("utf-8", "replace")
+    except autopilot.ApiError:
+        actions.append({"network_controller": "config.ini not found"})
+        return {"actions": actions}, 0
+
+    if re.search(r"^\s*network_controller\s*=\s*1\s*$", cfg_text, re.M):
+        actions.append({"network_controller": "already enabled"})
+    else:
+        backup = os.path.join(repo.CONSOLE_BACKUP_DIR,
+                              "config.ini.%s" % now().replace(":", ""))
+        with open(backup, "w", encoding="utf-8") as f:
+            f.write(cfg_text)
+        actions.append({"backed_up": backup})
+
+        patched, n = re.subn(r"^(\s*network_controller\s*=\s*)0\s*$",
+                             lambda m: m.group(1) + "1", cfg_text, count=1,
+                             flags=re.M)
+        how = "enabled"
+        if not n:
+            # A config.ini predating the feature has no key to flip.
+            patched, n = re.subn(
+                r"^(\s*\[global\]\s*)$",
+                lambda m: m.group(1) + "\nnetwork_controller=1\n"
+                          "network_controller_port=%d" % config.NETWORK_PAD_PORT,
+                cfg_text, count=1, flags=re.M)
+            how = "added to [global]"
+        if n:
+            api.write_file(config.CONFIG_PATH, patched.encode(), tid,
+                           allow_config=True)
+            actions.append({"network_controller": how})
+        else:
+            actions.append({"network_controller": "no [global] section; left alone"})
 
     return {"actions": actions}, 0
 
