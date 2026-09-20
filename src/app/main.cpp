@@ -19,6 +19,8 @@ namespace syscon
         // object on RunApp's stack and is shared by both flavours.
         alignas(0x1000) u8 g_hdls_buffer[0x8000]; // 32 KiB
 
+        bool g_hiddbg_initialized = false;
+
         // libnx's R_ABORT_UNLESS is a macro private to its runtime file, and stratosphere's
         // must not be pulled into this shared file, so use a small helper. diagAbortWithResult
         // is libnx and available in both builds.
@@ -53,7 +55,6 @@ namespace syscon
         AbortStep(setsysGetFirmwareVersion(&fw), 5);
         hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
 
-        AbortStep(hiddbgInitialize(), 1); // opened here; the HDLS work buffer is attached later by RunApp when mode=hiddbg
         AbortStep(usbHsInitialize(), 2);
         AbortStep(pscmInitialize(), 3);
     }
@@ -62,7 +63,8 @@ namespace syscon
     {
         pscmExit();
         usbHsExit();
-        hiddbgExit();
+        if (g_hiddbg_initialized)
+            hiddbgExit();
     }
 
     void RunApp(FileManagerFactory makeFileManager, BannerFn logExtraBanner)
@@ -100,6 +102,13 @@ namespace syscon
         else
         {
             ::syscon::logger::LogDebug("Initializing hiddbg HDLS (mode=hiddbg) ...");
+
+            // Opened here rather than in InitializeModules: the console has a single HDLS
+            // session, and a MITM-mode run that merely holds a hid:dbg session takes it
+            // away from whatever else is driving a virtual pad.
+            AbortStep(hiddbgInitialize(), 1);
+            g_hiddbg_initialized = true;
+
             if (hosversionAtLeast(7, 0, 0))
             {
                 AbortUnless(hiddbgAttachHdlsWorkBuffer(&::SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));

@@ -22,7 +22,7 @@ namespace syscon
     using BannerFn = void (*)();
 
     // Shared bring-up, called from each flavour's system init (where SM is already up).
-    void InitializeModules(); // hiddbg, usbHs, pscm
+    void InitializeModules(); // usbHs, pscm
     void FinalizeModules();
 
     // The application body: config -> controllers -> mode -> USB -> PSC loop -> teardown.

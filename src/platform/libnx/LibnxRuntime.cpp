@@ -41,10 +41,11 @@ extern "C"
     {
         R_ABORT_UNLESS(smInitialize());
 
-        syscon::InitializeModules(); // hiddbg, usbHs, pscm, pmdmnt, firmware version
+        syscon::InitializeModules(); // usbHs, pscm, firmware version
         R_ABORT_UNLESS(fsInitialize());
 
-        smExit();
+        // sm stays open on purpose: RunApp opens hid:dbg only once it has read the config
+        // and knows the run is in hiddbg mode, which is long after this point.
 
         R_ABORT_UNLESS(fsdevMountSdmc());
     }

@@ -40,6 +40,13 @@ namespace syscon::hid::mitm
         constexpr u64 SystemProgramIdStart = 0x0100000000000000ul;
         constexpr u64 SystemProgramIdEnd = 0x01000000000007FFul;
 
+        // Everything Nintendo signs - system modules, applets, applications - lives under
+        // 0x01. A program id outside it is a homebrew sysmodule (sys-con itself is 0x69...,
+        // sys-ftpd and the overlay loader 0x42...): none of them shows a controller, and
+        // handing one a fake HID shared memory has taken the console down.
+        constexpr u64 NintendoProgramIdStart = 0x0100000000000000ul;
+        constexpr u64 NintendoProgramIdEnd = 0x01FFFFFFFFFFFFFFul;
+
         constexpr size_t MaxHandles = 0x40; // port + query + sessions/sub-sessions
         constexpr int ThreadPriority = 0x20;
         constexpr int ThreadCpuId = 3;
@@ -54,20 +61,18 @@ namespace syscon::hid::mitm
             return program_id >= SystemProgramIdStart && program_id <= SystemProgramIdEnd;
         }
 
-        // Port of HidMitmService::ShouldMitm (src/platform/ams/HidMitmService.cpp:54).
+        bool IsHomebrewSysmoduleProgramId(u64 program_id)
+        {
+            return program_id < NintendoProgramIdStart || program_id > NintendoProgramIdEnd;
+        }
+
+        // Port of HidMitmService::ShouldMitm (src/platform/ams/HidMitmService.cpp).
         bool ShouldMitm(const SysconMitmProcessInfo &info)
         {
-            static const u64 boot_pid_list[] = {
-                0x420000000000000Eul, // sys-ftpd - ignore at boot to avoid an early system crash
-            };
-
-            for (u64 boot_pid : boot_pid_list)
+            if (IsHomebrewSysmoduleProgramId(info.program_id))
             {
-                if (info.program_id == boot_pid)
-                {
-                    ::syscon::logger::LogDebug("HidMitm ShouldMitm: 0x%016lX (Boot) ? (no)", info.program_id);
-                    return false;
-                }
+                ::syscon::logger::LogDebug("HidMitm ShouldMitm: 0x%016lX (Sysmodule) ? (no)", info.program_id);
+                return false;
             }
 
             if (IsSystemProgramId(info.program_id))
@@ -85,6 +90,15 @@ namespace syscon::hid::mitm
         const CmifInHeader *GetInHeader(const HipcParsedRequest &r)
         {
             return static_cast<const CmifInHeader *>(cmifGetAlignedDataStart(r.data.data_words, armGetTls()));
+        }
+
+        // Diagnostic only: a domain request carries a CmifDomainInHeader before the
+        // CmifInHeader, so the raw words say unambiguously which layout the client used.
+        struct Session;
+        void LogRawRequestImpl(const char *what, u64 program_id, u32 type, const u32 *raw)
+        {
+            ::syscon::logger::LogDebug("HidMitm: %s type=%u raw=%08X %08X %08X %08X %08X %08X (program 0x%016lX)",
+                                       what, type, raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], program_id);
         }
 
         // Lay out a CMIF reply in TLS: aligned CmifOutHeader (result 0) + out_data + handles.
@@ -132,6 +146,7 @@ namespace syscon::hid::mitm
 
         /* -------- session table -------- */
 
+
         enum class SessionKind
         {
             Hid,
@@ -161,7 +176,7 @@ namespace syscon::hid::mitm
             bool HookCreateAppletResource(Session &s, const CmifInHeader *in);
             bool HookGetSharedMemoryHandle(Session &s);
             const Service *ForwardServiceFor(const Session &s);
-            void AddSession(const Session &s);
+            bool AddSession(const Session &s);
             void CloseSessionAt(s32 idx);
 
             Handle m_port = INVALID_HANDLE;
@@ -175,16 +190,17 @@ namespace syscon::hid::mitm
             bool m_stop = false;
         };
 
-        void Server::AddSession(const Session &s)
+        bool Server::AddSession(const Session &s)
         {
             if (m_handles.size() >= MaxHandles)
             {
                 ::syscon::logger::LogError("HidMitm: session table full (%zu), dropping session", m_handles.size());
                 svcCloseHandle(s.handle);
-                return;
+                return false;
             }
             m_handles.push_back(s.handle);
             m_sessions.push_back(s);
+            return true;
         }
 
         void Server::CloseSessionAt(s32 idx)
@@ -195,6 +211,12 @@ namespace syscon::hid::mitm
             svcCloseHandle(s.handle);
             m_handles.erase(m_handles.begin() + idx);
             m_sessions.erase(m_sessions.begin() + (idx - 2));
+        }
+
+        void LogRawRequest(const char *what, const Session &s, const HipcParsedRequest &r)
+        {
+            const u32 *raw = static_cast<const u32 *>(cmifGetAlignedDataStart(r.data.data_words, armGetTls()));
+            LogRawRequestImpl(what, s.info.program_id, r.meta.type, raw);
         }
 
         const Service *Server::ForwardServiceFor(const Session &s)
@@ -226,7 +248,7 @@ namespace syscon::hid::mitm
                 return;
             }
 
-            ::syscon::logger::LogDebug("HidMitm: session accepted for program 0x%016lX", s.info.program_id);
+            ::syscon::logger::LogInfo("HidMitm: session accepted for program 0x%016lX", s.info.program_id);
             AddSession(s);
         }
 
@@ -306,6 +328,8 @@ namespace syscon::hid::mitm
             Service forward = s.forward;
             const u64 program_id = s.info.program_id;
 
+            ::syscon::logger::LogInfo("HidMitm: CreateAppletResource from program 0x%016lX (aruid=0x%lX) ...", program_id, aruid);
+
             std::shared_ptr<HidSharedMemoryEntry> entry =
                 HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(&forward, aruid, program_id);
             if (!entry)
@@ -327,12 +351,20 @@ namespace syscon::hid::mitm
             Session sub = {};
             sub.handle = srv_h;
             sub.kind = SessionKind::AppletResource;
+            sub.info.program_id = program_id;
             sub.entry = entry;
-            AddSession(sub);
+            if (!AddSession(sub))
+            {
+                // AddSession already closed the server side, so the client end would be a
+                // session nobody answers: fail the command instead of handing it over.
+                svcCloseHandle(cli_h);
+                BuildCmifReplyResult(MAKERESULT(11, 403));
+                return true;
+            }
 
             const Handle move_handles[1] = {cli_h};
             BuildCmifReply(0, 0, nullptr, 1, move_handles);
-            ::syscon::logger::LogDebug("HidMitm: CreateAppletResource hooked (aruid=0x%lX)", aruid);
+            ::syscon::logger::LogInfo("HidMitm: CreateAppletResource hooked for program 0x%016lX (aruid=0x%lX)", program_id, aruid);
             return true;
         }
 
@@ -359,6 +391,7 @@ namespace syscon::hid::mitm
                 case CmifCommandType_RequestWithContext:
                 {
                     const CmifInHeader *in = GetInHeader(r);
+                    LogRawRequest("Request", s, r);
                     if (s.kind == SessionKind::Hid && in->command_id == 0)
                         return HookCreateAppletResource(s, in);
                     if (s.kind == SessionKind::AppletResource && in->command_id == 0)
@@ -367,6 +400,7 @@ namespace syscon::hid::mitm
                 }
 
                 default: // Control / ControlWithContext / anything else -> forward
+                    LogRawRequest("Other", s, r);
                     return ForwardAndReply(r, ForwardServiceFor(s));
             }
         }

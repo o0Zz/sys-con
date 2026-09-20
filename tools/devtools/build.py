@@ -81,14 +81,17 @@ def run_build(cfg, jobs=4, clean=False, log_path=None):
     """`make all` through the MSYS2 login shell, which is where devkitPro lives.
 
     ATMOSPHERE=0 is the shipped flavour and the one CI builds, so it is what
-    the loop tests. Note `make clean` also deletes src/app/build/sys-con.elf,
-    which is exactly why archiving happens immediately after a build.
+    the loop tests by default. SYSCON_ATMOSPHERE=1 switches to the
+    libstratosphere flavour, which is the only one with a working HID MITM.
+    Note `make clean` also deletes src/app/build/sys-con.elf, which is exactly
+    why archiving happens immediately after a build.
     """
+    ams = os.environ.get("SYSCON_ATMOSPHERE", "0") == "1"
     root = repo.to_msys_path(repo.ROOT)
     cmd = "cd %s && " % root
     if clean:
         cmd += "make clean && "
-    cmd += "make all ATMOSPHERE=0 ATMOSPHERE_BUILD_ENABLED=0 -j%d" % jobs
+    cmd += "make all ATMOSPHERE=%d ATMOSPHERE_BUILD_ENABLED=%d -j%d" % (ams, ams, jobs)
 
     try:
         p = repo.run_in_msys2(cfg, cmd, timeout=config.BUILD)

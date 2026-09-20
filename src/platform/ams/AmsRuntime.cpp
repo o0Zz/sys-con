@@ -15,13 +15,22 @@
 #include "logger.h"
 #include "AMSFileManager.h"
 
+
 namespace ams
 {
     namespace syscon
     {
         namespace
         {
+            // Also serves libnx through __libnx_alloc below, and the socket driver alone
+            // takes ~148 KiB of it for its transfer memory. Do not grow this past 512 KiB:
+            // it is static storage, so it counts against the memory the kernel reserves for
+            // the process, and pm refuses to launch the module at all (LimitReached) beyond it.
             alignas(0x40) constinit u8 g_heap_memory[512_KB];
+
+            // Backs malloc(); libnx and operator new use the heap above. devkitPro's
+            // libsysbase allocates file descriptors with malloc, so socket() needs this.
+            alignas(0x1000) constinit u8 g_malloc_memory[64_KB];
             constinit lmem::HeapHandle g_heap_handle;
             constinit bool g_heap_initialized;
             constinit os::SdkMutex g_heap_init_mutex;
@@ -66,13 +75,17 @@ namespace ams
     {
         void InitializeSystemModuleBeforeConstructors(void)
         {
+            // libstratosphere replaces newlib's malloc with one that returns nullptr until a
+            // region is registered here, so without this every malloc in the process fails.
+            init::InitializeAllocator(ams::syscon::g_malloc_memory, sizeof(ams::syscon::g_malloc_memory));
+
             R_ABORT_UNLESS(sm::Initialize());
 
             fs::InitializeForSystem();
             fs::SetAllocator(ams::syscon::Allocate, ams::syscon::Deallocate);
             fs::SetEnabledAutoAbort(false);
 
-            ::syscon::InitializeModules(); // hiddbg, usbHs, pscm
+            ::syscon::InitializeModules(); // usbHs, pscm
 
             R_ABORT_UNLESS(fs::MountSdCard("sdmc"));
         }
@@ -112,6 +125,27 @@ namespace ams
         ::syscon::RunApp(&MakeFileManager, &LogAmsBanner);
     }
 } // namespace ams
+
+/*
+    libnx allocates through these rather than newlib (see libnx tmem.c, which the socket
+    driver uses for its transfer memory). libstratosphere only supplies weak versions that
+    abort, because a stratosphere module is expected to name its own heap here - which is
+    what its -Wl,--require-defined,__libnx_alloc flags are about.
+*/
+extern "C" void *__libnx_alloc(size_t size)
+{
+    return ams::syscon::Allocate(size);
+}
+
+extern "C" void *__libnx_aligned_alloc(size_t align, size_t size)
+{
+    return ams::syscon::AllocateWithAlign(size, align);
+}
+
+extern "C" void __libnx_free(void *p)
+{
+    return ams::syscon::Deallocate(p, 0);
+}
 
 void *operator new(size_t size)
 {

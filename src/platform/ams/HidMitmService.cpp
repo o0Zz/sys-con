@@ -26,6 +26,10 @@ namespace ams::syscon::hid::mitm
 
         std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(this->m_forward_service.get(), applet_resource_user_id.GetValue().value, m_client_info.program_id.value);
 
+        // A half-built entry has no usable shared memory handle; failing the command beats
+        // handing the client one that is not there.
+        R_UNLESS(entry != nullptr, sf::ResultNotSupported());
+
         out.SetValue(ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>(entry));
 
         R_SUCCEED();
@@ -53,21 +57,16 @@ namespace ams::syscon::hid::mitm
 
     bool HidMitmService::ShouldMitm(const sm::MitmProcessInfo &client_info)
     {
-        // Ignore this PID at boot to avoid to crash to system immediately
-        u64 boot_pid_list[] = {
-            0x420000000000000E, // sys-ftpd
-            //  0x420000000007e51a, // nx-ovlloader //After wakeup only this one is available we need to hook it
-
-            //  0x010000000000100d, // PhotoViewer / Gallery
-        };
-
-        for (const u64 &boot_pid : boot_pid_list)
+        /*
+            Everything Nintendo signs - system modules, applets, applications - lives under
+            0x01. A program id outside it is a homebrew sysmodule (sys-con itself is 0x69...,
+            sys-ftpd and the overlay loader 0x42...): none of them shows a controller, and
+            handing one a fake HID shared memory has taken the console down.
+        */
+        if (client_info.program_id.value < 0x0100000000000000 || client_info.program_id.value > 0x01FFFFFFFFFFFFFF)
         {
-            if (client_info.program_id.value == boot_pid)
-            {
-                ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (Boot) ? (no)", client_info.program_id.value);
-                return false; // Ignore these PIDs at boot
-            }
+            ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (Sysmodule) ? (no)", client_info.program_id.value);
+            return false;
         }
 
         if (IsSystemProgramId(client_info.program_id))
