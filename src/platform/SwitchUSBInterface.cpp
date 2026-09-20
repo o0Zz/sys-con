@@ -85,8 +85,6 @@ void SwitchUSBInterface::Close()
 
 Status SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, void *buffer, u16 *wLength)
 {
-    SwitchUSBLock usbLock;
-
     ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] ControlTransferInput (bmRequestType=0x%02X, bmRequest=0x%02X, wValue=0x%04X, wIndex=0x%04X, wLength=%d)...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, bmRequestType, bmRequest, wValue, wIndex, *wLength);
 
     if (!(bmRequestType & USB_ENDPOINT_IN))
@@ -96,34 +94,39 @@ Status SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, 
     }
 
     u32 transferredSize = 0;
+    Result rc;
+    bool copied = false;
 
-    if (R_FAILED(usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, *wLength, m_usb_buffer, &transferredSize)))
+    {
+        SwitchUSBLock usbLock;
+
+        rc = usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, *wLength, m_usb_buffer, &transferredSize);
+        if (R_SUCCEEDED(rc) && buffer != NULL && *wLength >= transferredSize)
+        {
+            memcpy(buffer, m_usb_buffer, transferredSize);
+            copied = true;
+        }
+    }
+
+    if (R_FAILED(rc))
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferInput: Failed to read data !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
         return Status::UnknownError;
     }
 
-    if (bmRequestType & USB_ENDPOINT_IN)
+    if (!copied)
     {
-        if (buffer != NULL && *wLength >= transferredSize)
-        {
-            memcpy(buffer, m_usb_buffer, transferredSize);
-            *wLength = transferredSize;
-        }
-        else
-        {
-            ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferInput: Invalid buffer size !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-            return Status::InvalidArgument;
-        }
+        ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferInput: Invalid buffer size !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
+        return Status::InvalidArgument;
     }
+
+    *wLength = transferredSize;
 
     return Status::Success;
 }
 
 Status SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, const void *buffer, u16 wLength)
 {
-    SwitchUSBLock usbLock;
-
     ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] ControlTransferOutput (bmRequestType=0x%02X, bmRequest=0x%02X, wValue=0x%04X, wIndex=0x%04X, wLength=%d)...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, bmRequestType, bmRequest, wValue, wIndex, wLength);
 
     u32 transferredSize = 0;
@@ -134,10 +137,18 @@ Status SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 bmRequest,
         return Status::InvalidArgument;
     }
 
-    if (buffer != NULL && wLength > 0)
-        memcpy(m_usb_buffer, buffer, wLength);
+    Result rc;
 
-    if (R_FAILED(usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, wLength, m_usb_buffer, &transferredSize)))
+    {
+        SwitchUSBLock usbLock;
+
+        if (buffer != NULL && wLength > 0)
+            memcpy(m_usb_buffer, buffer, wLength);
+
+        rc = usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, wLength, m_usb_buffer, &transferredSize);
+    }
+
+    if (R_FAILED(rc))
     {
         ::syscon::logger::LogError("SwitchUSBInterface[%04x-%04x] ControlTransferOutput: Failed to send data !", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
         return Status::UnknownError;
@@ -159,10 +170,9 @@ IUSBEndpoint *SwitchUSBInterface::GetEndpoint(IUSBEndpoint::Direction direction,
 
 Status SwitchUSBInterface::Reset()
 {
-    SwitchUSBLock usbLock;
-
     ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Reset...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
 
+    SwitchUSBLock usbLock;
     usbHsIfResetDevice(&m_session);
 
     return Status::Success;

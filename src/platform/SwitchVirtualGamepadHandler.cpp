@@ -89,9 +89,7 @@ void SwitchVirtualGamepadHandler::OnRun()
             Sleep for 100ms second before retrying, provide time to other threads to detect the controller disconnection
             Otherwise, the thread will be too busy and will not let the other threads to run and the nintendo switch will freeze
             */
-
-            //::syscon::logger::LogError("SwitchVirtualGamepadHandler UpdateInputOutput failed with error: 0x%08X !", rc);
-            svcSleepThread(100000);
+            svcSleepThread(100000000);
         }
 
     } while (m_ThreadIsRunning);

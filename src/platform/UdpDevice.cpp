@@ -199,23 +199,6 @@ namespace syscon
 
         syscon::logger::LogInfo("NetworkPad: listening on UDP port %d", m_port);
 
-        // TEMPORARY DIAGNOSTIC: does this bsd session have a LAN address, and
-        // did bind() land where we think it did?
-        {
-            struct sockaddr_in bound;
-            socklen_t blen = sizeof(bound);
-            memset(&bound, 0, sizeof(bound));
-            if (getsockname(m_socket, reinterpret_cast<struct sockaddr *>(&bound), &blen) == 0)
-                syscon::logger::LogError("NetworkPad: bound to %08X:%d",
-                                         static_cast<unsigned>(ntohl(bound.sin_addr.s_addr)),
-                                         static_cast<int>(ntohs(bound.sin_port)));
-            else
-                syscon::logger::LogError("NetworkPad: getsockname failed (errno %d)", errno);
-
-            const long host_id = gethostid();
-            syscon::logger::LogError("NetworkPad: gethostid = %08X", static_cast<unsigned>(host_id));
-        }
-
         return Status::Success;
     }
 
@@ -255,19 +238,12 @@ namespace syscon
             pfd.events = POLLIN;
             pfd.revents = 0;
 
-            const int timeout_ms = static_cast<int>((aTimeoutUs + 999) / 1000);
-            const int ready = poll(&pfd, 1, timeout_ms);
-            if (ready <= 0)
-            {
-                // TEMPORARY DIAGNOSTIC: fall through to recv() instead of
-                // trusting poll(), to find out whether poll is the reason no
-                // datagram is ever seen. The socket is O_NONBLOCK, so recv
-                // returns EAGAIN immediately when there is nothing queued.
-                if ((m_poll_timeouts++ % 500) == 0)
-                    syscon::logger::LogError("NetworkPad: poll timeout #%d (fd %d, %d ms, revents 0x%x)",
-                                             static_cast<int>(m_poll_timeouts),
-                                             m_socket, timeout_ms, pfd.revents);
-            }
+            /*
+                poll() only paces this read: its result is advisory and we fall through either
+                way. The socket is O_NONBLOCK, so the recv below returns EAGAIN immediately when
+                nothing is queued and is the authoritative answer.
+            */
+            poll(&pfd, 1, static_cast<int>((aTimeoutUs + 999) / 1000));
         }
 
         const ssize_t received = recv(m_socket, outBuffer, *bufferSizeInOut, 0);
@@ -282,13 +258,6 @@ namespace syscon
 
             return Status::ReadFailed;
         }
-
-        // TEMPORARY DIAGNOSTIC: is anything arriving at all? Sparse, because
-        // this runs on the polling thread every few ms.
-        if ((m_received_datagrams++ % 50) == 0)
-            syscon::logger::LogError("NetworkPad: RX #%d, %d bytes",
-                                     static_cast<int>(m_received_datagrams),
-                                     static_cast<int>(received));
 
         *bufferSizeInOut = static_cast<size_t>(received);
         return Status::Success;

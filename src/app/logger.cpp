@@ -24,12 +24,43 @@ namespace syscon::logger
         // Mutex to protect log writing
         static std::mutex sLogMutex;
 
-        static char sLogBuffer[1024];
         static std::filesystem::path sLogPath;
         static LogLevel sLogLevel = LogLevel::Trace;
         static std::unique_ptr<IFileManager> sFileManager;
 
+        constexpr size_t LogLineMax = 512;
+
         const char kLogLevelStr[LogLevelCount] = {'T', 'D', 'P', 'I', 'W', 'E'};
+
+        size_t FormatHeader(char *line, size_t lineSize, LogLevel lvl)
+        {
+            uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+            int written = std::snprintf(line, lineSize, "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ",
+                                        kLogLevelStr[static_cast<size_t>(lvl)],
+                                        (current_time_ms / 3600000) % 24,
+                                        (current_time_ms / 60000) % 60,
+                                        (current_time_ms / 1000) % 60,
+                                        current_time_ms % 1000,
+                                        (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+
+            return written < 0 ? 0 : std::min((size_t)written, lineSize - 1);
+        }
+
+        size_t AppendFormatted(char *line, size_t lineSize, size_t offset, const char *fmt, ::std::va_list vl)
+        {
+            if (offset >= lineSize)
+                return offset;
+
+            const size_t space = lineSize - offset;
+            int written = std::vsnprintf(&line[offset], space, fmt, vl);
+            if (written < 0)
+                return offset;
+
+            /* vsnprintf returns the length it would have written, not what it wrote: clamping to
+               the former would append uninitialised stack bytes to the line. */
+            return offset + std::min((size_t)written, space - 1);
+        }
     } // namespace
 
     void Initialize(const std::string &log, std::unique_ptr<IFileManager> &&file)
@@ -52,17 +83,19 @@ namespace syscon::logger
         sFileManager.reset();
     }
 
-    void LogWriteToFile(const char *logBuffer)
+    /* The file is reopened per line on purpose: holding a write handle on log.txt for the process
+       lifetime blocks every other reader of it -- the console-side tooling that streams the log,
+       and anything pulling it off the SD card while sys-con runs. */
+    void LogWriteToFile(const char *logBuffer, size_t length)
     {
+        std::lock_guard<std::mutex> printLock(sLogMutex);
+
         if (sFileManager == nullptr)
             return;
 
         auto file = sFileManager->open(sLogPath, (OpenFlags)(OpenFlags_Write | OpenFlags_Append));
         if (file && file->is_open())
-        {
-            file->write(logBuffer, strlen(logBuffer));
-            file->write("\n", 1);
-        }
+            file->write(logBuffer, length);
     }
 
     void SetLogLevel(LogLevel level)
@@ -76,14 +109,13 @@ namespace syscon::logger
         if (lvl < sLogLevel)
             return; // Don't log if the level is lower than the current log level.
 
-        std::lock_guard<std::mutex> printLock(sLogMutex);
+        char line[LogLineMax];
 
-        uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", kLogLevelStr[static_cast<size_t>(lvl)], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
-        std::vsnprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), fmt, vl);
+        size_t length = FormatHeader(line, sizeof(line) - 1, lvl);
+        length = AppendFormatted(line, sizeof(line) - 1, length, fmt, vl);
+        line[length++] = '\n';
 
-        /* Write in the file. */
-        LogWriteToFile(sLogBuffer);
+        LogWriteToFile(line, length);
     }
 
     void LogBuffer(LogLevel lvl, const uint8_t *buffer, size_t size)
@@ -91,25 +123,23 @@ namespace syscon::logger
         if (lvl < sLogLevel)
             return; // Don't log if the level is lower than the current log level.
 
-        std::lock_guard<std::mutex> printLock(sLogMutex);
+        char line[LogLineMax];
 
-        uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        std::snprintf(sLogBuffer, sizeof(sLogBuffer), "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ", kLogLevelStr[static_cast<size_t>(lvl)], (current_time_ms / 3600000) % 24, (current_time_ms / 60000) % 60, (current_time_ms / 1000) % 60, current_time_ms % 1000, (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        size_t start_offset = FormatHeader(line, sizeof(line) - 1, lvl);
 
-        size_t start_offset = strlen(sLogBuffer);
+        const size_t space = sizeof(line) - 1 - start_offset;
+        int written = std::snprintf(&line[start_offset], space, "Buffer (%zu): \n", size);
+        if (written > 0)
+            LogWriteToFile(line, start_offset + std::min((size_t)written, space - 1));
 
-        std::snprintf(&sLogBuffer[strlen(sLogBuffer)], sizeof(sLogBuffer) - strlen(sLogBuffer), "Buffer (%zu): ", size);
-
-        LogWriteToFile(sLogBuffer);
-
-        /* Format log */
         for (size_t i = 0; i < size; i += 16)
         {
+            size_t length = start_offset;
             for (size_t k = 0; k < std::min((size_t)16, size - i); k++)
-                snprintf(&sLogBuffer[start_offset + (k * 3)], sizeof(sLogBuffer) - (start_offset + (k * 3)), "%02X ", buffer[i + k]);
+                length += std::snprintf(&line[length], sizeof(line) - 1 - length, "%02X ", buffer[i + k]);
 
-            /* Write in the file. */
-            LogWriteToFile(sLogBuffer);
+            line[length++] = '\n';
+            LogWriteToFile(line, length);
         }
     }
 
