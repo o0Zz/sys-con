@@ -35,7 +35,7 @@ and becomes a fourth submodule, exactly as HIDDataInterpreter did.
                    └───────────────┬─────────────────────────────┘
                                    │ IController, ILogger, IFileManager
                    ┌───────────────┴─────────────────────────────┐
-src/controllerlib/ │  BaseController  +  10 drivers (drivers/)   │  standalone library.
+src/controllerlib/ │  BaseController  +  11 drivers (drivers/)   │  standalone library.
                    │  IUSBDevice · IUSBInterface · IUSBEndpoint  │  No libnx, no ams, no sys-con.
                    └───────────────┬─────────────────────────────┘
                                    │ implemented by

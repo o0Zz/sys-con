@@ -153,6 +153,11 @@ namespace syscon::usb
                             syscon::logger::LogInfo("Initializing Wii (Interface count: %d) ...", total_entries);
                             controllers::Insert(std::make_unique<WiiController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
                         }
+                        else if (config.driver == "sinput")
+                        {
+                            syscon::logger::LogInfo("Initializing SInput controller (Interface count: %d) ...", total_entries);
+                            controllers::Insert(std::make_unique<SInputController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
+                        }
                         else if (config.driver == "steam2026")
                         {
                             syscon::logger::LogInfo("Initializing Steam Controller 2026 (Interface count: %d) ...", total_entries);

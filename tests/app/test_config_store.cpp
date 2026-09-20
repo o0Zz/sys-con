@@ -81,3 +81,25 @@ TEST(Configuration, test_load_config_with_profile_wii)
     EXPECT_EQ(config.profile, "wii");
     EXPECT_EQ(config.buttonsPin[GamepadButton::ZL][0], 0);
 }
+
+TEST(Configuration, test_load_config_with_profile_sinput)
+{
+    ControllerConfig config;
+
+    ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x2e8a, 0x10df, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.driver, "sinput");
+    EXPECT_EQ(config.profile, "sinput");
+    EXPECT_EQ(config.buttonsPin[GamepadButton::B][0], 1);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::A][0], 2);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::Y][0], 3);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::X][0], 4);
+
+    // ZL/ZR take the digital bit and the analog trigger, so either kind of device works.
+    EXPECT_EQ(config.buttonsPin[GamepadButton::ZL][0], 9);
+    EXPECT_EQ(config.buttonsAnalog[GamepadButton::ZL].bind, AnalogAxis::Rx);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::ZR][0], 10);
+    EXPECT_EQ(config.buttonsAnalog[GamepadButton::ZR].bind, AnalogAxis::Ry);
+}

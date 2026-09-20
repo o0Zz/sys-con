@@ -156,6 +156,7 @@ In the `/config/sys-con/config.ini`, you need to find your controller (\[VID/PID
  - xboxone
  - dualshock4
  - switch
+ - sinput (SInput HID gamepads, e.g. the HOJA ProGCC in SInput mode)
 
 Typically, if you know your controller is an xboxone controller, just add
 ```
