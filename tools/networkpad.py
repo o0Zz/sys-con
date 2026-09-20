@@ -220,12 +220,21 @@ class NetworkPad:
 
 # -- interactive mode --------------------------------------------------------------------
 
-# A terminal reports key presses but never releases, so a press arms its action for
-# key_hold seconds and the OS auto-repeat refreshes it while the key stays down. The
-# default is longer than a typical auto-repeat delay (~0.5 s on Windows) so that holding a
-# key reads as a hold rather than a stutter; `,` and `.` retune it live, and latching a key
-# with its uppercase covers anything that has to stay down for minutes.
-DEFAULT_KEY_HOLD = 0.6
+# A terminal reports key presses but never releases. Each press is published as a short
+# pulse, and two presses never merge: the second is queued behind a release gap so the
+# console sees two distinct presses instead of one long one -- a long one would trip the
+# console's own menu auto-repeat and move the cursor several cells for a single tap.
+# Holding a key still becomes a real hold, because the OS auto-repeat stream is
+# recognisable: one event, the repeat delay, then a fast steady stream. Only an event that
+# arrives within REPEAT_GAP *and* follows a gap at least REPEAT_DELAY long turns the press
+# into a sustained one; mashing, which has no such delay, stays a run of distinct presses.
+TAP_SECONDS = 0.08
+RELEASE_SECONDS = 0.05
+REPEAT_GAP = 0.2
+REPEAT_DELAY = 0.25
+MAX_QUEUE_SECONDS = 0.5
+MEMORY_SECONDS = 1.2
+DEFAULT_KEY_HOLD = 0.15
 
 BTN = "btn"
 AXIS = "axis"
@@ -273,7 +282,7 @@ HELP = """\
   h ....... HOME  c ........... CAPTURE
 
   SHIFT+letter ... latch that input on or off   space ... release everything
-  , / . .......... shorter / longer key hold    p ....... unplug / replug the pad
+  , / . .......... shorter / longer repeat hold p ....... unplug / replug the pad
   [ / ] .......... stick tilt                   ? ....... this help
   Esc or Ctrl+C .. quit
 """
@@ -315,6 +324,36 @@ def _read_keys():
             termios.tcsetattr(fd, termios.TCSADRAIN, saved)
 
 
+class _Press:
+    """The pulses one key owes the pad, plus what the key's event timing looks like."""
+
+    __slots__ = ("pulses", "last", "gap", "repeating")
+
+    def __init__(self, now):
+        self.pulses = [[now, now + TAP_SECONDS]]
+        self.last = now
+        self.gap = 0.0
+        self.repeating = False
+
+    def sustain(self, now, seconds):
+        if self.pulses:
+            self.pulses[-1][1] = max(self.pulses[-1][1], now + seconds)
+        else:
+            self.pulses.append([now, now + seconds])
+
+    def queue(self, now):
+        start = max(now, self.pulses[-1][1] + RELEASE_SECONDS) if self.pulses else now
+        if start <= now + MAX_QUEUE_SECONDS:
+            self.pulses.append([start, start + TAP_SECONDS])
+
+    def is_down(self, now):
+        self.pulses = [p for p in self.pulses if p[1] > now]
+        return bool(self.pulses) and self.pulses[0][0] <= now
+
+    def is_spent(self, now):
+        return not self.pulses and now - self.last > MEMORY_SECONDS
+
+
 class InteractiveSession:
     """Turns key presses into a pad state that a frame thread keeps publishing."""
 
@@ -330,8 +369,23 @@ class InteractiveSession:
     # -- state -------------------------------------------------------------------------
 
     def _arm(self, action):
+        now = time.monotonic()
         with self._lock:
-            self._armed[action] = time.monotonic() + self.key_hold
+            press = self._armed.get(action)
+            if press is None:
+                self._armed[action] = _Press(now)
+                return
+            gap = now - press.last
+            if gap > REPEAT_GAP:
+                press.repeating = False
+                press.queue(now)
+            elif press.repeating or press.gap >= REPEAT_DELAY:
+                press.repeating = True
+                press.sustain(now, self.key_hold)
+            else:
+                press.queue(now)
+            press.gap = gap
+            press.last = now
 
     def _latch(self, action):
         with self._lock:
@@ -345,8 +399,9 @@ class InteractiveSession:
     def _state(self):
         now = time.monotonic()
         with self._lock:
-            self._armed = {a: d for a, d in self._armed.items() if d > now}
-            active = set(self._armed) | self._latched
+            active = {a for a, p in self._armed.items() if p.is_down(now)}
+            self._armed = {a: p for a, p in self._armed.items() if not p.is_spent(now)}
+            active |= self._latched
         buttons = set()
         sticks = {"left": [0.0, 0.0], "right": [0.0, 0.0]}
         for action in active:
@@ -457,7 +512,7 @@ def main(argv=None):
 
     p_interactive = sub.add_parser("interactive", help="drive the pad from the keyboard")
     p_interactive.add_argument("--key-hold", type=float, default=DEFAULT_KEY_HOLD,
-                               help="seconds a key press stays down between auto-repeats")
+                               help="seconds an auto-repeat event keeps an input down")
     p_interactive.add_argument("--tilt", type=float, default=1.0,
                                help="stick deflection a direction key applies, 0..1")
 
