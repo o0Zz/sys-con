@@ -48,7 +48,6 @@ private:
     ::Service m_appletresource{};
 
     ::SharedMemory m_real_shared_memory{};
-    ::SharedMemory m_fake_shared_memory{};
 };
 
 /* ------------------------------------------------ */
@@ -65,8 +64,8 @@ public:
     // client's shared memory, at a steady rate the console expects from a real pad.
     Result Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r);
 
-    void Publish(HidSharedMemoryEntry &entry);
-    void Clear(HidSharedMemoryEntry &entry);
+    void Publish();
+    void Clear();
 
 private:
     uint8_t m_player_idx;

@@ -26,9 +26,20 @@ namespace ams::syscon::hid::mitm
 
         std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(this->m_forward_service.get(), applet_resource_user_id.GetValue().value, m_client_info.program_id.value);
 
-        // A half-built entry has no usable shared memory handle; failing the command beats
-        // handing the client one that is not there.
-        R_UNLESS(entry != nullptr, sf::ResultNotSupported());
+        /*
+         * No entry means the fake shared memory could not be created - typically
+         * 0x00010801 (LimitReached) once the system memory pool is tight, which is easy to
+         * hit just by opening an applet. Hand the command to the real hid instead of
+         * failing it: libstratosphere replays it on the forward session, so the client gets
+         * a genuine IAppletResource and merely does not see sys-con's virtual pad. Failing
+         * here instead leaves the applet with no HID shared memory at all, which breaks it
+         * and takes the console down with it.
+         */
+        if (entry == nullptr)
+        {
+            ::syscon::logger::LogWarning("HidMitmService::CreateAppletResource: no shared memory entry, forwarding to the real hid (program 0x%016" PRIx64 ")", m_client_info.program_id.value);
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+        }
 
         out.SetValue(ams::sf::CreateSharedObjectEmplaced<IHidMitmAppletResourceInterface, HidMitmAppletResource>(entry));
 

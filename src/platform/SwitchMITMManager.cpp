@@ -11,7 +11,7 @@
 static HidSharedMemoryManager g_HidSharedMemoryManager;
 
 #define MITM_CONFIG_REUSE_SHARED_MEMORY 0 // Set to 1 to reuse the shared memory on maximum
-#define MITM_CONFIG_GC_ENABLED          0 // Set to 1 to enable garbage collection for the shared memory
+#define MITM_CONFIG_GC_ENABLED          1 // Set to 1 to enable garbage collection for the shared memory
 
 static_assert(sizeof(HidSharedMemory) == HID_SHARED_MEMORY_SIZE, "HidSharedMemory size is not good!");
 
@@ -29,6 +29,63 @@ namespace
         return reinterpret_cast<u8 *>(shmem) + offset;
     }
 } // namespace
+
+/*
+    One fake shared memory for every mitm'd client, rather than one each.
+    svcCreateSharedMemory charges 256 KiB against the shared system resource limit - sys-con
+    has no reservation of its own (pool_partition 2, system_resource_size 0) - so a
+    per-client allocation starts failing with 0x00010801 (LimitReached) as soon as the pool
+    is tight, which leaves the client with no HID shared memory and takes the console down.
+    Every client can share one: the contents reflect the same physical controllers plus the
+    pads sys-con injects. Allocating it once at Start() also claims the memory while the
+    pool is still free, instead of mid-session when it is not.
+*/
+static ::SharedMemory g_fake_shared_memory{};
+static bool g_fake_shared_memory_seeded = false;
+
+static Result CreateFakeSharedMemory()
+{
+    if (g_fake_shared_memory.handle != INVALID_HANDLE)
+        return 0;
+
+    Result rc = shmemCreate(&g_fake_shared_memory, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R);
+    if (R_FAILED(rc))
+    {
+        ::syscon::logger::LogError("HidSharedMemory failed to create the shared fake memory: 0x%08X (Mod:%d - Desc:%d)", rc, R_MODULE(rc), R_DESCRIPTION(rc));
+        g_fake_shared_memory = ::SharedMemory{};
+        return rc;
+    }
+
+    rc = shmemMap(&g_fake_shared_memory);
+    if (R_FAILED(rc))
+    {
+        ::syscon::logger::LogError("HidSharedMemory failed to map the shared fake memory: 0x%08X (Mod:%d - Desc:%d)", rc, R_MODULE(rc), R_DESCRIPTION(rc));
+        shmemClose(&g_fake_shared_memory);
+        g_fake_shared_memory = ::SharedMemory{};
+        return rc;
+    }
+
+    ::syscon::logger::LogInfo("HidSharedMemory shared fake memory ready (FakeAddr: %p)", shmemGetAddr(&g_fake_shared_memory));
+    return 0;
+}
+
+static void DestroyFakeSharedMemory()
+{
+    if (g_fake_shared_memory.map_addr != nullptr)
+        shmemUnmap(&g_fake_shared_memory);
+    if (g_fake_shared_memory.handle != INVALID_HANDLE)
+        shmemClose(&g_fake_shared_memory);
+
+    g_fake_shared_memory = ::SharedMemory{};
+    g_fake_shared_memory_seeded = false;
+}
+
+// The npad table of the one shared fake; null until CreateFakeSharedMemory() succeeds.
+static HidNpadSharedMemoryEntry *FakeNpadEntries()
+{
+    HidSharedMemory *fake = static_cast<HidSharedMemory *>(shmemGetAddr(&g_fake_shared_memory));
+    return fake != nullptr ? fake->npad.entries : nullptr;
+}
 
 static void memcpy_64(void *dest, const void *src, size_t n)
 {
@@ -97,18 +154,23 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId
         return;
     }
 
-    shmemCreate(&m_fake_shared_memory, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R); // sizeof(HidSharedMemory)
-    m_status = shmemMap(&m_fake_shared_memory);
+    // Normally already created by Start(); this only has to do anything if that failed.
+    m_status = CreateFakeSharedMemory();
     if (R_FAILED(m_status))
-    {
-        ::syscon::logger::LogError("HidSharedMemoryEntry failed to map fake shared memory (Process id: 0x%016" PRIx64 ")", m_process_id);
         return;
-    }
 
     ::syscon::logger::LogInfo("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", RealAddr: %p, FakeAddr: %p)", m_process_id, GetRealAddr(), GetFakeAddr());
 
-    // Initialize the fake shared memory with the content of the real shared memory
-    memcpy_64(GetFakeAddr(), GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+    /*
+        Seed from the first client only. The shared fake is already live for everyone else,
+        and the mirror thread keeps it current - copying over it again here would wipe the
+        npad slots sys-con has injected for the clients that are already running.
+    */
+    if (!g_fake_shared_memory_seeded)
+    {
+        memcpy_64(GetFakeAddr(), GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+        g_fake_shared_memory_seeded = true;
+    }
 }
 
 static void CloseSharedMemory(::SharedMemory *shared_memory)
@@ -125,7 +187,6 @@ HidSharedMemoryEntry::~HidSharedMemoryEntry()
     ::syscon::logger::LogDebug("HidSharedMemoryEntry destroyed (Process id: 0x%016" PRIx64 ")", m_process_id);
 
     CloseSharedMemory(&m_real_shared_memory);
-    CloseSharedMemory(&m_fake_shared_memory);
 
     if (serviceIsActive(&m_appletresource))
         serviceClose(&m_appletresource);
@@ -133,7 +194,7 @@ HidSharedMemoryEntry::~HidSharedMemoryEntry()
 
 const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
 {
-    return m_fake_shared_memory;
+    return g_fake_shared_memory;
 }
 
 ::HidSharedMemory *HidSharedMemoryEntry::GetRealAddr()
@@ -143,7 +204,7 @@ const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
 
 ::HidSharedMemory *HidSharedMemoryEntry::GetFakeAddr()
 {
-    return (HidSharedMemory *)shmemGetAddr(&m_fake_shared_memory);
+    return (HidSharedMemory *)shmemGetAddr(&g_fake_shared_memory);
 }
 
 u64 HidSharedMemoryEntry::GetProcessId() const
@@ -212,8 +273,7 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
         m_controller_list[i] = std::make_shared<HidSharedMemoryController>(i);
 
         std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-        for (const auto &entry : m_sharedmemory_entry_list)
-            m_controller_list[i]->Clear(*entry);
+        m_controller_list[i]->Clear();
 
         ::syscon::logger::LogInfo("HidSharedMemoryManager attached a controller on player %d", i + 1);
         return m_controller_list[i];
@@ -233,8 +293,7 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
             continue;
 
         std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-        for (const auto &entry : m_sharedmemory_entry_list)
-            controller->Clear(*entry);
+        controller->Clear();
 
         ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", (int)i + 1);
         m_controller_list[i] = nullptr;
@@ -253,6 +312,18 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(
         ::syscon::logger::LogDebug("HidSharedMemoryManager::CreateIfNotExists entry already exists (Process id: 0x%016" PRIx64 ", Program id: 0x%016" PRIx64 ")", processId, programId);
         return entry;
     }
+#endif
+
+    /*
+        Reclaim before allocating, not after. Every mitm'd process costs a 256 KiB fake
+        shared memory plus a mapping of the real one, and applets come and go constantly -
+        so without this the list only grows and shmemCreate eventually fails with
+        0xE401, leaving every later applet with no HID shared memory at all.
+        Running it from Add() would be too late: the allocation that needs the room
+        happens in the constructor below.
+    */
+#if MITM_CONFIG_GC_ENABLED
+    RunGarbageCollector();
 #endif
 
     entry = std::make_shared<HidSharedMemoryEntry>(hid_service, processId, programId);
@@ -275,14 +346,6 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
         return entry->m_status;
     }
 
-    /*
-        Everytime we add a new entry, we run garbage collector
-        in order to remove any entries for processes that are no longer running
-    */
-#if MITM_CONFIG_GC_ENABLED
-    RunGarbageCollector();
-#endif
-
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
     /*
@@ -293,7 +356,7 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
     for (const auto &controller : m_controller_list)
     {
         if (controller != nullptr)
-            controller->Clear(*entry);
+            controller->Clear();
     }
 
     m_mutex_sharedmemory.lock();
@@ -332,23 +395,55 @@ void HidSharedMemoryManager::RunGarbageCollector()
         return;
     }
 
-    m_mutex_sharedmemory.lock();
-    for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end();)
+    /*
+        The mirror thread wants m_mutex_sharedmemory every 5 ms, and both the pm queries
+        below and LogWarning (an SD write, ~7 ms) are far too slow to do while holding it.
+        So: snapshot under the lock, decide unlocked, then take it again just to erase.
+    */
+    std::vector<std::shared_ptr<HidSharedMemoryEntry>> snapshot;
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex_sharedmemory);
+        snapshot = m_sharedmemory_entry_list;
+    }
+
+    std::vector<std::shared_ptr<HidSharedMemoryEntry>> dead;
+    for (const auto &entry : snapshot)
     {
         u64 pid_out = 0;
 
-        Result ret = pmdmntGetProcessId(&pid_out, (*it)->GetProgramId());
-        if (R_SUCCEEDED(ret) && pid_out == (*it)->GetProcessId())
-        {
-            it++;
+        Result ret = pmdmntGetProcessId(&pid_out, entry->GetProgramId());
+        if (R_SUCCEEDED(ret) && pid_out == entry->GetProcessId())
             continue;
-        }
 
-        ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it ! (Ret: 0x%08X - Mod:%d - Desc:%d)", (*it)->GetProcessId(), ret, R_MODULE(ret), R_DESCRIPTION(ret));
-        it = m_sharedmemory_entry_list.erase(it);
+        ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it ! (Ret: 0x%08X - Mod:%d - Desc:%d)", entry->GetProcessId(), ret, R_MODULE(ret), R_DESCRIPTION(ret));
+        dead.push_back(entry);
     }
-    m_mutex_sharedmemory.unlock();
+
     pmdmntExit();
+
+    if (dead.empty())
+        return;
+
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex_sharedmemory);
+        for (const auto &entry : dead)
+        {
+            for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end(); ++it)
+            {
+                if (*it == entry)
+                {
+                    m_sharedmemory_entry_list.erase(it);
+                    break;
+                }
+            }
+        }
+    }
+
+    /*
+        `dead` drops the last references here, outside every lock: ~HidSharedMemoryEntry
+        unmaps and closes two shared memories and closes an IAppletResource session, none
+        of which should run with the mirror thread blocked behind it.
+    */
 }
 
 void HidSharedMemoryManager::DumpProcessesAndMemoryAddr()
@@ -375,6 +470,13 @@ int HidSharedMemoryManager::Start()
 
     ::syscon::logger::LogDebug("HidSharedMemoryManager::Start %p starting...", this);
 
+    /*
+        Claim the 256 KiB now, while the system memory pool is still free. Leaving it until
+        a client arrives means asking once an applet has already taken the slack, which is
+        when svcCreateSharedMemory starts returning 0x00010801 (LimitReached).
+    */
+    CreateFakeSharedMemory();
+
     m_running = true;
 
     Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 38, 3 /* On CPU 3 responsible for input */);
@@ -400,6 +502,8 @@ void HidSharedMemoryManager::Stop()
 
     threadWaitForExit(&m_thread);
     threadClose(&m_thread);
+
+    DestroyFakeSharedMemory();
 }
 
 void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
@@ -437,14 +541,19 @@ void HidSharedMemoryManager::OnRun()
             std::lock_guard<std::recursive_mutex> controller_lock(m_mutex_controller);
             std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
 
-            for (const auto &entry : m_sharedmemory_entry_list)
+            /*
+                One fake serves every client, so mirror once from any client's real view -
+                they all reflect the same physical controllers - and publish the virtual
+                pads once, rather than repeating both for each client.
+            */
+            if (!m_sharedmemory_entry_list.empty())
             {
-                Mirror(*entry);
+                Mirror(*m_sharedmemory_entry_list.front());
 
                 for (const auto &controller : m_controller_list)
                 {
                     if (controller != nullptr)
-                        controller->Publish(*entry);
+                        controller->Publish();
                 }
             }
         }
@@ -522,9 +631,9 @@ static void AppendNpadState(HidNpadCommonLifo *lifo, const HidNpadCommonState &s
     reported anything new: a real controller keeps sampling at a fixed rate and the
     console treats a lifo that stops advancing as a pad that went away.
 */
-void HidSharedMemoryController::Publish(HidSharedMemoryEntry &entry)
+void HidSharedMemoryController::Publish()
 {
-    HidNpadInternalState *internal_state = &entry.GetFakeAddr()->npad.entries[m_player_idx].internal_state;
+    HidNpadInternalState *internal_state = &FakeNpadEntries()[m_player_idx].internal_state;
 
     if (internal_state->style_set == 0)
         Initialize(internal_state);
@@ -544,9 +653,9 @@ void HidSharedMemoryController::Publish(HidSharedMemoryEntry &entry)
 
 /* ---------------------------------------- */
 
-void HidSharedMemoryController::Clear(HidSharedMemoryEntry &entry)
+void HidSharedMemoryController::Clear()
 {
-    memset(&entry.GetFakeAddr()->npad.entries[m_player_idx].internal_state, 0, sizeof(HidNpadInternalState));
+    memset(&FakeNpadEntries()[m_player_idx].internal_state, 0, sizeof(HidNpadInternalState));
 }
 
 /* ---------------------------------------- */
