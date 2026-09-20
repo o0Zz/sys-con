@@ -263,6 +263,16 @@ void HidSharedMemoryManager::RunGarbageCollector()
 {
     ::syscon::logger::LogDebug("HidSharedMemoryManager Garbage Collector running...");
 
+    // pm:dmnt accepts a single session, so hold it only for this sweep rather
+    // than for the process lifetime: anything else on the console that opens
+    // it - including whatever launched us - fails with SessionClosed while we
+    // keep it.
+    if (R_FAILED(pmdmntInitialize()))
+    {
+        ::syscon::logger::LogWarning("HidSharedMemoryManager: pm:dmnt unavailable, skipping garbage collection");
+        return;
+    }
+
     m_mutex_sharedmemory.lock();
     for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end();)
     {
@@ -279,6 +289,7 @@ void HidSharedMemoryManager::RunGarbageCollector()
         it = m_sharedmemory_entry_list.erase(it);
     }
     m_mutex_sharedmemory.unlock();
+    pmdmntExit();
 }
 
 void HidSharedMemoryManager::DumpProcessesAndMemoryAddr()

@@ -18,6 +18,7 @@ namespace syscon
     namespace
     {
         bool g_socket_initialized = false;
+        NifmRequest g_nifm_request{};
         size_t g_socket_tmem_size = 0;
 
         /*
@@ -36,14 +37,21 @@ namespace syscon
             formula then reuses the initial sizes) for 0x5000; do not reach for the defaults.
         */
         constexpr SocketInitConfig g_socketInitConfig = {
-            .tcp_tx_buf_size = 0,
-            .tcp_rx_buf_size = 0,
+            // Undersized buffers are not merely slow: at 20 KiB the session
+            // binds and polls but never delivers a datagram, and sendto()
+            // blocks outright. These are Nintendo's own values with
+            // sb_efficiency at 1 instead of 4, which is 148 KiB -- affordable
+            // against the 512 KiB heap, and known to work.
+            .tcp_tx_buf_size = 0x8000,
+            .tcp_rx_buf_size = 0x10000,
             .tcp_tx_buf_max_size = 0,
             .tcp_rx_buf_max_size = 0,
-            .udp_tx_buf_size = 0x1000,
-            .udp_rx_buf_size = 0x2000,
+            .udp_tx_buf_size = 0x2400,
+            .udp_rx_buf_size = 0xA500,
             .sb_efficiency = 1,
-            .num_bsd_sessions = 1,
+            // Session count does not enter the transfer-memory formula, so
+            // this costs nothing.
+            .num_bsd_sessions = 3,
             .bsd_service_type = BsdServiceType_User,
         };
 
@@ -78,6 +86,27 @@ namespace syscon
         }
 
         rc = socketInitialize(&g_socketInitConfig);
+
+        /*
+            A bound socket is not enough on Horizon: until this process has an
+            accepted nifm request, its bsd session is not attached to the active
+            network interface and no datagram is ever delivered to it. bind()
+            and poll() behave exactly as if the port were simply idle, which is
+            what makes this worth doing explicitly rather than discovering it
+            from an error.
+        */
+        Result nifm_rc = nifmInitialize(NifmServiceType_User);
+        if (R_SUCCEEDED(nifm_rc))
+        {
+            nifm_rc = nifmCreateRequest(&g_nifm_request, true);
+            if (R_SUCCEEDED(nifm_rc))
+                nifm_rc = nifmRequestSubmitAndWait(&g_nifm_request);
+        }
+        if (R_FAILED(nifm_rc))
+            syscon::logger::LogError("NetworkPad: nifm request failed (0x%08X) - inbound datagrams may never arrive", nifm_rc);
+        else
+            syscon::logger::LogDebug("NetworkPad: nifm network request accepted");
+
         smExit();
 
         if (R_FAILED(rc))
@@ -168,6 +197,24 @@ namespace syscon
         }
 
         syscon::logger::LogInfo("NetworkPad: listening on UDP port %d", m_port);
+
+        // TEMPORARY DIAGNOSTIC: does this bsd session have a LAN address, and
+        // did bind() land where we think it did?
+        {
+            struct sockaddr_in bound;
+            socklen_t blen = sizeof(bound);
+            memset(&bound, 0, sizeof(bound));
+            if (getsockname(m_socket, reinterpret_cast<struct sockaddr *>(&bound), &blen) == 0)
+                syscon::logger::LogError("NetworkPad: bound to %08X:%d",
+                                         static_cast<unsigned>(ntohl(bound.sin_addr.s_addr)),
+                                         static_cast<int>(ntohs(bound.sin_port)));
+            else
+                syscon::logger::LogError("NetworkPad: getsockname failed (errno %d)", errno);
+
+            const long host_id = gethostid();
+            syscon::logger::LogError("NetworkPad: gethostid = %08X", static_cast<unsigned>(host_id));
+        }
+
         return Status::Success;
     }
 
@@ -210,7 +257,16 @@ namespace syscon
             const int timeout_ms = static_cast<int>((aTimeoutUs + 999) / 1000);
             const int ready = poll(&pfd, 1, timeout_ms);
             if (ready <= 0)
-                return Status::Timeout;
+            {
+                // TEMPORARY DIAGNOSTIC: fall through to recv() instead of
+                // trusting poll(), to find out whether poll is the reason no
+                // datagram is ever seen. The socket is O_NONBLOCK, so recv
+                // returns EAGAIN immediately when there is nothing queued.
+                if ((m_poll_timeouts++ % 500) == 0)
+                    syscon::logger::LogError("NetworkPad: poll timeout #%d (fd %d, %d ms, revents 0x%x)",
+                                             static_cast<int>(m_poll_timeouts),
+                                             m_socket, timeout_ms, pfd.revents);
+            }
         }
 
         const ssize_t received = recv(m_socket, outBuffer, *bufferSizeInOut, 0);
@@ -225,6 +281,13 @@ namespace syscon
 
             return Status::ReadFailed;
         }
+
+        // TEMPORARY DIAGNOSTIC: is anything arriving at all? Sparse, because
+        // this runs on the polling thread every few ms.
+        if ((m_received_datagrams++ % 50) == 0)
+            syscon::logger::LogError("NetworkPad: RX #%d, %d bytes",
+                                     static_cast<int>(m_received_datagrams),
+                                     static_cast<int>(received));
 
         *bufferSizeInOut = static_cast<size_t>(received);
         return Status::Success;

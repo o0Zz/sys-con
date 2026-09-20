@@ -72,6 +72,15 @@ SOAK_DEFAULT = 120
 # instead: those bugs are latent and time-dependent (see psc_module.cpp:20).
 SOAK_LONG = 600
 
+# hiddbgInitialize leaks across launches, so only the first couple of starts in
+# a boot are sound. By the third the call quietly does nothing: sys-con either
+# fails to start or comes up unable to drive a virtual controller -- and the
+# second failure mode looks exactly like a bug in the code under test. Reboot
+# before spending the budget rather than reading the result.
+# Measured on this console: the second start already fails with LimitReached,
+# so the usable budget is one.
+MAX_STARTS_PER_BOOT = 1
+
 
 # --- scripted input ----------------------------------------------------------
 # sys-con's own UDP-driven virtual pad (network_controller=1 in config.ini).

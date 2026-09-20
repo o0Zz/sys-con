@@ -99,26 +99,82 @@ class Iteration:
                 local_hash[:16], str(info.get("hash"))[:16])
         return True, local_hash
 
+    def ensure_start_budget(self):
+        """Reboots when this boot has no sound start left.
+
+        hiddbgInitialize leaks across launches. The third start in a boot
+        either fails or, worse, succeeds into a process that cannot drive a
+        virtual controller -- which reads as a bug in the build under test.
+        Spending a reboot is cheaper than trusting that result.
+        """
+        state = watchdog.load()
+        try:
+            uptime = int(self.api.status().get("uptimeSeconds") or 0)
+        except (autopilot.Unreachable, autopilot.ApiError):
+            uptime = 0
+
+        if uptime < state.get("last_uptime", 0):
+            state["starts_since_boot"] = 0
+        state["last_uptime"] = uptime
+
+        if state.get("starts_since_boot", 0) >= config.MAX_STARTS_PER_BOOT:
+            self.log("rebooting: %d starts already used this boot (hiddbg leak)"
+                     % state["starts_since_boot"])
+            self.api.power_restart()
+            time.sleep(15)
+            if self.api.wait_until_alive() is None:
+                raise autopilot.Unreachable(
+                    "console did not return after the scheduled reboot")
+            state["starts_since_boot"] = 0
+            state["last_uptime"] = 0
+
+        state["starts_since_boot"] = state.get("starts_since_boot", 0) + 1
+        watchdog.save(state)
+
     def start(self):
+        self.ensure_start_budget()
         self.log("starting sys-con")
         self.api.process_start(self.tid)
         return self.api.wait_running(self.tid, True, config.START_SETTLE)
 
-    def exercise_input(self):
+    def log_tail(self, nbytes=65536):
+        try:
+            raw = self.api.read_file(config.LOG_PATH, offset=-nbytes)
+        except autopilot.ApiError:
+            return ""
+        return raw.decode("utf-8", "replace")
+
+    def exercise_input(self, attempts=3, settle=2.0):
         """Drive sys-con's UDP pad and let the log say whether it landed.
 
         This is what separates "did not crash" from "actually processed
         input", and it needs no physical controller plugged into the console.
         Failures here are reported, never raised: a pad that does not answer
         is a finding about the build, not a reason to abandon the run.
+
+        The sequence goes out more than once: the process reports running
+        before the network controller has bound its socket, and UDP gives no
+        hint that the first packets went nowhere.
         """
         try:
             host = pad_mod.host_from_url(self.cfg.url)
-            self.log("driving the UDP pad: %s" % " ".join(config.SMOKE_BUTTONS))
-            return {"sent": pad_mod.tap_sequence(host, config.SMOKE_BUTTONS),
-                    "error": None}
-        except (repo.Fatal, OSError, ValueError) as e:
-            return {"sent": [], "error": str(e)}
+        except repo.Fatal as e:
+            return {"sent": [], "error": str(e), "attempts": 0}
+
+        sent = []
+        for attempt in range(1, attempts + 1):
+            self.log("driving the UDP pad (%d/%d): %s"
+                     % (attempt, attempts, " ".join(config.SMOKE_BUTTONS)))
+            try:
+                sent = pad_mod.tap_sequence(host, config.SMOKE_BUTTONS)
+            except (repo.Fatal, OSError, ValueError) as e:
+                return {"sent": [], "error": str(e), "attempts": attempt}
+            if config.NETWORK_PAD_PLUGGED in self.log_tail():
+                return {"sent": sent, "error": None, "attempts": attempt}
+            time.sleep(settle)
+
+        return {"sent": sent, "attempts": attempts,
+                "error": "%r never appeared in the log" % config.NETWORK_PAD_PLUGGED}
 
     def observe(self, soak):
         """Watch until the soak elapses or something goes wrong.
@@ -279,6 +335,7 @@ def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2,
     while True:
         attempt += 1
         envelope["attempt"] = attempt
+        input_result = None
 
         try:
             before = it.snapshot()
@@ -297,12 +354,13 @@ def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2,
             build_mod.record_deploy(build_id)
 
             started_ok = it.start()
+            if started_ok and exercise_input:
+                input_result = it.exercise_input()
             state, why = ("died", "never reported running") if not started_ok \
                 else it.observe(soak)
 
         except autopilot.Unreachable as e:
             state, why = "console_gone", str(e)
-            input_result = locals().get("input_result")
         except autopilot.ApiError as e:
             envelope.update(outcome="DEPLOY_FAILED", error=str(e))
             it.record(envelope)
@@ -341,6 +399,7 @@ def run(cfg, log, soak=None, do_build=True, do_test=True, max_retries=2,
             envelope["signals"].update({
                 "input_sent": input_result["sent"],
                 "input_error": input_result["error"],
+                "input_attempts": input_result["attempts"],
                 "network_module_up": config.NETWORK_INIT_MARKER in log_text,
                 "input_pad_registered": config.NETWORK_PAD_PLUGGED in log_text,
             })

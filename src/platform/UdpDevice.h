@@ -67,6 +67,8 @@ namespace syscon
         uint16_t m_port;
         int m_socket = -1;
         uint32_t m_dropped_datagrams = 0;
+        uint32_t m_received_datagrams = 0;
+        uint32_t m_poll_timeouts = 0;
         controllerlib::IUSBEndpoint::EndpointDescriptor m_descriptor{};
     };
 

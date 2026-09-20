@@ -48,35 +48,47 @@ def parse_crash_report(text):
     if m:
         out["result"] = m.group(1)
 
-    # Module list: a name, then an address range, then optionally a build ID.
-    # The module we want is the one whose range contains the fault, but the
-    # sys-con entry is also identifiable by name.
-    for block in re.split(r"\n\s*Module\s+\d+", text)[1:]:
+    m = re.search(r"Type:\s*(.+)", text)
+    if m:
+        out["exception_type"] = m.group(1).strip()
+
+    # creport writes addresses as bare hex, and its "Module Id" is the GNU
+    # build ID padded out to 32 bytes.
+    for block in re.split(r"\n\s*Module\s+\d+:", text)[1:]:
         name = re.search(r"Name:\s*(\S+)", block)
-        rng = re.search(r"Address:\s*" + HEX + r"\s*-\s*" + HEX, block)
-        bid = re.search(r"Build ID:\s*([0-9A-Fa-f]{16,40})", block)
+        rng = re.search(r"Address:\s*([0-9A-Fa-f]{8,16})\s*-\s*([0-9A-Fa-f]{8,16})",
+                        block)
+        bid = re.search(r"Module Id:\s*([0-9A-Fa-f]{16,64})", block)
         if not rng:
             continue
-        base, end = int(rng.group(1), 16), int(rng.group(2), 16)
-        is_syscon = name and "sys-con" in name.group(1).lower()
+        is_syscon = bool(name) and "sys-con" in name.group(1).lower()
         if is_syscon or out["module_base"] is None:
             out["module_name"] = name.group(1) if name else None
-            out["module_base"] = base
-            out["module_end"] = end
-            out["build_id"] = bid.group(1).lower() if bid else None
+            out["module_base"] = int(rng.group(1), 16)
+            out["module_end"] = int(rng.group(2), 16)
+            if bid:
+                out["build_id"] = bid.group(1).lower().rstrip("0")
         if is_syscon:
             break
 
-    # Registers worth resolving, then the stack trace itself.
-    for label in ("PC", "LR"):
-        m = re.search(r"\b%s:\s*" % label + HEX, text)
-        if m:
-            out["frames"].append({"label": label, "addr": int(m.group(1), 16)})
-
-    m = re.search(r"Stack Trace:(.*?)(?:\n\s*\n|\Z)", text, re.S)
-    if m:
-        for i, addr in enumerate(re.findall(HEX, m.group(1))):
-            out["frames"].append({"label": "bt%02d" % i, "addr": int(addr, 16)})
+    # Every interesting address is annotated with its module-relative offset,
+    # e.g. "PC: 000000006d41edd4 (sys-con + 0x1edd4)". Taking the offset
+    # directly avoids depending on the base being parsed at all.
+    frame_re = re.compile(
+        r"^\s*(PC|LR|ReturnAddress\[\d+\]):\s*([0-9A-Fa-f]{8,16})"
+        r"(?:\s*\(\s*([^\s)]+)\s*\+\s*0x([0-9A-Fa-f]+)\s*\))?",
+        re.M)
+    seen = set()
+    for m in frame_re.finditer(text):
+        label = m.group(1).replace("ReturnAddress", "bt")
+        if label in seen:
+            continue  # the report repeats registers in the per-thread section
+        seen.add(label)
+        frame = {"label": label, "addr": int(m.group(2), 16)}
+        if m.group(4) is not None:
+            frame["module"] = m.group(3)
+            frame["offset"] = int(m.group(4), 16)
+        out["frames"].append(frame)
 
     return out
 
@@ -128,7 +140,8 @@ def symbolize(report_path, elf_path, devkitpro_win, module_base=None):
 
     info = parse_crash_report(text)
     base = module_base if module_base is not None else info["module_base"]
-    if base is None:
+    annotated = any("offset" in f for f in info["frames"])
+    if base is None and not annotated:
         raise repo.Fatal(
             "no module base in %s; pass --module-base 0xHEX (the 'Start "
             "Address' shown on the fatal screen)" % os.path.basename(report_path),
@@ -138,8 +151,10 @@ def symbolize(report_path, elf_path, devkitpro_win, module_base=None):
 
     in_image, out_of_image = [], []
     for frame in info["frames"]:
-        off = frame["addr"] - base
-        if 0 <= off < image_size:
+        off = frame.get("offset")
+        if off is None and base is not None:
+            off = frame["addr"] - base
+        if off is not None and 0 <= off < image_size:
             in_image.append(dict(frame, offset=off))
         else:
             out_of_image.append(frame)
@@ -159,7 +174,7 @@ def symbolize(report_path, elf_path, devkitpro_win, module_base=None):
         "program_id": info["program_id"],
         "result": info["result"],
         "module_name": info["module_name"],
-        "module_base": "0x%x" % base,
+        "module_base": ("0x%x" % base) if base is not None else None,
         "image_size": "0x%x" % image_size,
         "report_build_id": info["build_id"],
         "frames": in_image,
@@ -199,7 +214,7 @@ def render(result):
         "  elf          %s" % result["elf"],
         "  program id   %s" % (result["program_id"] or "?"),
         "  result       %s" % (result["result"] or "?"),
-        "  module base  %s   image size %s" % (result["module_base"],
+        "  module base  %s   image size %s" % (result["module_base"] or "(offsets)",
                                                result["image_size"]),
         "",
     ]

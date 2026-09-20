@@ -41,6 +41,12 @@ missing.
 `python tools/devtools setup-console --write` applies 2 and 3, backing up
 anything it overwrites into `debug/console-backup/`.
 
+The console must also stay awake: sleep powers down the WLAN module, so every
+call turns into an unreachable error (exit 30) that reads like a crash but is
+not one. sys-autopilot holds auto-sleep off while `keep_awake = true` under
+`[power]` in `/config/sys-autopilot/config.ini` (the default); `doctor` warns
+when `/status` reports `keepAwake` false.
+
 Also worth setting `log_level=0` (Trace) in `/config/sys-con/config.ini`. The
 startup milestones are logged at Debug, so at the shipped `log_level=3` the log
 shows the banner and then nothing, and a boot hang cannot be attributed to a
@@ -88,8 +94,10 @@ the packet layout has to agree with `NetworkController.h`, and two copies would
 drift.
 
 With `--exercise-input`, an iteration presses the smoke-test set after startup
-and then checks the log for `Controller[ffff-0001] plugged !`. If the pad never
-registers, the outcome is `UNSTABLE` rather than `HEALTHY` — the sysmodule is
+and then checks the log for `Controller[ffff-0001] plugged !`, retrying up to
+three times — the process reports running before the network controller has
+bound its socket, and UDP gives no hint that the first packets went nowhere.
+If the pad never registers, the outcome is `UNSTABLE` rather than `HEALTHY` — the sysmodule is
 up but not doing its job. That is the difference between proving it did not
 crash and proving it works.
 
@@ -149,7 +157,7 @@ the result.
 | 10 / 11 | `BUILD_FAILED` / `DEPLOY_FAILED` |
 | 12 / 13 / 14 | `BOOT_HANG` / `CRASHED` / `UNSTABLE` |
 | 20 | host tests failed (never deploys) |
-| 30 | console unreachable — *not* a crash |
+| 30 | console unreachable — *not* a crash (asleep, off, or sys-autopilot down) |
 | 40 / 41 / 42 | usage / guardrail refused / needs a human |
 | 43 | another run holds the console |
 
@@ -171,6 +179,20 @@ When the server vanishes mid-run the loop waits out the auto-reboot (up to
 180s), then harvests the report. A retry is attempted unless the crash
 signature repeats: **the same crash twice is a code bug, and rebooting harder
 produces no new information.**
+
+## Two sound starts per boot
+
+`hiddbgInitialize` leaks across launches. The third start in a boot either
+fails outright (`LimitReached`, `rc=0x00010801`) or — worse — succeeds into a
+process that logs a clean startup and registers its pad while no input ever
+reaches the console. That reads exactly like an input bug in the build under
+test, which is why this is enforced rather than merely documented:
+`MAX_STARTS_PER_BOOT` in `config.py`, applied by `iterate` through the
+`starts_since_boot` counter in `debug/watchdog.json`, reset whenever the
+console's uptime goes backwards.
+
+`devtools start` does **not** enforce it. Counting starts is on you when
+driving by hand, and the remedy is always a reboot, never another start.
 
 ## Things that will bite you
 

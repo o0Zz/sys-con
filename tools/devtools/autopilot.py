@@ -3,7 +3,7 @@
 Only the endpoints this loop needs. Response shapes were read out of
 sys-autopilot's source rather than guessed:
 
-    GET    /status                  -> {"version","firmware","uptimeSeconds",...}
+    GET    /status                  -> {"version","firmware","uptimeSeconds","keepAwake",...}
     GET    /files?path=P            -> raw bytes; &offset=-N tails the last N
     GET    /files?path=DIR/         -> {"path","entries":[{name,type,size,mtime}]}
     GET    /files/hash?path=P       -> {"path","algorithm","hash","size"}
@@ -124,15 +124,17 @@ class Autopilot:
     def wait_until_alive(self, timeout=config.REBOOT_WAIT,
                          poll=config.REBOOT_POLL, on_tick=None):
         """Waits out a reboot. Returns the seconds waited, or None on timeout."""
-        deadline = time.monotonic() + timeout
-        waited = 0.0
+        # Count real elapsed time: each alive() probe can itself burn most of
+        # the poll interval, so adding the interval under-reports the wait and
+        # gives up well before the timeout.
+        started = time.monotonic()
+        deadline = started + timeout
         while time.monotonic() < deadline:
             if self.alive():
-                return waited
+                return time.monotonic() - started
             if on_tick:
-                on_tick(waited)
+                on_tick(time.monotonic() - started)
             time.sleep(poll)
-            waited += poll
         return None
 
     def screenshot(self):

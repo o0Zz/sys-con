@@ -106,6 +106,7 @@ def check_console(cfg, tid):
         checks.append(_check_process(api, tid))
 
     checks.append(_check_fatal_reboot(api))
+    checks.append(_check_keep_awake(status))
     checks.append(_check_log_level(api))
     checks.append(_check_network_pad(api))
     return checks, True
@@ -214,6 +215,32 @@ def _check_log_level(api):
             "hang cannot be localized",
             level="warn")
     return _check("log_level", True, "log_level=0 (Trace)")
+
+
+def _check_keep_awake(status):
+    """A sleeping console is indistinguishable from a crashed one.
+
+    Sleep powers down the WLAN module, so every call turns into Unreachable
+    and the run exits 30 -- which reads like a fatal error but is not one.
+    sys-autopilot holds auto-sleep off when its keep_awake setting is on.
+    """
+    awake = status.get("keepAwake")
+    if awake is None:
+        return _check(
+            "keep_awake", False, "sys-autopilot too old to report keepAwake",
+            "update sys-autopilot, or set auto-sleep to Never in System "
+            "Settings: a sleeping console drops the network and every call "
+            "then fails as unreachable (exit 30)",
+            level="warn")
+    if not awake:
+        return _check(
+            "keep_awake", False, "auto-sleep not held off",
+            "set keep_awake = true under [power] in "
+            "/config/sys-autopilot/config.ini and restart sys-autopilot; "
+            "otherwise the console sleeps mid-run and every call fails as "
+            "unreachable (exit 30)",
+            level="warn")
+    return _check("keep_awake", True, "auto-sleep held off by sys-autopilot")
 
 
 def _check_network_pad(api):

@@ -29,21 +29,33 @@ namespace syscon
         }
     } // namespace
 
+    // Aborting with a step-tagged result rather than the service's own keeps
+    // the failing call identifiable: the compiler merges these into a single
+    // diagAbortWithResult, so the stack trace alone cannot say which one it was.
+    void AbortStep(Result rc, u32 step)
+    {
+        if (R_FAILED(rc)) [[unlikely]]
+            diagAbortWithResult(MAKERESULT(420, step));
+    }
+
     void InitializeModules()
     {
-        AbortUnless(hiddbgInitialize()); // opened here; the HDLS work buffer is attached later by RunApp when mode=hiddbg
-        AbortUnless(usbHsInitialize());
-        AbortUnless(pscmInitialize());
-        AbortUnless(pmdmntInitialize());
-
-        // Read the firmware version into libnx's hosversion global. set:sys is opened once
-        // for this and intentionally left open: nothing reads it afterward (libstratosphere
-        // gets its version from exosphere), and it is released at process exit anyway.
-        AbortUnless(setsysInitialize());
+        // The firmware version must be set before any other service is opened:
+        // libnx picks command ids from it, so with hosversion still 0
+        // usbHsInitialize sends the pre-2.0.0 command, usb rejects it and
+        // closes the session, and the call fails with SessionClosed.
+        // set:sys is opened once for this and intentionally left open: nothing
+        // reads it afterward (libstratosphere gets its version from exosphere),
+        // and it is released at process exit anyway.
+        AbortStep(setsysInitialize(), 4);
 
         SetSysFirmwareVersion fw;
-        AbortUnless(setsysGetFirmwareVersion(&fw));
+        AbortStep(setsysGetFirmwareVersion(&fw), 5);
         hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
+
+        AbortStep(hiddbgInitialize(), 1); // opened here; the HDLS work buffer is attached later by RunApp when mode=hiddbg
+        AbortStep(usbHsInitialize(), 2);
+        AbortStep(pscmInitialize(), 3);
     }
 
     void FinalizeModules()

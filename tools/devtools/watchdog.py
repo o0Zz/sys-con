@@ -38,6 +38,8 @@ def load():
     state.setdefault("consecutive_healthy", 0)
     state.setdefault("last_signature_hash", None)
     state.setdefault("signature_streak", 0)
+    state.setdefault("starts_since_boot", 0)
+    state.setdefault("last_uptime", 0)
     state.setdefault("history", [])
     return state
 

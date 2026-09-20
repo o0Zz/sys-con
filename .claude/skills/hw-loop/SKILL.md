@@ -48,8 +48,7 @@ Any change to a **stack size, thread priority or heap size** needs
 python tools/devtools iterate --soak 120 2>/dev/null
 ```
 
-Add `--exercise-input` to also prove input works: it drives sys-con's UDP pad
-and checks the log for `Controller[ffff-0001] plugged !`. Without it a pass
+Add `--exercise-input` to also prove input works (see §4). Without it a pass
 only means "did not fall over".
 
 Branch on `.outcome`:
@@ -62,7 +61,7 @@ Branch on `.outcome`:
 | `DEPLOY_FAILED` | 11 | Transport problem, **not** a code problem. Do not change code. Retry once; on a second failure stop and tell the user. |
 | `CRASHED` | 13 | Read the file at `crash.symbolized_path`. |
 | `BOOT_HANG` | 12 | `signals.milestones_seen` names the last startup step reached — suspect the step *after* it, in `src/app/main.cpp`. |
-| `UNSTABLE` | 14 | Repeat once before concluding anything. |
+| `UNSTABLE` | 14 | Repeat once before concluding anything. With `--exercise-input`, check `signals.input_pad_registered` first — see §4. |
 
 ### Reading a crash
 
@@ -74,7 +73,57 @@ Frames listed under `frames_outside_image` are libnx or kernel addresses, not
 sys-con. Do not chase them and do not override the module base to force them to
 resolve; a confident wrong answer is worse than an unresolved frame.
 
-## 4. Repeating
+## 4. Simulating a controller over UDP
+
+sys-con can create a virtual pad driven over UDP, so input is testable with
+nothing plugged into the console. Use it whenever the change touches the input
+path — `src/app/controller_handler.cpp`, `src/controllerlib/**`,
+`usb_module.cpp`, the profile/config handling — because a `HEALTHY` run without
+it says nothing about whether sys-con still reads a controller.
+
+It needs `network_controller=1` in `/config/sys-con/config.ini`; `doctor`
+reports this as the `network_pad` check, and `setup-console --write` turns it
+on. A disabled pad makes `--exercise-input` report `UNSTABLE` for a build that
+is actually fine, so check `doctor` before believing that result.
+
+Inside a run:
+
+```sh
+python tools/devtools iterate --soak 120 --exercise-input 2>/dev/null
+python tools/devtools loop --iterations 10 --exercise-input 2>/dev/null
+```
+
+The iteration taps the smoke-test set (`A B X Y DPAD_UP DPAD_DOWN L R`, no
+HOME, no CAPTURE) after startup and retries up to three times, because sys-con
+reports running before its network controller has bound the socket.
+
+Standalone, against a console already running sys-con:
+
+```sh
+python tools/devtools input 2>/dev/null                    # smoke-test set
+python tools/devtools input A B DPAD_UP --hold 0.2 2>/dev/null
+python tools/devtools logs --tail 4096 2>/dev/null         # look for the pad
+```
+
+Read the result from `signals`, not from the fact that the command returned:
+
+| Signal | Means |
+|---|---|
+| `input_sent` | what the host transmitted. **UDP is unacknowledged — this is not evidence it arrived.** |
+| `network_module_up` | sys-con started its network controller at all. |
+| `input_pad_registered` | `Controller[ffff-0001] plugged !` in the log. This is the only proof input reached the sysmodule. |
+| `input_attempts` | how many tries it took; >1 means the socket was late, not broken. |
+| `input_error` | the host side failed (no route, pad import); fix the rig, do not read it as a code finding. |
+
+`input_expected` true with `input_pad_registered` false is classified
+`UNSTABLE`: the sysmodule is up but not doing its job. Treat it as a finding
+about the build once `doctor` says the pad is enabled.
+
+The wire format comes from `tools/networkpad.py` and must agree with
+`src/controllerlib/drivers/NetworkController.h` — if a pad stops registering
+after a change to that header, suspect the struct, not the console.
+
+## 5. Repeating
 
 ```sh
 python tools/devtools loop --iterations 10 --exercise-input 2>/dev/null
@@ -83,6 +132,33 @@ python tools/devtools loop --iterations 10 --exercise-input 2>/dev/null
 It stops on its own: build/test failure, deploy failure, 3 consecutive
 `HEALTHY`, or the same crash signature 3 times. Prefer this over calling
 `iterate` in a shell loop.
+
+## The console only has two sound starts per boot
+
+`hiddbgInitialize` leaks across launches. By the **third** start in a boot the
+call quietly does nothing, and sys-con either fails to start or comes up unable
+to drive a virtual controller.
+
+The second failure mode is the dangerous one: the process runs, logs a clean
+startup, reports `Controller[ffff-0001] plugged !` — and no input ever reaches
+the console. That is indistinguishable from a real input bug, so a result
+gathered on a third start is worse than no result.
+
+`iterate` enforces this itself (`MAX_STARTS_PER_BOOT` in `config.py`): it
+tracks starts against the console's uptime and reboots before spending a start
+it cannot trust. **When starting sys-con by hand, count your starts** —
+`devtools start` does not, and two is the budget.
+
+Symptoms that mean you have already overrun it, not that you found a bug:
+
+- `process/start` returning `LimitReached` (`rc=0x00010801`) when the same
+  build started fine minutes earlier
+- the pad registering in the log while nothing moves on screen
+- `devtools input` succeeding while the log shows no receive activity
+
+The fix is always `power/restart`, never another start. Budget one reboot
+(~60 s) per two experiments and plan the session around that, rather than
+retrying and reading the wreckage.
 
 ## Hard stops
 
@@ -97,7 +173,8 @@ Stop, report, and do **not** retry on:
 
 **Exit `30` means the console is unreachable — that is not a crash.** It is the
 one failure that must never be reported as a finding about the code. Check the
-console is on and sys-autopilot is answering.
+console is on and sys-autopilot is answering. A console that went to sleep
+looks exactly the same: run `doctor` and read its `keep_awake` check.
 
 ## Never
 
