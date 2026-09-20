@@ -12,6 +12,9 @@
  *     IAppletResource cmd 0 GetSharedMemoryHandle (return the fake HID shared memory),
  *   - forward every other command to the real service, tagging the PID like Atmosphere does.
  *
+ * INVARIANT: a staged reply lives in TLS until svcReplyAndReceive. No IPC (logging, close,
+ * libnx wrappers) may run between Build*Reply()/ForwardAndReply() and return to Run().
+ *
  * The fake shared-memory data plane (HidSharedMemoryManager) is shared unchanged with the
  * ams build. Reference: libstratosphere sf_hipc_server_session_manager.cpp (ForwardRequest /
  * PreProcessCommandBufferForMitm), sf_hipc_mitm_query_api.cpp (ShouldMitm), and
@@ -330,9 +333,11 @@ namespace syscon::hid::mitm
             sub.entry = entry;
             AddSession(sub);
 
+            // Log before staging reply (see TLS invariant at top of file).
+            ::syscon::logger::LogDebug("HidMitm: CreateAppletResource hooked (aruid=0x%lX)", aruid);
+
             const Handle move_handles[1] = {cli_h};
             BuildCmifReply(0, 0, nullptr, 1, move_handles);
-            ::syscon::logger::LogDebug("HidMitm: CreateAppletResource hooked (aruid=0x%lX)", aruid);
             return true;
         }
 
