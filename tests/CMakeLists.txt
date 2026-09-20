@@ -24,6 +24,7 @@ set(TEST_FILES
     drivers/test_dualshock3.cpp
     drivers/test_network_controller.cpp
     drivers/test_report_bounds.cpp
+    drivers/test_sinput.cpp
     drivers/test_steam2026.cpp
     drivers/test_switch.cpp
     drivers/test_wii.cpp
