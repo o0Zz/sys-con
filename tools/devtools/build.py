@@ -87,6 +87,20 @@ def run_build(cfg, jobs=4, clean=False, log_path=None):
     why archiving happens immediately after a build.
     """
     ams = os.environ.get("SYSCON_ATMOSPHERE", "0") == "1"
+
+    # Both flavours compile into the same src/app/build, and make cannot tell them apart:
+    # after building one, the other finds every object "up to date" and silently relinks the
+    # wrong binary. That ships a libnx MITM as if it were the Atmosphere one, which wedges
+    # the console, so switching flavour forces a clean.
+    marker = os.path.join(repo.ROOT, "src", "app", "build", ".flavour")
+    previous = None
+    if os.path.exists(marker):
+        with open(marker) as f:
+            previous = f.read().strip()
+    flavour = "ams" if ams else "libnx"
+    if previous != flavour:
+        clean = True
+
     root = repo.to_msys_path(repo.ROOT)
     cmd = "cd %s && " % root
     if clean:
@@ -95,6 +109,10 @@ def run_build(cfg, jobs=4, clean=False, log_path=None):
 
     try:
         p = repo.run_in_msys2(cfg, cmd, timeout=config.BUILD)
+        if p.returncode == 0:
+            os.makedirs(os.path.dirname(marker), exist_ok=True)
+            with open(marker, "w") as f:
+                f.write(flavour)
     except subprocess.TimeoutExpired:
         _write(log_path, ["$ " + cmd, "TIMEOUT after %ds" % config.BUILD])
         return False, "build timed out after %ds" % config.BUILD

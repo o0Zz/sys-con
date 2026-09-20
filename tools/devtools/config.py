@@ -60,7 +60,9 @@ HTTP_READ = 30.0
 HTTP_ATTEMPTS = 3
 
 CTEST = 180
-BUILD = 300
+# Generous because a flavour switch forces `make clean`, and the Atmosphere build then
+# relinks everything through LTO, which takes minutes rather than the libnx build's seconds.
+BUILD = 600
 
 STOP_SETTLE = 5  # stop -> /process reports running=false
 START_SETTLE = 10  # start -> /process reports running=true

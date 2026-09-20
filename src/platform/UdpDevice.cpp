@@ -1,11 +1,4 @@
 #include "UdpDevice.h"
-#include <malloc.h>
-
-extern "C"
-{
-    extern char *fake_heap_start;
-    extern char *fake_heap_end;
-}
 #include "SwitchLogger.h"
 
 #include <sys/types.h>
@@ -125,11 +118,6 @@ namespace syscon
         g_socket_initialized = true;
         syscon::logger::LogDebug("NetworkPad: socket driver up (%d bytes of transfer memory)", static_cast<int>(g_socket_tmem_size));
 
-        {
-            void *probe = malloc(0x100);
-            syscon::logger::LogDebug("NetworkPad: heap probe malloc=%p heap=[%p,%p)", probe, (void *)fake_heap_start, (void *)fake_heap_end);
-            free(probe);
-        }
         return 0;
     }
 

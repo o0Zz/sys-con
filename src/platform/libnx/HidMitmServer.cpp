@@ -92,15 +92,6 @@ namespace syscon::hid::mitm
             return static_cast<const CmifInHeader *>(cmifGetAlignedDataStart(r.data.data_words, armGetTls()));
         }
 
-        // Diagnostic only: a domain request carries a CmifDomainInHeader before the
-        // CmifInHeader, so the raw words say unambiguously which layout the client used.
-        struct Session;
-        void LogRawRequestImpl(const char *what, u64 program_id, u32 type, const u32 *raw)
-        {
-            ::syscon::logger::LogDebug("HidMitm: %s type=%u raw=%08X %08X %08X %08X %08X %08X (program 0x%016lX)",
-                                       what, type, raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], program_id);
-        }
-
         // Lay out a CMIF reply in TLS: aligned CmifOutHeader (result 0) + out_data + handles.
         // Returns a pointer to the out_data region (right after the header).
         void *BuildCmifReply(u32 out_data_size, u32 num_copy, const Handle *copy, u32 num_move, const Handle *move)
@@ -211,12 +202,6 @@ namespace syscon::hid::mitm
             svcCloseHandle(s.handle);
             m_handles.erase(m_handles.begin() + idx);
             m_sessions.erase(m_sessions.begin() + (idx - 2));
-        }
-
-        void LogRawRequest(const char *what, const Session &s, const HipcParsedRequest &r)
-        {
-            const u32 *raw = static_cast<const u32 *>(cmifGetAlignedDataStart(r.data.data_words, armGetTls()));
-            LogRawRequestImpl(what, s.info.program_id, r.meta.type, raw);
         }
 
         const Service *Server::ForwardServiceFor(const Session &s)
@@ -391,7 +376,6 @@ namespace syscon::hid::mitm
                 case CmifCommandType_RequestWithContext:
                 {
                     const CmifInHeader *in = GetInHeader(r);
-                    LogRawRequest("Request", s, r);
                     if (s.kind == SessionKind::Hid && in->command_id == 0)
                         return HookCreateAppletResource(s, in);
                     if (s.kind == SessionKind::AppletResource && in->command_id == 0)
@@ -400,7 +384,6 @@ namespace syscon::hid::mitm
                 }
 
                 default: // Control / ControlWithContext / anything else -> forward
-                    LogRawRequest("Other", s, r);
                     return ForwardAndReply(r, ForwardServiceFor(s));
             }
         }
