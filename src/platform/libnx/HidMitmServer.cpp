@@ -10,7 +10,12 @@
  *     handle, and every accepted session (+ the IAppletResource sub-sessions we hand out),
  *   - hook `hid` cmd 0 CreateAppletResource (return our own IAppletResource sub-session) and
  *     IAppletResource cmd 0 GetSharedMemoryHandle (return the fake HID shared memory),
+ *   - answer ConvertCurrentObjectToDomain ourselves so the session and its forward become
+ *     domains together and share one object-id space (see HookConvertToDomain),
  *   - forward every other command to the real service, tagging the PID like Atmosphere does.
+ *
+ * CloneCurrentObject(Ex) is still forwarded verbatim: the client gets a clone of the real
+ * session and only loses the MITM on it, which is a hole but never a protocol mismatch.
  *
  * The fake shared-memory data plane (HidSharedMemoryManager) is shared unchanged with the
  * ams build. Reference: libstratosphere sf_hipc_server_session_manager.cpp (ForwardRequest /
@@ -56,6 +61,11 @@ namespace syscon::hid::mitm
         // server thread.
         alignas(0x10) u8 g_pointer_buffer[0x1000];
 
+        // Replies are staged here rather than in TLS, for the same reason requests are copied
+        // out of it: logging goes through fs, and fs IPC reuses this thread's command buffer.
+        // The loop copies this into TLS immediately before svcReplyAndReceive.
+        alignas(0x10) u8 g_reply[0x100];
+
         bool IsSystemProgramId(u64 program_id)
         {
             return program_id >= SystemProgramIdStart && program_id <= SystemProgramIdEnd;
@@ -87,17 +97,25 @@ namespace syscon::hid::mitm
 
         /* -------- TLS / CMIF helpers -------- */
 
-        const CmifInHeader *GetInHeader(const HipcParsedRequest &r)
+        const CmifInHeader *GetInHeader(const HipcParsedRequest &r, const void *base)
         {
-            return static_cast<const CmifInHeader *>(cmifGetAlignedDataStart(r.data.data_words, armGetTls()));
+            return static_cast<const CmifInHeader *>(cmifGetAlignedDataStart(r.data.data_words, const_cast<void *>(base)));
         }
 
-        // Lay out a CMIF reply in TLS: aligned CmifOutHeader (result 0) + out_data + handles.
-        // Returns a pointer to the out_data region (right after the header).
-        void *BuildCmifReply(u32 out_data_size, u32 num_copy, const Handle *copy, u32 num_move, const Handle *move)
+        const CmifDomainInHeader *GetDomainInHeader(const HipcParsedRequest &r, const void *base)
         {
-            void *base = armGetTls();
-            const u32 raw_size = 16 + static_cast<u32>(sizeof(CmifOutHeader)) + out_data_size;
+            return static_cast<const CmifDomainInHeader *>(cmifGetAlignedDataStart(r.data.data_words, const_cast<void *>(base)));
+        }
+
+        // Lay out a CMIF reply in TLS: [CmifDomainOutHeader] + CmifOutHeader + out_data +
+        // [object ids], plus the handles. Returns a pointer to the out_data region.
+        void *BuildReply(bool domain, Result rc, u32 out_data_size, u32 num_objects, const u32 *objects,
+                         u32 num_copy, const Handle *copy, u32 num_move, const Handle *move)
+        {
+            void *base = g_reply;
+            u32 raw_size = 16 + static_cast<u32>(sizeof(CmifOutHeader)) + out_data_size;
+            if (domain)
+                raw_size += static_cast<u32>(sizeof(CmifDomainOutHeader)) + num_objects * static_cast<u32>(sizeof(u32));
 
             HipcRequest req = hipcMakeRequestInline(base,
                                                     .type = CmifCommandType_Invalid,
@@ -110,29 +128,44 @@ namespace syscon::hid::mitm
             for (u32 i = 0; i < num_move; i++)
                 req.move_handles[i] = move[i];
 
-            CmifOutHeader *hdr = static_cast<CmifOutHeader *>(cmifGetAlignedDataStart(req.data_words, base));
-            hdr->magic = CMIF_OUT_HEADER_MAGIC;
-            hdr->version = 0;
-            hdr->result = 0;
-            hdr->token = 0;
-            return static_cast<void *>(hdr + 1);
-        }
+            u8 *cursor = static_cast<u8 *>(cmifGetAlignedDataStart(req.data_words, base));
+            if (domain)
+            {
+                CmifDomainOutHeader *domain_hdr = reinterpret_cast<CmifDomainOutHeader *>(cursor);
+                domain_hdr->num_out_objects = num_objects;
+                domain_hdr->padding[0] = domain_hdr->padding[1] = domain_hdr->padding[2] = 0;
+                cursor += sizeof(CmifDomainOutHeader);
+            }
 
-        // A CMIF reply carrying only a (failure) result code and no out-data/handles.
-        void BuildCmifReplyResult(Result rc)
-        {
-            void *base = armGetTls();
-            const u32 raw_size = 16 + static_cast<u32>(sizeof(CmifOutHeader));
-
-            HipcRequest req = hipcMakeRequestInline(base,
-                                                    .type = CmifCommandType_Invalid,
-                                                    .num_data_words = (raw_size + 3) / 4, );
-
-            CmifOutHeader *hdr = static_cast<CmifOutHeader *>(cmifGetAlignedDataStart(req.data_words, base));
+            CmifOutHeader *hdr = reinterpret_cast<CmifOutHeader *>(cursor);
             hdr->magic = CMIF_OUT_HEADER_MAGIC;
             hdr->version = 0;
             hdr->result = rc;
             hdr->token = 0;
+
+            void *out_data = static_cast<void *>(hdr + 1);
+            u32 *out_objects = reinterpret_cast<u32 *>(static_cast<u8 *>(out_data) + out_data_size);
+            for (u32 i = 0; i < num_objects; i++)
+                out_objects[i] = objects[i];
+
+            return out_data;
+        }
+
+        void *BuildCmifReply(u32 out_data_size, u32 num_copy, const Handle *copy, u32 num_move, const Handle *move)
+        {
+            return BuildReply(false, 0, out_data_size, 0, nullptr, num_copy, copy, num_move, move);
+        }
+
+        void *BuildCmifDomainReply(u32 out_data_size, u32 num_objects, const u32 *objects, u32 num_copy, const Handle *copy)
+        {
+            return BuildReply(true, 0, out_data_size, num_objects, objects, num_copy, copy, 0, nullptr);
+        }
+
+        // A CMIF reply carrying only a (failure) result code and no out-data/handles. The
+        // reply to a domain request keeps the domain header: that is how the client reads it.
+        void BuildCmifReplyResult(Result rc, bool domain = false)
+        {
+            BuildReply(domain, rc, 0, 0, nullptr, 0, nullptr, 0, nullptr);
         }
 
         /* -------- session table -------- */
@@ -144,6 +177,30 @@ namespace syscon::hid::mitm
             AppletResource,
         };
 
+        const char *KindName(SessionKind kind)
+        {
+            return kind == SessionKind::Hid ? "hid" : "appletres";
+        }
+
+        void TraceRequest(const char *what, SessionKind kind, const HipcParsedRequest &r, u32 command_id)
+        {
+            ::syscon::logger::LogDebug("HidMitm: %s [%s] type=%u cmd=%u pid=%u statics=%u/%u bufs=%u/%u/%u handles=%u/%u words=%u",
+                                       what, KindName(kind), r.meta.type, command_id, r.meta.send_pid,
+                                       r.meta.num_send_statics, r.meta.num_recv_statics,
+                                       r.meta.num_send_buffers, r.meta.num_recv_buffers, r.meta.num_exch_buffers,
+                                       r.meta.num_copy_handles, r.meta.num_move_handles, r.meta.num_data_words);
+        }
+
+        // An object hosted in a session the client turned into a domain. Its id is the one the
+        // real service handed out for the matching real object, which is what lets every
+        // domain request we do not hook be forwarded byte for byte.
+        struct DomainObject
+        {
+            u32 object_id;
+            SessionKind kind;
+            std::shared_ptr<HidSharedMemoryEntry> entry; // AppletResource objects only
+        };
+
         struct Session
         {
             Handle handle;
@@ -151,6 +208,8 @@ namespace syscon::hid::mitm
             Service forward;                             // valid for Hid sessions
             SysconMitmProcessInfo info;                  // valid for Hid sessions
             std::shared_ptr<HidSharedMemoryEntry> entry; // valid for AppletResource sub-sessions
+            bool is_domain;
+            std::vector<DomainObject> objects; // non-empty only once is_domain
         };
 
         class Server
@@ -161,14 +220,29 @@ namespace syscon::hid::mitm
 
         private:
             void AcceptNewSession();
-            void ProcessQuery();
+            bool ProcessQuery(); // returns true if a reply was staged in TLS
+            void SaveRequest() { std::memcpy(m_request, armGetTls(), sizeof(m_request)); }
+            void RestoreRequest() { std::memcpy(armGetTls(), m_request, sizeof(m_request)); }
             bool ProcessSession(s32 idx); // returns true if a reply was staged in TLS
-            bool ForwardAndReply(const HipcParsedRequest &r, const Service *fwd);
-            bool HookCreateAppletResource(Session &s, const CmifInHeader *in);
-            bool HookGetSharedMemoryHandle(Session &s);
-            const Service *ForwardServiceFor(const Session &s);
+            bool ProcessRequest(s32 idx, const HipcParsedRequest &r);
+            bool ProcessDomainRequest(s32 idx, const HipcParsedRequest &r);
+            bool ForwardAndReply(const HipcParsedRequest &r, Handle forward_session, bool domain_reply);
+            bool HookConvertToDomain(s32 idx);
+            bool HookCreateAppletResource(s32 idx, u64 aruid);
+            bool HookGetSharedMemoryHandle(const std::shared_ptr<HidSharedMemoryEntry> &entry, bool domain);
+            Handle ForwardSessionFor(const Session &s);
+            static DomainObject *FindDomainObject(Session &s, u32 object_id);
             bool AddSession(const Session &s);
             void CloseSessionAt(s32 idx);
+
+            /*
+             * A private copy of the incoming message. syscon::logger writes to the SD card,
+             * and a file write is IPC, which reuses this thread's TLS command buffer - so a
+             * single log line between receiving a request and reading its payload silently
+             * replaces the request with an fs reply. Everything below parses this copy, and
+             * ForwardAndReply puts it back in TLS just before sending it on.
+             */
+            alignas(0x10) u8 m_request[0x100];
 
             Handle m_port = INVALID_HANDLE;
             Handle m_query = INVALID_HANDLE;
@@ -194,21 +268,48 @@ namespace syscon::hid::mitm
             return true;
         }
 
+        // The real IAppletResource objects a domain session hosts live in the forward
+        // session's domain, so closing that session leaves the entries holding a handle
+        // number the kernel is free to hand to somebody else. Make them forget it first.
+        void AbandonDomainObjects(Session &s)
+        {
+            for (DomainObject &object : s.objects)
+            {
+                if (object.kind == SessionKind::AppletResource && object.entry)
+                    object.entry->AbandonForwardAppletResource();
+            }
+            s.objects.clear();
+        }
+
         void Server::CloseSessionAt(s32 idx)
         {
             Session &s = m_sessions[idx - 2];
-            if (s.kind == SessionKind::Hid && serviceIsActive(&s.forward))
-                serviceClose(&s.forward);
+            if (s.kind == SessionKind::Hid)
+            {
+                AbandonDomainObjects(s);
+                if (serviceIsActive(&s.forward))
+                    serviceClose(&s.forward);
+            }
             svcCloseHandle(s.handle);
             m_handles.erase(m_handles.begin() + idx);
             m_sessions.erase(m_sessions.begin() + (idx - 2));
         }
 
-        const Service *Server::ForwardServiceFor(const Session &s)
+        Handle Server::ForwardSessionFor(const Session &s)
         {
             if (s.kind == SessionKind::AppletResource)
-                return s.entry->GetForwardAppletResource();
-            return &s.forward;
+                return s.entry->GetForwardAppletResource()->session;
+            return s.forward.session;
+        }
+
+        DomainObject *Server::FindDomainObject(Session &s, u32 object_id)
+        {
+            for (DomainObject &object : s.objects)
+            {
+                if (object.object_id == object_id)
+                    return &object;
+            }
+            return nullptr;
         }
 
         void Server::AcceptNewSession()
@@ -237,45 +338,70 @@ namespace syscon::hid::mitm
             AddSession(s);
         }
 
-        void Server::ProcessQuery()
+        /*
+         * The peer on this handle is sm itself, asking whether to intercept a process that is
+         * acquiring 'hid'. Every service acquisition on the console is blocked behind the
+         * answer, so a reply of the wrong shape - or a reply to a message that must not get
+         * one, such as a session close - deadlocks the whole system with the kernel still
+         * running. Anything not positively recognised is therefore left unanswered rather
+         * than answered with an invented CMIF payload.
+         */
+        bool Server::ProcessQuery()
         {
-            HipcParsedRequest r = hipcParseRequest(armGetTls());
+            HipcParsedRequest r = hipcParseRequest(m_request);
+            ::syscon::logger::LogDebug("HidMitm: query type=%u words=%u", r.meta.type, r.meta.num_data_words);
 
-            if (r.meta.type == CmifCommandType_Request || r.meta.type == CmifCommandType_RequestWithContext)
+            switch (r.meta.type)
             {
-                const CmifInHeader *in = GetInHeader(r);
-                bool should = false;
-                if (in->command_id == 65000) // ShouldMitm
+                case CmifCommandType_Request:
+                case CmifCommandType_RequestWithContext:
                 {
+                    const CmifInHeader *in = GetInHeader(r, m_request);
+                    if (in->magic != CMIF_IN_HEADER_MAGIC)
+                    {
+                        ::syscon::logger::LogWarning("HidMitm: query has no CMIF header (magic 0x%08X), not replying", in->magic);
+                        return false;
+                    }
+                    if (in->command_id != 65000) // ShouldMitm
+                    {
+                        ::syscon::logger::LogWarning("HidMitm: unexpected query command %u, not replying", in->command_id);
+                        return false;
+                    }
+
                     const SysconMitmProcessInfo *info = reinterpret_cast<const SysconMitmProcessInfo *>(in + 1);
-                    should = ShouldMitm(*info);
+                    bool *out = static_cast<bool *>(BuildCmifReply(sizeof(bool), 0, nullptr, 0, nullptr));
+                    *out = ShouldMitm(*info);
+                    return true;
                 }
-                bool *out = static_cast<bool *>(BuildCmifReply(sizeof(bool), 0, nullptr, 0, nullptr));
-                *out = should;
-            }
-            else // Control (e.g. QueryPointerBufferSize when the client wraps our handle)
-            {
-                const CmifInHeader *in = GetInHeader(r);
-                if (in->command_id == 3) // QueryPointerBufferSize
+
+                case CmifCommandType_Control:
+                case CmifCommandType_ControlWithContext:
                 {
-                    u16 *out = static_cast<u16 *>(BuildCmifReply(sizeof(u16), 0, nullptr, 0, nullptr));
-                    *out = 0;
+                    const CmifInHeader *in = GetInHeader(r, m_request);
+                    if (in->magic == CMIF_IN_HEADER_MAGIC && in->command_id == 3) // QueryPointerBufferSize
+                    {
+                        u16 *out = static_cast<u16 *>(BuildCmifReply(sizeof(u16), 0, nullptr, 0, nullptr));
+                        *out = 0;
+                        return true;
+                    }
+                    ::syscon::logger::LogWarning("HidMitm: unhandled query control message, not replying");
+                    return false;
                 }
-                else
-                {
-                    BuildCmifReplyResult(MAKERESULT(11, 403)); // sf::ResultNotSupported
-                }
+
+                default:
+                    ::syscon::logger::LogWarning("HidMitm: query message type %u left unanswered", r.meta.type);
+                    return false;
             }
         }
 
-        bool Server::ForwardAndReply(const HipcParsedRequest &r, const Service *fwd)
+        bool Server::ForwardAndReply(const HipcParsedRequest &r, Handle forward_session, bool domain_reply)
         {
-            void *base = armGetTls();
+            u8 *base = m_request;
 
             // Tag the PID so the real service still attributes the request to the original client.
             if (r.meta.send_pid)
             {
-                u64 *pid = reinterpret_cast<u64 *>(static_cast<u8 *>(base) + sizeof(HipcHeader) + sizeof(HipcSpecialHeader));
+                u64 *pid = reinterpret_cast<u64 *>(base + sizeof(HipcHeader) + sizeof(HipcSpecialHeader));
                 *pid = MitmProcessIdTag | (*pid & ProcessIdMask);
             }
 
@@ -284,34 +410,80 @@ namespace syscon::hid::mitm
             {
                 reinterpret_cast<HipcHeader *>(base)->recv_static_mode = 2;
                 const uintptr_t off = reinterpret_cast<uintptr_t>(r.data.recv_list) - reinterpret_cast<uintptr_t>(base);
-                *reinterpret_cast<HipcRecvListEntry *>(static_cast<u8 *>(base) + off) =
-                    hipcMakeRecvStatic(g_pointer_buffer, sizeof(g_pointer_buffer));
+                *reinterpret_cast<HipcRecvListEntry *>(base + off) = hipcMakeRecvStatic(g_pointer_buffer, sizeof(g_pointer_buffer));
             }
 
-            Result rc = svcSendSyncRequest(fwd->session);
+            // Put the untouched request back where the kernel expects it. Everything above
+            // may have logged, and logging goes through fs, which uses this same buffer.
+            RestoreRequest();
+
+            Result rc = svcSendSyncRequest(forward_session);
+
+            // Take the reply out of TLS before anything logs, then it is safe to talk.
+            std::memcpy(g_reply, armGetTls(), sizeof(g_reply));
+
             if (R_FAILED(rc))
             {
                 ::syscon::logger::LogError("HidMitm: forward svcSendSyncRequest failed: 0x%X", rc);
-                BuildCmifReplyResult(rc);
+                BuildCmifReplyResult(rc, domain_reply);
                 return true;
             }
 
-            // The real service's reply now sits in TLS; reply it verbatim. Any copy handles
-            // in it are duplicated to the client on our reply, so close our copies afterwards.
-            HipcResponse resp = hipcParseResponse(armGetTls());
+            // Reply it verbatim. Any copy handles in it are duplicated to the client when we
+            // reply, so our own copies have to be closed once that has happened.
+            HipcResponse resp = hipcParseResponse(g_reply);
             for (u32 i = 0; i < resp.num_copy_handles; i++)
                 m_pending_close.push_back(resp.copy_handles[i]);
             return true;
         }
 
-        bool Server::HookCreateAppletResource(Session &s, const CmifInHeader *in)
+        /*
+         * Turn the session into a domain the same way libstratosphere does for a mitm session
+         * (HipcManager::ConvertCurrentObjectToDomain): convert the forward service too, and
+         * adopt the object id the real service reserved for it instead of allocating our own.
+         * Both domains then name the same objects by the same ids, which is what makes every
+         * unhooked domain request forwardable verbatim - and forwarding this command instead,
+         * leaving our side a plain session, is what used to wedge the console.
+         */
+        bool Server::HookConvertToDomain(s32 idx)
         {
-            const u64 aruid = *reinterpret_cast<const u64 *>(in + 1);
+            Session &s = m_sessions[idx - 2];
 
+            if (s.kind != SessionKind::Hid || s.is_domain)
+            {
+                ::syscon::logger::LogWarning("HidMitm: ConvertCurrentObjectToDomain refused (kind=%d, is_domain=%d)",
+                                             static_cast<int>(s.kind), static_cast<int>(s.is_domain));
+                BuildCmifReplyResult(MAKERESULT(11, 403));
+                return true;
+            }
+
+            Result rc = serviceConvertToDomain(&s.forward);
+            if (R_FAILED(rc))
+            {
+                ::syscon::logger::LogError("HidMitm: serviceConvertToDomain failed: 0x%X", rc);
+                BuildCmifReplyResult(rc);
+                return true;
+            }
+
+            const u32 object_id = s.forward.object_id;
+            s.is_domain = true;
+            s.objects.push_back(DomainObject{object_id, SessionKind::Hid, nullptr});
+
+            ::syscon::logger::LogInfo("HidMitm: session for program 0x%016lX converted to a domain (object id %u)",
+                                      s.info.program_id, object_id);
+
+            u32 *out = static_cast<u32 *>(BuildCmifReply(sizeof(u32), 0, nullptr, 0, nullptr));
+            *out = object_id;
+            return true;
+        }
+
+        bool Server::HookCreateAppletResource(s32 idx, u64 aruid)
+        {
             // Copy what we need before AddSession() below, which may reallocate m_sessions
-            // and invalidate the reference `s`.
-            Service forward = s.forward;
-            const u64 program_id = s.info.program_id;
+            // and invalidate any reference into it.
+            Service forward = m_sessions[idx - 2].forward;
+            const u64 program_id = m_sessions[idx - 2].info.program_id;
+            const bool domain = m_sessions[idx - 2].is_domain;
 
             ::syscon::logger::LogInfo("HidMitm: CreateAppletResource from program 0x%016lX (aruid=0x%lX) ...", program_id, aruid);
 
@@ -320,7 +492,27 @@ namespace syscon::hid::mitm
             if (!entry)
             {
                 ::syscon::logger::LogError("HidMitm: CreateIfNotExists failed (aruid=0x%lX)", aruid);
-                BuildCmifReplyResult(MAKERESULT(11, 403));
+                BuildCmifReplyResult(MAKERESULT(11, 403), domain);
+                return true;
+            }
+
+            if (domain)
+            {
+                // The forward is a domain, so the real IAppletResource came back as a domain
+                // object: hand the client that very id and host it on our side.
+                const u32 object_id = entry->GetForwardAppletResource()->object_id;
+                if (object_id == 0)
+                {
+                    ::syscon::logger::LogError("HidMitm: forwarded IAppletResource is not a domain object");
+                    BuildCmifReplyResult(MAKERESULT(11, 403), true);
+                    return true;
+                }
+
+                m_sessions[idx - 2].objects.push_back(DomainObject{object_id, SessionKind::AppletResource, entry});
+
+                const u32 out_objects[1] = {object_id};
+                BuildCmifDomainReply(0, 1, out_objects, 0, nullptr);
+                ::syscon::logger::LogInfo("HidMitm: CreateAppletResource hooked for program 0x%016lX (aruid=0x%lX, object id %u)", program_id, aruid, object_id);
                 return true;
             }
 
@@ -353,38 +545,100 @@ namespace syscon::hid::mitm
             return true;
         }
 
-        bool Server::HookGetSharedMemoryHandle(Session &s)
+        bool Server::HookGetSharedMemoryHandle(const std::shared_ptr<HidSharedMemoryEntry> &entry, bool domain)
         {
-            const Handle copy_handles[1] = {s.entry->GetSharedMemoryHandle().handle};
-            BuildCmifReply(0, 1, copy_handles, 0, nullptr);
+            const Handle copy_handles[1] = {entry->GetSharedMemoryHandle().handle};
+            ::syscon::logger::LogInfo("HidMitm: GetSharedMemoryHandle hooked -> fake shmem handle 0x%X (domain=%d)",
+                                      copy_handles[0], static_cast<int>(domain));
+            if (domain)
+                BuildCmifDomainReply(0, 0, nullptr, 1, copy_handles);
+            else
+                BuildCmifReply(0, 1, copy_handles, 0, nullptr);
             return true;
+        }
+
+        bool Server::ProcessRequest(s32 idx, const HipcParsedRequest &r)
+        {
+            Session &s = m_sessions[idx - 2];
+            const CmifInHeader *in = GetInHeader(r, m_request);
+            const u32 command_id = in->command_id;
+            const u64 aruid = *reinterpret_cast<const u64 *>(in + 1);
+            TraceRequest("request", s.kind, r, command_id);
+
+            if (s.kind == SessionKind::Hid && command_id == 0)
+                return HookCreateAppletResource(idx, aruid);
+            if (s.kind == SessionKind::AppletResource && command_id == 0)
+                return HookGetSharedMemoryHandle(s.entry, false);
+            return ForwardAndReply(r, ForwardSessionFor(s), false);
+        }
+
+        bool Server::ProcessDomainRequest(s32 idx, const HipcParsedRequest &r)
+        {
+            Session &s = m_sessions[idx - 2];
+            const CmifDomainInHeader *domain_hdr = GetDomainInHeader(r, m_request);
+            const CmifInHeader *in = reinterpret_cast<const CmifInHeader *>(domain_hdr + 1);
+            const u8 domain_type = domain_hdr->type;
+            const u32 command_id = in->command_id;
+            const u64 aruid = *reinterpret_cast<const u64 *>(in + 1);
+            const Handle forward_session = ForwardSessionFor(s);
+            DomainObject *object = FindDomainObject(s, domain_hdr->object_id);
+
+            if (domain_type == CmifDomainRequestType_Close)
+            {
+                // Our ids are the real service's ids, so the close has to reach it - and the
+                // entry must stop owning an object the client just freed.
+                if (object != nullptr)
+                {
+                    if (object->entry)
+                        object->entry->AbandonForwardAppletResource();
+                    s.objects.erase(s.objects.begin() + (object - s.objects.data()));
+                }
+                return ForwardAndReply(r, forward_session, true);
+            }
+
+            if (domain_type == CmifDomainRequestType_SendMessage && object != nullptr && command_id == 0)
+            {
+                if (object->kind == SessionKind::Hid)
+                    return HookCreateAppletResource(idx, aruid);
+
+                std::shared_ptr<HidSharedMemoryEntry> entry = object->entry;
+                return HookGetSharedMemoryHandle(entry, true);
+            }
+
+            return ForwardAndReply(r, forward_session, true);
         }
 
         bool Server::ProcessSession(s32 idx)
         {
-            Session &s = m_sessions[idx - 2];
-            HipcParsedRequest r = hipcParseRequest(armGetTls());
+            HipcParsedRequest r = hipcParseRequest(m_request);
 
             switch (r.meta.type)
             {
                 case CmifCommandType_Close:
                 case TipcCommandType_Close:
+                    ::syscon::logger::LogDebug("HidMitm: close [%s]", KindName(m_sessions[idx - 2].kind));
                     CloseSessionAt(idx);
                     return false;
 
                 case CmifCommandType_Request:
                 case CmifCommandType_RequestWithContext:
-                {
-                    const CmifInHeader *in = GetInHeader(r);
-                    if (s.kind == SessionKind::Hid && in->command_id == 0)
-                        return HookCreateAppletResource(s, in);
-                    if (s.kind == SessionKind::AppletResource && in->command_id == 0)
-                        return HookGetSharedMemoryHandle(s);
-                    return ForwardAndReply(r, ForwardServiceFor(s));
-                }
+                    if (m_sessions[idx - 2].is_domain)
+                        return ProcessDomainRequest(idx, r);
+                    return ProcessRequest(idx, r);
 
-                default: // Control / ControlWithContext / anything else -> forward
-                    return ForwardAndReply(r, ForwardServiceFor(s));
+                case CmifCommandType_Control:
+                case CmifCommandType_ControlWithContext:
+                    // Control messages are never domain-wrapped, whatever the session is.
+                {
+                    const u32 control_id = GetInHeader(r, m_request)->command_id;
+                    TraceRequest("control", m_sessions[idx - 2].kind, r, control_id);
+                    if (control_id == 0) // ConvertCurrentObjectToDomain
+                        return HookConvertToDomain(idx);
+                    return ForwardAndReply(r, ForwardSessionFor(m_sessions[idx - 2]), false);
+                }
+                default:
+                    TraceRequest("other", m_sessions[idx - 2].kind, r, 0);
+                    return ForwardAndReply(r, ForwardSessionFor(m_sessions[idx - 2]), false);
             }
         }
 
@@ -410,8 +664,33 @@ namespace syscon::hid::mitm
             while (!m_stop)
             {
                 s32 idx = 0;
-                rc = svcReplyAndReceive(&idx, m_handles.data(), static_cast<s32>(m_handles.size()), reply_target, UINT64_MAX);
-                reply_target = INVALID_HANDLE;
+                // Reply and receive are two syscalls, as in libstratosphere: the staged reply
+                // is copied into TLS and sent on its own, so the receive below always starts
+                // from a buffer we control. A zero timeout returns TimedOut once the reply is
+                // delivered.
+                if (reply_target != INVALID_HANDLE)
+                {
+                    std::memcpy(armGetTls(), g_reply, sizeof(g_reply));
+                    s32 unused = 0;
+                    const Result reply_rc = svcReplyAndReceive(&unused, nullptr, 0, reply_target, 0);
+                    if (R_FAILED(reply_rc) && R_VALUE(reply_rc) != KERNELRESULT(TimedOut))
+                        ::syscon::logger::LogWarning("HidMitm: reply on 0x%X failed: 0x%X", reply_target, reply_rc);
+                    reply_target = INVALID_HANDLE;
+                }
+
+                // Arm the receive with our pointer buffer, so a request carrying in-pointer
+                // data (hid's SetSupportedNpadIdType does) has somewhere to land.
+                hipcMakeRequestInline(armGetTls(),
+                                      .type = CmifCommandType_Invalid,
+                                      .num_recv_statics = HIPC_AUTO_RECV_STATIC, )
+                    .recv_list[0] = hipcMakeRecvStatic(g_pointer_buffer, sizeof(g_pointer_buffer));
+
+                rc = svcReplyAndReceive(&idx, m_handles.data(), static_cast<s32>(m_handles.size()), INVALID_HANDLE, UINT64_MAX);
+
+                // Snapshot the message before anything else touches this thread's TLS - and
+                // that includes the very next log line, whose fs write goes through the same
+                // buffer.
+                SaveRequest();
 
                 // The reply staged last iteration has now been delivered: close any copy
                 // handles we forwarded onward.
@@ -442,8 +721,8 @@ namespace syscon::hid::mitm
                 }
                 else if (idx == 1)
                 {
-                    ProcessQuery();
-                    reply_target = m_query;
+                    if (ProcessQuery())
+                        reply_target = m_query;
                 }
                 else
                 {
@@ -457,8 +736,12 @@ namespace syscon::hid::mitm
             smMitmUninstall(hid_name);
             for (Session &s : m_sessions)
             {
-                if (s.kind == SessionKind::Hid && serviceIsActive(&s.forward))
-                    serviceClose(&s.forward);
+                if (s.kind == SessionKind::Hid)
+                {
+                    AbandonDomainObjects(s);
+                    if (serviceIsActive(&s.forward))
+                        serviceClose(&s.forward);
+                }
                 svcCloseHandle(s.handle);
             }
             m_sessions.clear();

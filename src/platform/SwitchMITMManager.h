@@ -24,6 +24,11 @@ public:
     // any non-hooked IAppletResource command straight to the original object.
     const ::Service *GetForwardAppletResource() const { return &m_appletresource; }
 
+    // Forget the forwarded IAppletResource without closing it. A MITM server calls this when
+    // the domain the object lives in is going away: the destructor would otherwise send a
+    // close request down a session handle the kernel has already handed to somebody else.
+    void AbandonForwardAppletResource() { m_appletresource = ::Service{}; }
+
     inline ::HidSharedMemory *GetRealAddr();
 
     inline ::HidSharedMemory *GetFakeAddr();
