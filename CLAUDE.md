@@ -65,6 +65,14 @@
   gives its own mitm query server 16 KiB for the same reason. This only bites once an applet
   actually reaches `CreateAppletResource`, which is why it surfaced the moment `boot2.flag`
   made the MITM catch `qlaunch` (`0x…1000`) and `overlayDisp` (`0x…100C`) at boot.
+- **A stale MITM registration on `hid` survives until the console reboots, and sys-con must
+  not abort over it.** sm never reclaims a MITM registration when its owner is killed, a
+  terminated sys-con never runs `Finalize`, and sm refuses `UninstallMitm` from any process
+  that is not the owner — all verified on device. So after any `devtools stop`/`restart`,
+  the next sys-con runs *without* a MITM until a reboot; only a clean boot gets one.
+  `RegisterMitmServer` therefore must never be wrapped in `R_ABORT_UNLESS`: it returns
+  `0x815` (`sm::ResultAlreadyRegistered`) in that state, and aborting fatals the whole
+  console. **Restarting sys-con is not a valid way to test mitm mode — reboot instead.**
 - **Decoding a fatal: `tools/AFE_Parser.exe -report <bin> -elf src/app/build/sys-con.elf
   -addr2line C:/msys64/opt/devkitpro/devkitA64/bin/aarch64-none-elf-addr2line.exe`.** The
   default addr2line path in the tool is wrong on this machine and the trace comes out

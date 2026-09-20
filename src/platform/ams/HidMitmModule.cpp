@@ -83,7 +83,20 @@ namespace ams::syscon::hid::mitm
         (void)arg;
 
         ::syscon::logger::LogDebug("HidMitmModule RegisterMitmServer ...");
-        R_ABORT_UNLESS(g_server_manager.RegisterMitmServer<HidMitmService>(PortIndex_Mitm, HidMitmServiceName));
+
+        /*
+         * Never R_ABORT_UNLESS this: it fatals the whole console. sm returns
+         * AlreadyRegistered (0x815) whenever a previous sys-con still holds 'hid' - it does
+         * not reclaim the registration when the owner is killed, and refuses UninstallMitm
+         * from a non-owner, so it stays claimed until the console reboots. Retrying is
+         * pointless for the same reason; just carry on without a MITM.
+         */
+        const Result rc = g_server_manager.RegisterMitmServer<HidMitmService>(PortIndex_Mitm, HidMitmServiceName);
+        if (R_FAILED(rc))
+        {
+            ::syscon::logger::LogError("HidMitmModule RegisterMitmServer failed: 0x%X - running without a HID MITM (if a previous sys-con still holds 'hid', only a reboot frees it).", rc.GetValue());
+            return;
+        }
 
         ::syscon::logger::LogDebug("HidMitmModule LoopProcess ...");
         g_server_manager.LoopProcess();
