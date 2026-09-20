@@ -1,6 +1,7 @@
 #include "drivers/SwitchController.h"
 
 #define SWITCH_INPUT_BUFFER_SIZE 64
+#define SWITCH_INIT_FLUSH_MAX_READS 10
 
 namespace controllerlib
 {
@@ -29,13 +30,19 @@ namespace controllerlib
             return Status::InvalidEndpoint;
         }
 
-        // Flush the input buffer
+        // Flush the input buffer. Third party controllers (HOJA firmware) already stream 0x30
+        // reports on enumeration, faster than the read timeout, so draining until a timeout
+        // would never end: stop as soon as the device reports it is already in 0x30 mode.
         uint8_t buffer[SWITCH_INPUT_BUFFER_SIZE]{0x00};
-        do
+        for (size_t idx = 0; idx < SWITCH_INIT_FLUSH_MAX_READS; idx++)
         {
             size_t size = sizeof(buffer);
-            result = m_inPipe[0]->Read(buffer, &size, 100 * 1000 /*timeout_us*/);
-        } while (result == Status::Success);
+            if (m_inPipe[0]->Read(buffer, &size, 100 * 1000 /*timeout_us*/) != Status::Success)
+                break;
+
+            if (size >= sizeof(SwitchButtonData) && buffer[0] == 0x30)
+                break;
+        }
 
         // Send the initialization packet
         uint8_t initPacket1[SWITCH_INPUT_BUFFER_SIZE]{0x80, 0x02};
