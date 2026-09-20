@@ -31,23 +31,23 @@ namespace syscon
 
     void InitializeModules()
     {
-        AbortUnless(hiddbgInitialize()); // opened here; the HDLS work buffer is attached later by RunApp when mode=hiddbg
-        AbortUnless(usbHsInitialize());
-        AbortUnless(pscmInitialize());
-        AbortUnless(pmdmntInitialize());
-
-        // Read the firmware version into libnx's hosversion global. set:sys is opened once
-        // for this and intentionally left open: nothing reads it afterward (libstratosphere
-        // gets its version from exosphere), and it is released at process exit anyway.
+        // Set hosversion before any service init: libnx wrappers branch on it (e.g. usbHs).
+        // set:sys is intentionally left open; released at process exit.
         AbortUnless(setsysInitialize());
 
         SetSysFirmwareVersion fw;
         AbortUnless(setsysGetFirmwareVersion(&fw));
         hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
+
+        AbortUnless(hiddbgInitialize()); // opened here; the HDLS work buffer is attached later by RunApp when mode=hiddbg
+        AbortUnless(usbHsInitialize());
+        AbortUnless(pscmInitialize());
+        AbortUnless(pmdmntInitialize());
     }
 
     void FinalizeModules()
     {
+        pmdmntExit();
         pscmExit();
         usbHsExit();
         hiddbgExit();
