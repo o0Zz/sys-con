@@ -65,7 +65,14 @@ namespace ams::syscon::hid::mitm
             }
         }
 
-        alignas(ams::os::ThreadStackAlignment) constinit u8 g_mitm_thread_stack[0x1000];
+        /*
+         * 16 KiB, matching libstratosphere's own mitm query server thread. 4 KiB overflows:
+         * libstratosphere's CMIF dispatch is ten frames deep before a handler runs, and
+         * HidMitmService::CreateAppletResource then puts the logger's 512-byte line buffer
+         * and newlib's vsnprintf on top of that. The console dies with fatal descriptor
+         * 0xFFD (StackOverflowErrorDesc) and takes the system down with it.
+         */
+        alignas(ams::os::ThreadStackAlignment) constinit u8 g_mitm_thread_stack[0x4000];
         ams::os::ThreadType g_mitm_thread;
 
         bool g_initialized = false;
@@ -93,7 +100,7 @@ namespace ams::syscon::hid::mitm
         }
 
         // Create and start the MITM thread
-        R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, 0x1000, 20));
+        R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), 20));
 
         ams::os::SetThreadNamePointer(&g_mitm_thread, "HidMitmThread");
 

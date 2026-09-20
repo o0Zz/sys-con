@@ -57,6 +57,20 @@
 - **Keep the ams heap at 512 KiB.** It is static storage, so it counts against the memory the
   kernel reserves for the process; at 1 MiB pm refuses to launch the module at all
   (`0x00010801` LimitReached).
+- **The ams MITM thread needs 16 KiB of stack, not 4 KiB.** libstratosphere's CMIF dispatch is
+  ten frames deep before a handler body runs, and `HidMitmService::CreateAppletResource` then
+  adds the logger's 512-byte line buffer plus newlib's `vsnprintf`. At `0x1000` it overflows
+  and Atmosphere fatals with descriptor **`0xFFD`** (`StackOverflowErrorDesc`, see
+  `libvapours/.../ams_fatal_error_context.hpp`), taking the whole console down. libstratosphere
+  gives its own mitm query server 16 KiB for the same reason. This only bites once an applet
+  actually reaches `CreateAppletResource`, which is why it surfaced the moment `boot2.flag`
+  made the MITM catch `qlaunch` (`0x…1000`) and `overlayDisp` (`0x…100C`) at boot.
+- **Decoding a fatal: `tools/AFE_Parser.exe -report <bin> -elf src/app/build/sys-con.elf
+  -addr2line C:/msys64/opt/devkitpro/devkitA64/bin/aarch64-none-elf-addr2line.exe`.** The
+  default addr2line path in the tool is wrong on this machine and the trace comes out
+  unsymbolized without the flag. Descriptor `0xFFE` is `std::abort` (a failed
+  `R_ABORT_UNLESS`; the failing Result is in X[0] — e.g. `0x815` = `sm::ResultAlreadyRegistered`
+  from `InstallMitm("hid")` when a second sys-con instance starts while the first holds it).
 - **A MITM only catches processes that open `hid` after it installs.** Atmosphere resolves it
   at `sm:GetService` time, so nothing already running — qlaunch included — is ever
   intercepted. In production that is what `boot2.flag` solves. On the test console, where
