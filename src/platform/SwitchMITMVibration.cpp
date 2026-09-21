@@ -3,35 +3,25 @@
 
 namespace syscon::hid::mitm::vibration
 {
-    namespace
-    {
-        std::shared_ptr<HidSharedMemoryController> ControllerFor(HidVibrationDeviceHandle handle)
-        {
-            return HidSharedMemoryManager::GetHidSharedMemoryManager().GetController(handle.player_number);
-        }
-    } // namespace
-
     bool IsOwned(HidVibrationDeviceHandle handle)
     {
-        return ControllerFor(handle) != nullptr;
+        return HidSharedMemoryManager::GetHidSharedMemoryManager().IsPlayerIndexOwned(handle.player_number);
     }
 
     void Store(HidVibrationDeviceHandle handle, const HidVibrationValue &value)
     {
-        std::shared_ptr<HidSharedMemoryController> controller = ControllerFor(handle);
-        if (controller == nullptr)
+        if (!IsOwned(handle))
             return;
 
-        controller->SetVibration(handle.device_idx, value);
+        HidSharedMemoryManager::GetHidSharedMemoryManager().SetVibration(handle.player_number, handle.device_idx, value);
     }
 
     bool Load(HidVibrationDeviceHandle handle, HidVibrationValue *out)
     {
-        std::shared_ptr<HidSharedMemoryController> controller = ControllerFor(handle);
-        if (controller == nullptr)
+        if (!IsOwned(handle))
             return false;
 
-        *out = controller->GetVibration(handle.device_idx);
+        *out = HidSharedMemoryManager::GetHidSharedMemoryManager().GetVibration(handle.player_number, handle.device_idx);
         return true;
     }
 

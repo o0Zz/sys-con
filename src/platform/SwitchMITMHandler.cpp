@@ -1,5 +1,6 @@
 #include "SwitchMITMHandler.h"
 #include "SwitchLogger.h"
+#include <algorithm>
 #include <cmath>
 #include <chrono>
 
@@ -89,7 +90,11 @@ Result SwitchMITMHandler::UpdateOutput()
     if (!m_controller->Support(SUPPORTS_RUMBLE))
         return 0;
 
-    for (uint16_t input_idx = 0; input_idx < m_controller->GetInputCount(); input_idx++)
+    // GetInputCount() can exceed CONTROLLER_MAX_INPUTS on a controller with more endpoints
+    // than sys-con tracks (see SwitchVirtualGamepadHandler::UpdateInput).
+    const uint16_t input_count = std::min<uint16_t>(m_controller->GetInputCount(), CONTROLLER_MAX_INPUTS);
+
+    for (uint16_t input_idx = 0; input_idx < input_count; input_idx++)
     {
         if (!IsControllerAttached(input_idx))
             continue;
