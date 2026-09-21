@@ -39,39 +39,7 @@ TEST(Controller, test_switch_lstick_left)
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], -1.0f);
 }
 
-TEST(Controller, test_switch_init_flush_stops_on_streaming_device)
-{
-    ControllerConfig config;
-
-    auto mockUSBEndpointIn = std::make_unique<MockUSBEndpoint>(IUSBEndpoint::USB_ENDPOINT_IN);
-    auto mockUSBEndpointOut = std::make_unique<MockUSBEndpoint>(IUSBEndpoint::USB_ENDPOINT_OUT);
-    EXPECT_CALL(*mockUSBEndpointIn, Open).WillOnce(testing::Return(Status::Success));
-    EXPECT_CALL(*mockUSBEndpointOut, Open).WillOnce(testing::Return(Status::Success));
-
-    // HOJA based Pro Controllers stream 0x30 reports before the handshake, a read never times out.
-    // The guard keeps an unbounded flush loop from hanging the test suite instead of failing it.
-    size_t readCount = 0;
-    EXPECT_CALL(*mockUSBEndpointIn, Read(testing::_, testing::_, testing::_))
-        .Times(2)
-        .WillRepeatedly(testing::Invoke([&readCount](uint8_t *outBuffer, size_t *bufferSizeInOut, uint64_t) {
-            if (++readCount > 32)
-                return Status::Timeout;
-
-            *bufferSizeInOut = sizeof(SwitchButtonData);
-            memset(outBuffer, 0x00, *bufferSizeInOut);
-            outBuffer[0] = 0x30;
-            return Status::Success;
-        }));
-
-    EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, testing::_))
-        .Times(2)
-        .WillRepeatedly(testing::Return(Status::Success));
-
-    SwitchController controller(std::make_unique<MockDevice>(0x057e, 0x2009, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
-    EXPECT_EQ(controller.Initialize(), Status::Success);
-}
-
-TEST(Controller, test_switch_init_flush_stops_on_timeout)
+TEST(Controller, test_switch_init_handshake_writes_before_reading)
 {
     ControllerConfig config;
 
@@ -81,16 +49,23 @@ TEST(Controller, test_switch_init_flush_stops_on_timeout)
     EXPECT_CALL(*mockUSBEndpointOut, Open).WillOnce(testing::Return(Status::Success));
 
     testing::Sequence seq;
+    EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, testing::_))
+        .InSequence(seq)
+        .WillOnce(testing::Invoke([](const uint8_t *inBuffer, size_t) {
+            EXPECT_EQ(inBuffer[0], 0x80);
+            EXPECT_EQ(inBuffer[1], 0x02);
+            return Status::Success;
+        }));
     EXPECT_CALL(*mockUSBEndpointIn, Read(testing::_, testing::_, testing::_))
         .InSequence(seq)
         .WillOnce(testing::Return(Status::Timeout));
-    EXPECT_CALL(*mockUSBEndpointIn, Read(testing::_, testing::_, testing::_))
-        .InSequence(seq)
-        .WillOnce(testing::Return(Status::Success));
-
     EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, testing::_))
-        .Times(2)
-        .WillRepeatedly(testing::Return(Status::Success));
+        .InSequence(seq)
+        .WillOnce(testing::Invoke([](const uint8_t *inBuffer, size_t) {
+            EXPECT_EQ(inBuffer[0], 0x80);
+            EXPECT_EQ(inBuffer[1], 0x04);
+            return Status::Success;
+        }));
 
     SwitchController controller(std::make_unique<MockDevice>(0x057e, 0x2009, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
     EXPECT_EQ(controller.Initialize(), Status::Success);

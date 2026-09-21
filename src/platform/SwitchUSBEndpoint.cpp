@@ -41,22 +41,14 @@ Status SwitchUSBEndpoint::Open(int maxPacketSize)
 
     ::syscon::logger::LogDebug("SwitchUSBEndpoint[0x%02X] Successfully opened !", m_descriptor->bEndpointAddress);
 
-    if (GetDirection() == USB_ENDPOINT_IN)
-        m_readSize = std::min<u32>(std::min<u32>(maxPacketSize, m_descriptor->wMaxPacketSize), sizeof(m_usb_buffer_in));
-
-    return Status::Success;
-}
-
-Status SwitchUSBEndpoint::ArmForRead()
-{
-    if (GetDirection() != USB_ENDPOINT_IN)
+    if (GetDirection() == USB_ENDPOINT_OUT)
         return Status::Success;
 
-    /* usb:hs must already hold a transfer on an interrupt IN endpoint when the device first talks
-       on it - the Xbox 360 LED ack or the GC adapter's first frame will otherwise wedge the
-       endpoint for 30-60 s. Arming has to happen AFTER the driver's init OUT writes: if we arm
-       first and the device answers on IN before the OUT is posted, usb:hs blocks the OUT's
-       PostBuffer for tens of seconds waiting for the pending IN to be drained. */
+    m_readSize = std::min<u32>(maxPacketSize, sizeof(m_usb_buffer_in));
+
+    /* usb:hs must already hold a transfer on an interrupt IN endpoint when the device first
+       talks on it, otherwise its first report (an Xbox 360 LED ack, the GC adapter's first
+       frame, a pad already streaming at enumeration) wedges the endpoint for 30-60 s. */
     return PostRead();
 }
 

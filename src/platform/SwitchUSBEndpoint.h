@@ -17,9 +17,6 @@ private:
     controllerlib::Status PostRead();
 
 public:
-    controllerlib::Status ArmForRead() override;
-
-public:
     // Pass the necessary information to be able to open the endpoint
     SwitchUSBEndpoint(UsbHsClientIfSession &if_session, usb_endpoint_descriptor &desc);
     ~SwitchUSBEndpoint();
