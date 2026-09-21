@@ -123,7 +123,7 @@ Result SwitchHDLHandler::UpdateControllerState(u64 buttons, const HidAnalogStick
                 This case might also happen if user plugged a controller and we were not able to attach it (i.e: if the game do no accept more controller)
             */
 
-            // syscon::logger::LogError("SwitchHDLHandler UpdateHdlState - Failed to set HDL state for idx: %d (Ret: 0x%X) - Detaching controller ...", input_idx, rc);
+            syscon::logger::LogError("SwitchHDLHandler[%04x-%04x] UpdateHdlState failed on idx: %d - Error: 0x%08X (Module: 0x%X, Desc: 0x%X) - Detaching controller ...", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc, R_MODULE(rc), R_DESCRIPTION(rc));
             DetachController(input_idx);
 
             return rc;

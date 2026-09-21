@@ -40,6 +40,12 @@ namespace controllerlib
         virtual Status Initialize() = 0;
         virtual void Exit() = 0;
 
+        /* Called after Initialize() has run to completion, including any driver-specific init OUT
+           writes. This is where IN endpoints get armed for reading. Doing it earlier (at Open, or
+           inside Initialize) risks the device answering on IN while the driver is still doing sync
+           OUT writes, which on Switch's usb:hs then wedges the OUT for tens of seconds. */
+        virtual Status PostInitialize() { return Status::Success; }
+
         virtual uint16_t GetInputCount() = 0;
         virtual Status ReadInput(NormalizedButtonData *normalData, uint16_t *input_idx, uint32_t timeout_us) = 0;
 

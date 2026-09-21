@@ -1,6 +1,7 @@
 #include "SwitchUSBEndpoint.h"
 #include "SwitchUSBLock.h"
 #include "SwitchLogger.h"
+#include <algorithm>
 #include <cstring>
 #include <malloc.h>
 
@@ -39,6 +40,39 @@ Status SwitchUSBEndpoint::Open(int maxPacketSize)
     }
 
     ::syscon::logger::LogDebug("SwitchUSBEndpoint[0x%02X] Successfully opened !", m_descriptor->bEndpointAddress);
+
+    if (GetDirection() == USB_ENDPOINT_IN)
+        m_readSize = std::min<u32>(std::min<u32>(maxPacketSize, m_descriptor->wMaxPacketSize), sizeof(m_usb_buffer_in));
+
+    return Status::Success;
+}
+
+Status SwitchUSBEndpoint::ArmForRead()
+{
+    if (GetDirection() != USB_ENDPOINT_IN)
+        return Status::Success;
+
+    /* usb:hs must already hold a transfer on an interrupt IN endpoint when the device first talks
+       on it - the Xbox 360 LED ack or the GC adapter's first frame will otherwise wedge the
+       endpoint for 30-60 s. Arming has to happen AFTER the driver's init OUT writes: if we arm
+       first and the device answers on IN before the OUT is posted, usb:hs blocks the OUT's
+       PostBuffer for tens of seconds waiting for the pending IN to be drained. */
+    return PostRead();
+}
+
+Status SwitchUSBEndpoint::PostRead()
+{
+    Result rc;
+    {
+        SwitchUSBLock usbLock;
+        rc = usbHsEpPostBufferAsync(&m_epSession, m_usb_buffer_in, m_readSize, 0, &m_xferIdRead);
+    }
+
+    if (R_FAILED(rc))
+    {
+        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadAsync post failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
+        return Status::ReadFailed;
+    }
 
     return Status::Success;
 }
@@ -133,16 +167,9 @@ Status SwitchUSBEndpoint::ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut,
 
     if (m_xferIdRead == 0)
     {
-        {
-            SwitchUSBLock usbLock;
-            rc = usbHsEpPostBufferAsync(&m_epSession, m_usb_buffer_in, *bufferSizeInOut, 0, &m_xferIdRead);
-        }
-
-        if (R_FAILED(rc))
-        {
-            ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadAsync post failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
-            return Status::ReadFailed;
-        }
+        Status postStatus = PostRead();
+        if (postStatus != Status::Success)
+            return postStatus;
     }
 
     /* eventWait/eventClear are syscalls on the endpoint's own event, not usbHs IPC. Holding the
@@ -157,11 +184,15 @@ Status SwitchUSBEndpoint::ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut,
     m_xferIdRead = 0;
 
     memset(&report, 0, sizeof(report));
+    size_t copySize = 0;
     {
         SwitchUSBLock usbLock;
         rc = usbHsEpGetXferReport(&m_epSession, &report, 1, &count);
-        if (R_SUCCEEDED(rc) && (count > 0) && (tmpXcferId == report.xferId))
-            memcpy(outBuffer, m_usb_buffer_in, report.transferredSize);
+        if (R_SUCCEEDED(rc) && (count > 0) && (tmpXcferId == report.xferId) && R_SUCCEEDED(report.res))
+        {
+            copySize = std::min<size_t>(report.transferredSize, *bufferSizeInOut);
+            memcpy(outBuffer, m_usb_buffer_in, copySize);
+        }
     }
 
     if (R_FAILED(rc))
@@ -176,19 +207,19 @@ Status SwitchUSBEndpoint::ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut,
         return Status::NoDataAvailable;
     }
 
-    *bufferSizeInOut = report.transferredSize;
-
-    if (report.transferredSize == 0)
-        return Status::NoDataAvailable;
-
-    ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] ReadAsync %d bytes", m_descriptor->bEndpointAddress, *bufferSizeInOut);
-    ::syscon::logger::LogBuffer(LogLevel::Trace, outBuffer, *bufferSizeInOut);
-
     if (R_FAILED(report.res))
     {
         ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadAsync transfer failed: 0x%08X", m_descriptor->bEndpointAddress, report.res);
         return Status::ReadFailed;
     }
+
+    *bufferSizeInOut = copySize;
+
+    if (copySize == 0)
+        return Status::NoDataAvailable;
+
+    ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] ReadAsync %d bytes", m_descriptor->bEndpointAddress, *bufferSizeInOut);
+    ::syscon::logger::LogBuffer(LogLevel::Trace, outBuffer, *bufferSizeInOut);
 
     return Status::Success;
 }

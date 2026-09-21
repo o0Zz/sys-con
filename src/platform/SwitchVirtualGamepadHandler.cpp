@@ -35,6 +35,13 @@ Result SwitchVirtualGamepadHandler::Initialize()
         return syscon::ToHorizonResult(status);
     }
 
+    status = m_controller->PostInitialize();
+    if (Failed(status))
+    {
+        syscon::logger::LogError("SwitchVirtualGamepadHandler[%04x-%04x] Controller post-initialization failed: %s", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), ToString(status));
+        return syscon::ToHorizonResult(status);
+    }
+
     return 0;
 }
 

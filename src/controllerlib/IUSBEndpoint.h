@@ -30,6 +30,13 @@ namespace controllerlib
         virtual Status Open(int maxPacketSize = 0) = 0;
         virtual void Close() = 0;
 
+        /* Post a pending IN transfer so the endpoint captures the device's very next report.
+           Called after the driver's init writes complete: if we armed at Open, the pad's LED
+           ack/first input can complete in the window between arming and the next OUT write and
+           wedge that OUT for tens of seconds. Default no-op for OUT endpoints and hosts that
+           don't need explicit arming. */
+        virtual Status ArmForRead() { return Status::Success; }
+
         // This will read from the inBuffer pointer for the specified size and write it to the endpoint.
         virtual Status Write(const uint8_t *inBuffer, size_t bufferSize) = 0;
 

@@ -114,6 +114,20 @@ namespace controllerlib
         return Status::Success;
     }
 
+    Status BaseController::PostInitialize()
+    {
+        for (auto *endpoint : m_inPipe)
+        {
+            Status result = endpoint->ArmForRead();
+            if (result != Status::Success)
+            {
+                m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to arm input endpoint for read: %s", m_device->GetVendor(), m_device->GetProduct(), ToString(result));
+                return result;
+            }
+        }
+        return Status::Success;
+    }
+
     void BaseController::CloseInterfaces()
     {
         m_device->Close();
