@@ -10,8 +10,14 @@ private:
     UsbHsClientIfSession *m_ifSession;
     usb_endpoint_descriptor *m_descriptor;
     u32 m_xferIdRead = 0;
+    u32 m_readSize = 0;
     alignas(0x1000) u8 m_usb_buffer_in[512];
     alignas(0x1000) u8 m_usb_buffer_out[512];
+
+    controllerlib::Status PostRead();
+
+public:
+    controllerlib::Status ArmForRead() override;
 
 public:
     // Pass the necessary information to be able to open the endpoint

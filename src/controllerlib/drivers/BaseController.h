@@ -33,6 +33,7 @@ namespace controllerlib
         virtual ~BaseController() override;
 
         virtual Status Initialize() override;
+        Status PostInitialize() override;
         virtual void Exit() override;
 
         virtual Status OpenInterfaces();
