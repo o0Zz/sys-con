@@ -55,6 +55,8 @@ private:
 class HidSharedMemoryController
 {
 public:
+    static constexpr uint8_t VibrationDeviceCount = 2;
+
     HidSharedMemoryController(uint8_t player_idx);
     ~HidSharedMemoryController();
 
@@ -63,6 +65,14 @@ public:
     // Stores the latest pad state; the manager thread is what writes it into every
     // client's shared memory, at a steady rate the console expects from a real pad.
     Result Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r);
+
+    // Vibration flows the other way: a mitm'd hid command stores it here and the handler's
+    // polling thread drains it into the driver. device_idx is the VibrationDeviceHandle one
+    // (0 = left, 1 = right); a Pro Controller exposes both.
+    void SetVibration(uint8_t device_idx, const HidVibrationValue &value);
+    HidVibrationValue GetVibration(uint8_t device_idx) const;
+    void GetRumble(float *amp_high, float *amp_low) const;
+    void ClearVibration();
 
     void Publish();
     void Clear();
@@ -74,6 +84,8 @@ private:
     u64 m_buttons;
     HidAnalogStickState m_analog_stick_l;
     HidAnalogStickState m_analog_stick_r;
+
+    HidVibrationValue m_vibration[VibrationDeviceCount];
 
     void Initialize(HidNpadInternalState *internal_state);
 };
@@ -94,6 +106,9 @@ public:
     std::shared_ptr<HidSharedMemoryController> AttachController();
     void DetachController(std::shared_ptr<HidSharedMemoryController> controller);
 
+    bool IsPlayerIndexOwned(uint8_t player_idx) const;
+    std::shared_ptr<HidSharedMemoryController> GetController(uint8_t player_idx);
+
     std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId);
     std::shared_ptr<HidSharedMemoryEntry> Get(u64 processId, u64 programId);
 
@@ -107,7 +122,6 @@ private:
 
     // real -> fake, for everything but the npad slots sys-con owns.
     void Mirror(HidSharedMemoryEntry &entry);
-    bool IsPlayerIndexOwned(uint8_t player_idx) const;
     bool IsPlayerIndexUsedByRealHid(uint8_t player_idx);
 
     void RunGarbageCollector();

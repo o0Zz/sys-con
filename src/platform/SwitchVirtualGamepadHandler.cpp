@@ -248,7 +248,7 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 
 Result SwitchVirtualGamepadHandler::UpdateOutput()
 {
-    // Vibrations are not supported with HDL
+    // hiddbg never reports vibration back, so only SwitchMITMHandler overrides this.
     return 0;
 }
 

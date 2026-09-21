@@ -1,6 +1,7 @@
 #include "SwitchMITMManager.h"
 #include "SwitchLogger.h"
 #include <string.h> // memcpy
+#include <algorithm>
 #include <cinttypes>
 #include <atomic>
 #include <chrono>
@@ -294,11 +295,22 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
 
         std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
         controller->Clear();
+        controller->ClearVibration();
 
         ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", (int)i + 1);
         m_controller_list[i] = nullptr;
         return;
     }
+}
+
+std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::GetController(uint8_t player_idx)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+
+    if (player_idx >= m_controller_list.size())
+        return nullptr;
+
+    return m_controller_list[player_idx];
 }
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
@@ -571,7 +583,8 @@ HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx)
       m_sampling_number(0),
       m_buttons(0),
       m_analog_stick_l{},
-      m_analog_stick_r{}
+      m_analog_stick_r{},
+      m_vibration{}
 {
 }
 
@@ -669,4 +682,40 @@ Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState 
     m_analog_stick_r = analog_stick_r;
 
     return 0;
+}
+
+/* ---------------------------------------- */
+
+void HidSharedMemoryController::SetVibration(uint8_t device_idx, const HidVibrationValue &value)
+{
+    std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
+
+    m_vibration[device_idx % VibrationDeviceCount] = value;
+}
+
+HidVibrationValue HidSharedMemoryController::GetVibration(uint8_t device_idx) const
+{
+    std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
+
+    return m_vibration[device_idx % VibrationDeviceCount];
+}
+
+/*
+    A Switch pad has one actuator per grip and each carries a low and a high band, while a
+    driver takes a single pair of amplitudes. The loudest band of either actuator is what the
+    player feels, so that is what is handed down.
+*/
+void HidSharedMemoryController::GetRumble(float *amp_high, float *amp_low) const
+{
+    std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
+
+    *amp_high = std::max(m_vibration[0].amp_high, m_vibration[1].amp_high);
+    *amp_low = std::max(m_vibration[0].amp_low, m_vibration[1].amp_low);
+}
+
+void HidSharedMemoryController::ClearVibration()
+{
+    std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
+
+    memset(m_vibration, 0, sizeof(m_vibration));
 }

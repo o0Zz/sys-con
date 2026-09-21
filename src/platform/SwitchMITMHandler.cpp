@@ -52,6 +52,7 @@ Result SwitchMITMHandler::DetachController(uint16_t input_idx)
 
     HidSharedMemoryManager::GetHidSharedMemoryManager().DetachController(m_controllerList[input_idx]);
     m_controllerList[input_idx] = nullptr;
+    m_lastRumble[input_idx] = RumbleState{};
 
     return 0;
 }
@@ -72,4 +73,46 @@ Result SwitchMITMHandler::UpdateControllerState(u64 buttons, const HidAnalogStic
         return 0;
 
     return m_controllerList[input_idx]->Update(buttons, analog_stick_l, analog_stick_r);
+}
+
+static bool IsRumbling(const SwitchMITMHandler::RumbleState &rumble)
+{
+    return rumble.amp_high > 0.0f || rumble.amp_low > 0.0f;
+}
+
+/*
+    Only on change: a USB write costs a transfer on the same thread that reads the pad, and a
+    game keeps resending the same value every frame for as long as the effect lasts.
+*/
+Result SwitchMITMHandler::UpdateOutput()
+{
+    if (!m_controller->Support(SUPPORTS_RUMBLE))
+        return 0;
+
+    for (uint16_t input_idx = 0; input_idx < m_controller->GetInputCount(); input_idx++)
+    {
+        if (!IsControllerAttached(input_idx))
+            continue;
+
+        RumbleState rumble{};
+        m_controllerList[input_idx]->GetRumble(&rumble.amp_high, &rumble.amp_low);
+
+        if (rumble.amp_high == m_lastRumble[input_idx].amp_high && rumble.amp_low == m_lastRumble[input_idx].amp_low)
+            continue;
+
+        const bool was_rumbling = IsRumbling(m_lastRumble[input_idx]);
+        m_lastRumble[input_idx] = rumble;
+
+        controllerlib::Status rc = m_controller->SetRumble(input_idx, rumble.amp_high, rumble.amp_low);
+
+        // Only the edges: an SD write costs several milliseconds on the very thread that
+        // polls the pad, and a game changes the amplitude every frame while it rumbles.
+        if (was_rumbling != IsRumbling(rumble))
+            syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] rumble %s on idx %d (high: %d%%, low: %d%%, rc: %d)",
+                                    m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(),
+                                    IsRumbling(rumble) ? "started" : "stopped", input_idx,
+                                    (int)(rumble.amp_high * 100), (int)(rumble.amp_low * 100), rc);
+    }
+
+    return 0;
 }

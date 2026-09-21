@@ -1,4 +1,5 @@
 #include "HidMitmService.h"
+#include "SwitchMITMVibration.h"
 #include "SwitchLogger.h"
 #include <stratosphere.hpp>
 
@@ -46,24 +47,125 @@ namespace ams::syscon::hid::mitm
         R_SUCCEED();
     }
 
-    Result HidMitmService::SendVibrationValue(sf::CopyHandle vibration_device_handle, ::HidVibrationValue vibration_value, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    namespace
     {
-        (void)vibration_device_handle;
-        (void)vibration_value;
-        ::syscon::logger::LogDebug("HidMitmService::SendVibrationValue...");
+        constexpr u32 HidCmdCreateActiveVibrationDeviceList = 203;
 
-        // Find the corresponding shared memory entry
-        std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().Get(applet_resource_user_id.GetValue().value, m_client_info.program_id.value);
-        if (!entry)
+        ::HidVibrationDeviceHandle ToVibrationDeviceHandle(u32 type_value)
         {
-            ::syscon::logger::LogError("HidMitmService::SendVibrationValue: Failed to find shared memory entry");
-            // return R_FAILED();
+            ::HidVibrationDeviceHandle handle;
+            handle.type_value = type_value;
+            return handle;
+        }
+    } // namespace
+
+    /*
+     * Every vibration command below answers only for the npad slots sys-con drives. A handle
+     * naming a real controller is handed back to the real hid with ShouldForwardToSession,
+     * which replays the original request on the forward session.
+     */
+    Result HidMitmService::GetVibrationDeviceInfo(sf::Out<::HidVibrationDeviceInfo> out, u32 vibration_device_handle)
+    {
+        const ::HidVibrationDeviceHandle handle = ToVibrationDeviceHandle(vibration_device_handle);
+
+        if (!::syscon::hid::mitm::vibration::IsOwned(handle))
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+
+        out.SetValue(::syscon::hid::mitm::vibration::GetDeviceInfo(handle));
+        R_SUCCEED();
+    }
+
+    Result HidMitmService::SendVibrationValue(sf::ClientProcessId client_pid, u32 vibration_device_handle, ::HidVibrationValue vibration_value, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    {
+        AMS_UNUSED(client_pid, applet_resource_user_id);
+
+        const ::HidVibrationDeviceHandle handle = ToVibrationDeviceHandle(vibration_device_handle);
+
+        if (!::syscon::hid::mitm::vibration::IsOwned(handle))
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+
+        ::syscon::hid::mitm::vibration::Store(handle, vibration_value);
+        R_SUCCEED();
+    }
+
+    Result HidMitmService::GetActualVibrationValue(sf::Out<::HidVibrationValue> out, sf::ClientProcessId client_pid, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    {
+        AMS_UNUSED(client_pid, applet_resource_user_id);
+
+        ::HidVibrationValue value;
+        if (!::syscon::hid::mitm::vibration::Load(ToVibrationDeviceHandle(vibration_device_handle), &value))
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+
+        out.SetValue(value);
+        R_SUCCEED();
+    }
+
+    Result HidMitmService::CreateActiveVibrationDeviceList(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmActiveVibrationDeviceListInterface>> out)
+    {
+        ::Service forward_list = {};
+        R_TRY(serviceDispatch(this->m_forward_service.get(), HidCmdCreateActiveVibrationDeviceList,
+                              .out_num_objects = 1,
+                              .out_objects = &forward_list, ));
+
+        out.SetValue(ams::sf::CreateSharedObjectEmplaced<IHidMitmActiveVibrationDeviceListInterface, HidMitmActiveVibrationDeviceList>(forward_list));
+
+        ::syscon::logger::LogDebug("HidMitmService::CreateActiveVibrationDeviceList hooked (program 0x%016" PRIx64 ")", m_client_info.program_id.value);
+        R_SUCCEED();
+    }
+
+    /*
+     * One command can carry handles for a sys-con pad and for a real controller at once.
+     * Ours are picked out here; unless every handle was ours the request is still replayed on
+     * the real hid, so the real pads keep rumbling.
+     */
+    Result HidMitmService::SendVibrationValues(ams::sf::ClientAppletResourceUserId applet_resource_user_id, const sf::InPointerArray<::HidVibrationDeviceHandle> &handles, const sf::InPointerArray<::HidVibrationValue> &values)
+    {
+        AMS_UNUSED(applet_resource_user_id);
+
+        const size_t count = std::min(handles.GetSize(), values.GetSize());
+
+        size_t owned = 0;
+        for (size_t i = 0; i < count; i++)
+        {
+            if (!::syscon::hid::mitm::vibration::IsOwned(handles[i]))
+                continue;
+
+            ::syscon::hid::mitm::vibration::Store(handles[i], values[i]);
+            owned++;
         }
 
-        // Send the vibration value to the shared memory
-        // entry->GetSharedMemoryHandle().SendVibrationValue(vibration_device_handle, vibration_value);
+        if (count == 0 || owned != count)
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
 
         R_SUCCEED();
+    }
+
+    Result HidMitmService::IsVibrationDeviceMounted(sf::Out<bool> out, sf::ClientProcessId client_pid, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    {
+        AMS_UNUSED(client_pid, applet_resource_user_id);
+
+        if (!::syscon::hid::mitm::vibration::IsOwned(ToVibrationDeviceHandle(vibration_device_handle)))
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+
+        out.SetValue(true);
+        R_SUCCEED();
+    }
+
+    HidMitmActiveVibrationDeviceList::~HidMitmActiveVibrationDeviceList()
+    {
+        if (serviceIsActive(&m_forward))
+            serviceClose(&m_forward);
+    }
+
+    Result HidMitmActiveVibrationDeviceList::ActivateVibrationDevice(u32 vibration_device_handle)
+    {
+        ::HidVibrationDeviceHandle handle;
+        handle.type_value = vibration_device_handle;
+
+        if (::syscon::hid::mitm::vibration::IsOwned(handle))
+            R_SUCCEED();
+
+        R_RETURN(serviceDispatchIn(&m_forward, 0, vibration_device_handle));
     }
 
     bool HidMitmService::ShouldMitm(const sm::MitmProcessInfo &client_info)

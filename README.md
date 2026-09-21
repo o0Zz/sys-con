@@ -47,7 +47,7 @@ Reboot the Nintendo Switch.
 - [x] Configurable polling frequency
 - [x] Configurable controller color using #RGBA
 - [x] Network controller over UDP, for scripted input during testing (off by default)
-- [ ] Rumble
+- [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
 - [ ] Motion controls
 - [ ] HID keyboard / mouse support
 

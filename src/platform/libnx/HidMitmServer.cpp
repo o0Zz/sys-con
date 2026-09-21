@@ -25,11 +25,13 @@
 #include "HidMitm.h"
 #include "sm_mitm.h"
 #include "SwitchMITMManager.h"
+#include "SwitchMITMVibration.h"
 #include "SwitchLogger.h"
 
 #include <vector>
 #include <memory>
 #include <cstring>
+#include <algorithm>
 
 namespace syscon::hid::mitm
 {
@@ -168,6 +170,43 @@ namespace syscon::hid::mitm
             BuildReply(domain, rc, 0, 0, nullptr, 0, nullptr, 0, nullptr);
         }
 
+        // A successful reply carrying nothing but out-data, whichever shape the session has.
+        void *BuildCmifDataReply(u32 out_data_size, bool domain)
+        {
+            if (domain)
+                return BuildCmifDomainReply(out_data_size, 0, nullptr, 0, nullptr);
+            return BuildCmifReply(out_data_size, 0, nullptr, 0, nullptr);
+        }
+
+        /* -------- hid vibration commands (https://switchbrew.org/wiki/HID_services) -------- */
+
+        constexpr u32 HidCmdGetVibrationDeviceInfo = 200;
+        constexpr u32 HidCmdSendVibrationValue = 201;
+        constexpr u32 HidCmdGetActualVibrationValue = 202;
+        constexpr u32 HidCmdCreateActiveVibrationDeviceList = 203;
+        constexpr u32 HidCmdSendVibrationValues = 206;
+        constexpr u32 HidCmdIsVibrationDeviceMounted = 211;
+        constexpr u32 ActiveVibrationDeviceListCmdActivate = 0;
+
+        // Request payloads, as libnx serializes them (external/libnx/nx/source/services/hid.c).
+        struct VibrationSendValueIn
+        {
+            HidVibrationDeviceHandle handle;
+            HidVibrationValue value;
+            u32 pad;
+            u64 aruid;
+        };
+
+        struct VibrationHandleIn
+        {
+            HidVibrationDeviceHandle handle;
+            u32 pad;
+            u64 aruid;
+        };
+
+        static_assert(sizeof(VibrationSendValueIn) == 0x20);
+        static_assert(sizeof(VibrationHandleIn) == 0x10);
+
         /* -------- session table -------- */
 
 
@@ -175,11 +214,20 @@ namespace syscon::hid::mitm
         {
             Hid,
             AppletResource,
+            VibrationDeviceList,
         };
 
         const char *KindName(SessionKind kind)
         {
-            return kind == SessionKind::Hid ? "hid" : "appletres";
+            switch (kind)
+            {
+                case SessionKind::AppletResource:
+                    return "appletres";
+                case SessionKind::VibrationDeviceList:
+                    return "vibrationlist";
+                default:
+                    return "hid";
+            }
         }
 
         void TraceRequest(const char *what, SessionKind kind, const HipcParsedRequest &r, u32 command_id)
@@ -208,6 +256,7 @@ namespace syscon::hid::mitm
             Service forward;                             // valid for Hid sessions
             SysconMitmProcessInfo info;                  // valid for Hid sessions
             std::shared_ptr<HidSharedMemoryEntry> entry; // valid for AppletResource sub-sessions
+            Service forward_sub;                         // valid for VibrationDeviceList sub-sessions
             bool is_domain;
             std::vector<DomainObject> objects; // non-empty only once is_domain
         };
@@ -230,6 +279,11 @@ namespace syscon::hid::mitm
             bool HookConvertToDomain(s32 idx);
             bool HookCreateAppletResource(s32 idx, u64 aruid);
             bool HookGetSharedMemoryHandle(const std::shared_ptr<HidSharedMemoryEntry> &entry, bool domain);
+            bool HookVibration(const HipcParsedRequest &r, u32 command_id, bool domain);
+            bool HookSendVibrationValues(const HipcParsedRequest &r, bool domain);
+            bool HookCreateVibrationDeviceList(s32 idx, bool domain);
+            bool HookActivateVibrationDevice(const HipcParsedRequest &r, Handle forward_session, bool domain);
+            const void *GetInData(const HipcParsedRequest &r, bool domain);
             Handle ForwardSessionFor(const Session &s);
             static DomainObject *FindDomainObject(Session &s, u32 object_id);
             bool AddSession(const Session &s);
@@ -290,6 +344,8 @@ namespace syscon::hid::mitm
                 if (serviceIsActive(&s.forward))
                     serviceClose(&s.forward);
             }
+            if (s.kind == SessionKind::VibrationDeviceList && serviceIsActive(&s.forward_sub))
+                serviceClose(&s.forward_sub);
             svcCloseHandle(s.handle);
             m_handles.erase(m_handles.begin() + idx);
             m_sessions.erase(m_sessions.begin() + (idx - 2));
@@ -299,6 +355,8 @@ namespace syscon::hid::mitm
         {
             if (s.kind == SessionKind::AppletResource)
                 return s.entry->GetForwardAppletResource()->session;
+            if (s.kind == SessionKind::VibrationDeviceList)
+                return s.forward_sub.session;
             return s.forward.session;
         }
 
@@ -557,6 +615,196 @@ namespace syscon::hid::mitm
             return true;
         }
 
+        // The CMIF in-data of the request, past the domain header a domain session adds.
+        const void *Server::GetInData(const HipcParsedRequest &r, bool domain)
+        {
+            const CmifInHeader *in = domain
+                                         ? reinterpret_cast<const CmifInHeader *>(GetDomainInHeader(r, m_request) + 1)
+                                         : GetInHeader(r, m_request);
+            return in + 1;
+        }
+
+        /*
+         * The vibration commands a game aims at a pad sys-con owns are answered here rather
+         * than forwarded: the real hid has no npad in that slot, so it would reject them and
+         * the game would stop rumbling. A handle naming a real controller is left alone -
+         * returning false tells the caller to forward the request untouched.
+         */
+        bool Server::HookVibration(const HipcParsedRequest &r, u32 command_id, bool domain)
+        {
+            const void *data = GetInData(r, domain);
+
+            switch (command_id)
+            {
+                case HidCmdGetVibrationDeviceInfo:
+                {
+                    const HidVibrationDeviceHandle handle = *static_cast<const HidVibrationDeviceHandle *>(data);
+                    if (!vibration::IsOwned(handle))
+                        return false;
+
+                    const HidVibrationDeviceInfo info = vibration::GetDeviceInfo(handle);
+                    *static_cast<HidVibrationDeviceInfo *>(BuildCmifDataReply(sizeof(info), domain)) = info;
+                    return true;
+                }
+
+                case HidCmdSendVibrationValue:
+                {
+                    const VibrationSendValueIn *in = static_cast<const VibrationSendValueIn *>(data);
+                    if (!vibration::IsOwned(in->handle))
+                        return false;
+
+                    vibration::Store(in->handle, in->value);
+                    BuildCmifDataReply(0, domain);
+                    return true;
+                }
+
+                case HidCmdGetActualVibrationValue:
+                {
+                    const VibrationHandleIn *in = static_cast<const VibrationHandleIn *>(data);
+                    HidVibrationValue value;
+                    if (!vibration::Load(in->handle, &value))
+                        return false;
+
+                    *static_cast<HidVibrationValue *>(BuildCmifDataReply(sizeof(value), domain)) = value;
+                    return true;
+                }
+
+                case HidCmdIsVibrationDeviceMounted:
+                {
+                    const VibrationHandleIn *in = static_cast<const VibrationHandleIn *>(data);
+                    if (!vibration::IsOwned(in->handle))
+                        return false;
+
+                    *static_cast<u8 *>(BuildCmifDataReply(sizeof(u8), domain)) = 1;
+                    return true;
+                }
+
+                case HidCmdSendVibrationValues:
+                    return HookSendVibrationValues(r, domain);
+
+                default:
+                    return false;
+            }
+        }
+
+        /*
+         * One command can carry handles for a sys-con pad and for a real controller at once.
+         * Ours are picked out here; the request is still forwarded unless every handle in it
+         * was ours, so the real pads keep rumbling.
+         */
+        bool Server::HookSendVibrationValues(const HipcParsedRequest &r, bool domain)
+        {
+            if (r.meta.num_send_statics < 2)
+                return false;
+
+            const HidVibrationDeviceHandle *handles = static_cast<const HidVibrationDeviceHandle *>(hipcGetStaticAddress(&r.data.send_statics[0]));
+            const HidVibrationValue *values = static_cast<const HidVibrationValue *>(hipcGetStaticAddress(&r.data.send_statics[1]));
+            const size_t count = std::min(hipcGetStaticSize(&r.data.send_statics[0]) / sizeof(HidVibrationDeviceHandle),
+                                          hipcGetStaticSize(&r.data.send_statics[1]) / sizeof(HidVibrationValue));
+
+            size_t owned = 0;
+            for (size_t i = 0; i < count; i++)
+            {
+                if (!vibration::IsOwned(handles[i]))
+                    continue;
+
+                vibration::Store(handles[i], values[i]);
+                owned++;
+            }
+
+            if (count == 0 || owned != count)
+                return false;
+
+            BuildCmifDataReply(0, domain);
+            return true;
+        }
+
+        /*
+         * A game activates its vibration devices through an IActiveVibrationDeviceList before
+         * sending any value, so the list has to accept handles for pads the real hid does not
+         * have. The real object is still created and kept, because activating a handle that
+         * belongs to a real controller has to reach it.
+         */
+        bool Server::HookCreateVibrationDeviceList(s32 idx, bool domain)
+        {
+            // Copy what we need before AddSession() below, which may reallocate m_sessions
+            // and invalidate any reference into it.
+            Service forward = m_sessions[idx - 2].forward;
+            const u64 program_id = m_sessions[idx - 2].info.program_id;
+
+            Service real_list = {};
+            Result rc = serviceDispatch(&forward, HidCmdCreateActiveVibrationDeviceList,
+                                        .out_num_objects = 1,
+                                        .out_objects = &real_list, );
+            if (R_FAILED(rc))
+            {
+                ::syscon::logger::LogError("HidMitm: forwarding CreateActiveVibrationDeviceList failed: 0x%X", rc);
+                BuildCmifReplyResult(rc, domain);
+                return true;
+            }
+
+            if (domain)
+            {
+                // The real object already has an id in the domain both sides share, so the
+                // client gets that one and every unhooked command on it forwards verbatim.
+                const u32 object_id = real_list.object_id;
+                if (object_id == 0)
+                {
+                    ::syscon::logger::LogError("HidMitm: forwarded IActiveVibrationDeviceList is not a domain object");
+                    BuildCmifReplyResult(MAKERESULT(11, 403), true);
+                    return true;
+                }
+
+                m_sessions[idx - 2].objects.push_back(DomainObject{object_id, SessionKind::VibrationDeviceList, nullptr});
+
+                const u32 out_objects[1] = {object_id};
+                BuildCmifDomainReply(0, 1, out_objects, 0, nullptr);
+                ::syscon::logger::LogInfo("HidMitm: CreateActiveVibrationDeviceList hooked for program 0x%016lX (object id %u)", program_id, object_id);
+                return true;
+            }
+
+            Handle srv_h, cli_h;
+            rc = svcCreateSession(&srv_h, &cli_h, 0, 0);
+            if (R_FAILED(rc))
+            {
+                ::syscon::logger::LogError("HidMitm: svcCreateSession failed: 0x%X", rc);
+                serviceClose(&real_list);
+                BuildCmifReplyResult(rc);
+                return true;
+            }
+
+            Session sub = {};
+            sub.handle = srv_h;
+            sub.kind = SessionKind::VibrationDeviceList;
+            sub.info.program_id = program_id;
+            sub.forward_sub = real_list;
+            if (!AddSession(sub))
+            {
+                // AddSession already closed the server side, so the client end would be a
+                // session nobody answers: fail the command instead of handing it over.
+                svcCloseHandle(cli_h);
+                serviceClose(&real_list);
+                BuildCmifReplyResult(MAKERESULT(11, 403));
+                return true;
+            }
+
+            const Handle move_handles[1] = {cli_h};
+            BuildCmifReply(0, 0, nullptr, 1, move_handles);
+            ::syscon::logger::LogInfo("HidMitm: CreateActiveVibrationDeviceList hooked for program 0x%016lX", program_id);
+            return true;
+        }
+
+        bool Server::HookActivateVibrationDevice(const HipcParsedRequest &r, Handle forward_session, bool domain)
+        {
+            const HidVibrationDeviceHandle handle = *static_cast<const HidVibrationDeviceHandle *>(GetInData(r, domain));
+
+            if (!vibration::IsOwned(handle))
+                return ForwardAndReply(r, forward_session, domain);
+
+            BuildCmifDataReply(0, domain);
+            return true;
+        }
+
         bool Server::ProcessRequest(s32 idx, const HipcParsedRequest &r)
         {
             Session &s = m_sessions[idx - 2];
@@ -569,6 +817,12 @@ namespace syscon::hid::mitm
                 return HookCreateAppletResource(idx, aruid);
             if (s.kind == SessionKind::AppletResource && command_id == 0)
                 return HookGetSharedMemoryHandle(s.entry, false);
+            if (s.kind == SessionKind::VibrationDeviceList && command_id == ActiveVibrationDeviceListCmdActivate)
+                return HookActivateVibrationDevice(r, ForwardSessionFor(s), false);
+            if (s.kind == SessionKind::Hid && command_id == HidCmdCreateActiveVibrationDeviceList)
+                return HookCreateVibrationDeviceList(idx, false);
+            if (s.kind == SessionKind::Hid && HookVibration(r, command_id, false))
+                return true;
             return ForwardAndReply(r, ForwardSessionFor(s), false);
         }
 
@@ -596,13 +850,23 @@ namespace syscon::hid::mitm
                 return ForwardAndReply(r, forward_session, true);
             }
 
-            if (domain_type == CmifDomainRequestType_SendMessage && object != nullptr && command_id == 0)
+            if (domain_type == CmifDomainRequestType_SendMessage && object != nullptr)
             {
-                if (object->kind == SessionKind::Hid)
-                    return HookCreateAppletResource(idx, aruid);
+                if (object->kind == SessionKind::VibrationDeviceList && command_id == ActiveVibrationDeviceListCmdActivate)
+                    return HookActivateVibrationDevice(r, forward_session, true);
 
-                std::shared_ptr<HidSharedMemoryEntry> entry = object->entry;
-                return HookGetSharedMemoryHandle(entry, true);
+                if (object->kind == SessionKind::AppletResource && command_id == 0)
+                    return HookGetSharedMemoryHandle(object->entry, true);
+
+                if (object->kind == SessionKind::Hid)
+                {
+                    if (command_id == 0)
+                        return HookCreateAppletResource(idx, aruid);
+                    if (command_id == HidCmdCreateActiveVibrationDeviceList)
+                        return HookCreateVibrationDeviceList(idx, true);
+                    if (HookVibration(r, command_id, true))
+                        return true;
+                }
             }
 
             return ForwardAndReply(r, forward_session, true);
