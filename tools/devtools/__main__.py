@@ -359,6 +359,39 @@ def cmd_input(cfg, args):
                     % config.NETWORK_PAD_VIDPID}, 0
 
 
+def cmd_touch(cfg, args):
+    """Tap the touch panel through hiddbg.
+
+    This is the input path that still works while sys-con is running: `input`
+    drives an HDLS pad, whose npad slots the MITM replaces with its own, so the
+    intercepted process never sees the press. The touch panel is mirrored
+    straight through, so a tap reaches the applet. Handheld mode only -- docked,
+    the panel is off and the tap succeeds while nothing moves on screen.
+    """
+    _check_touch_bounds(args.x, args.y)
+    api = autopilot.Autopilot(cfg)
+    result = api.input_touch(args.x, args.y, duration_ms=args.duration)
+    return {"x": args.x, "y": args.y, "duration_ms": args.duration,
+            "response": result}, 0
+
+
+def cmd_swipe(cfg, args):
+    for x, y in ((args.from_x, args.from_y), (args.to_x, args.to_y)):
+        _check_touch_bounds(x, y)
+    api = autopilot.Autopilot(cfg)
+    result = api.input_swipe(args.from_x, args.from_y, args.to_x, args.to_y,
+                             duration_ms=args.duration)
+    return {"from": [args.from_x, args.from_y], "to": [args.to_x, args.to_y],
+            "duration_ms": args.duration, "response": result}, 0
+
+
+def _check_touch_bounds(x, y):
+    if not (0 <= x < config.TOUCH_WIDTH and 0 <= y < config.TOUCH_HEIGHT):
+        raise repo.Fatal("(%d, %d) is outside the %dx%d panel"
+                         % (x, y, config.TOUCH_WIDTH, config.TOUCH_HEIGHT),
+                         code=40)
+
+
 def cmd_screenshot(cfg, args):
     api = autopilot.Autopilot(cfg)
     data = api.screenshot()
@@ -508,6 +541,19 @@ def build_parser():
     inp.add_argument("--port", type=int)
     inp.add_argument("--hold", type=float, default=0.12)
 
+    tp = sub.add_parser("touch", help="tap the touch panel (works while "
+                                      "sys-con is running)")
+    tp.add_argument("x", type=int)
+    tp.add_argument("y", type=int)
+    tp.add_argument("--duration", type=int, help="ms the finger stays down")
+
+    sw = sub.add_parser("swipe", help="drag across the touch panel")
+    sw.add_argument("from_x", type=int)
+    sw.add_argument("from_y", type=int)
+    sw.add_argument("to_x", type=int)
+    sw.add_argument("to_y", type=int)
+    sw.add_argument("--duration", type=int)
+
     ss = sub.add_parser("screenshot", help="capture the screen")
     ss.add_argument("--out")
 
@@ -555,6 +601,8 @@ HANDLERS = {
     "dumps": cmd_dumps,
     "symbolize": cmd_symbolize,
     "input": cmd_input,
+    "touch": cmd_touch,
+    "swipe": cmd_swipe,
     "screenshot": cmd_screenshot,
     "iterate": cmd_iterate,
     "loop": cmd_loop,
@@ -563,7 +611,7 @@ HANDLERS = {
 
 
 CONSOLE_MUTATING = {"deploy", "start", "stop", "restart", "iterate", "loop",
-                    "setup-console", "input"}
+                    "setup-console", "input", "touch", "swipe"}
 
 
 def main(argv):

@@ -58,6 +58,9 @@ def boot2_flag_path(title_id):
 HTTP_CONNECT = 5.0
 HTTP_READ = 30.0
 HTTP_ATTEMPTS = 3
+# A touch gesture is driven frame by frame on the console and the server answers
+# only once it is over, so the read has to outlast the server's own 10s cap.
+TOUCH_READ = 30.0
 
 CTEST = 180
 # Generous because a flavour switch forces `make clean`, and the Atmosphere build then
@@ -99,6 +102,14 @@ NETWORK_PAD_PLUGGED = "Controller[%s] plugged !" % NETWORK_PAD_VIDPID
 # would background whatever is running) and no CAPTURE (which writes to the
 # album).
 SMOKE_BUTTONS = ["A", "B", "X", "Y", "DPAD_UP", "DPAD_DOWN", "L", "R"]
+
+
+# --- touch screen ------------------------------------------------------------
+# Panel coordinates, the same 1280x720 space `screenshot` returns, so a target
+# can be read straight off a capture. The panel is dead in docked mode.
+
+TOUCH_WIDTH = 1280
+TOUCH_HEIGHT = 720
 
 
 # --- log parsing -------------------------------------------------------------

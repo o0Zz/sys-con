@@ -104,6 +104,28 @@ crash and proving it works.
 `HOME` and `CAPTURE` are left out of the smoke set on purpose: one backgrounds
 whatever is running, the other writes to the album.
 
+## Driving the UI: the touch panel
+
+`input` presses buttons on sys-con's own pad, which is the wrong tool for
+walking the console's own menus. Use the touch panel instead:
+
+```sh
+python tools/devtools screenshot --out debug/before.jpg
+python tools/devtools touch 819 345          # pixel in the screenshot
+python tools/devtools swipe 640 600 640 150 --duration 250
+```
+
+Coordinates are pixels in the panel's 1280x720 space, which is exactly the
+space `screenshot` returns, so a target is read straight off a capture — button
+hints at the bottom of a system screen ("B Retour") are tappable too. Verified
+on hardware 2026-09-21: two taps walked the post-boot "A Commencer" screen
+forward into controller pairing and back out.
+
+sys-autopilot injects this through `hiddbg`'s touch auto-pilot, not through the
+HDLS virtual pad, so it needs no controller attached and no `network_controller`.
+Handheld mode only: docked, the panel is off and a tap succeeds while nothing
+moves on screen.
+
 ## Commands
 
 ```
@@ -115,6 +137,8 @@ start / stop / restart / status
 logs / crashes / dumps       pull artifacts off the console
 symbolize --report FILE      crash report -> symbolized stack trace
 input [BUTTONS...]           press buttons via the UDP pad
+touch X Y                    tap the touch panel (drives the console's menus)
+swipe X0 Y0 X1 Y1            drag across the touch panel
 screenshot                   capture the screen
 iterate                      one build -> deploy -> run -> classify cycle
 loop                         repeat iterate until a stop condition

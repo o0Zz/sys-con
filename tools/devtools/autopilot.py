@@ -11,6 +11,8 @@ sys-autopilot's source rather than guessed:
     DELETE /files?path=P            -> {"deleted":P}
     GET    /process?titleId=T       -> {"titleId","running":bool,"pid":"N"}
     POST   /process/{start,stop,restart} {"titleId":"T"}
+    POST   /input/touch             {"x":N,"y":N,"durationMs":N}
+    POST   /input/swipe             {"fromX":N,"fromY":N,"toX":N,"toY":N,...}
     POST   /power/restart           -> {"ok":true,...} then the console goes down
 """
 
@@ -222,6 +224,26 @@ class Autopilot:
                 return True
             time.sleep(0.25)
         return False
+
+    # --- touch screen --------------------------------------------------------
+    # hiddbg's touch auto-pilot, not sys-con's UDP pad. It is the only scripted
+    # input that survives sys-con running: /input/tap drives an HDLS pad, whose
+    # npad slots the MITM replaces, while the touch panel is mirrored through
+    # to the intercepted process untouched.
+
+    def input_touch(self, x, y, duration_ms=None):
+        body = {"x": x, "y": y}
+        if duration_ms is not None:
+            body["durationMs"] = duration_ms
+        return self._json("POST", "/input/touch", body=json.dumps(body).encode(),
+                          attempts=1, read_timeout=config.TOUCH_READ)
+
+    def input_swipe(self, from_x, from_y, to_x, to_y, duration_ms=None):
+        body = {"fromX": from_x, "fromY": from_y, "toX": to_x, "toY": to_y}
+        if duration_ms is not None:
+            body["durationMs"] = duration_ms
+        return self._json("POST", "/input/swipe", body=json.dumps(body).encode(),
+                          attempts=1, read_timeout=config.TOUCH_READ)
 
     # --- power ---------------------------------------------------------------
 

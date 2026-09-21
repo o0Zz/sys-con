@@ -95,6 +95,27 @@
 
 ## Hardware test rig
 
+- **Drive the console's UI with the touch panel, not with buttons.**
+  `python tools/devtools touch X Y` (and `swipe X0 Y0 X1 Y1`) taps the screen
+  through sys-autopilot's `/input/touch`, which injects into hiddbg's touch
+  auto-pilot. Coordinates are pixels in the same 1280x720 space `devtools
+  screenshot` returns, so read the target off a capture — on-screen button hints
+  ("B Retour") are tappable too. This is the only scripted input that reaches an
+  intercepted process in `mode=mitm`: a pad press lands in an npad slot the MITM
+  replaces, while the touch section of shared memory is mirrored through.
+  Verified 2026-09-21 against qlaunch while the log showed `CreateAppletResource
+  hooked for program 0x0100000000001000` — two taps walked the post-boot
+  "Ⓐ Commencer" screen into controller pairing and back out. Handheld only:
+  docked, the panel is off and the tap succeeds with nothing happening.
+- **sys-autopilot only knows the processes it launched itself.**
+  `GET /process?titleId=...` resolves the pid it kept at launch, so a sysmodule
+  started by its own `boot2.flag` always reports `running: false`, and
+  `POST /process/start` on it then fails with **`0x00010801`** — the same
+  LimitReached that a too-large heap gives, because a second instance cannot
+  fit. Before chasing a memory budget, check `/atmosphere/contents/<TID>/flags/`
+  and whether `/config/sys-con/log.txt` has a fresh mtime. The test console
+  currently *does* carry sys-con's `boot2.flag` (mitm needs it to catch
+  qlaunch), which contradicts `tools/devtools/README.md`'s setup rule.
 - **sys-autopilot gives up `hid:dbg` whenever it launches a sysmodule**, so its scripted input
   dies for as long as sys-con runs (`/input/tap` → `0xe401`). It takes it back only in
   `process_stop`. Its `process.c` was patched with `reopen_hiddbg()`, which wraps
