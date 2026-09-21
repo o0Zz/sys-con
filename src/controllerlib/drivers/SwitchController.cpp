@@ -1,7 +1,6 @@
 #include "drivers/SwitchController.h"
 
 #define SWITCH_INPUT_BUFFER_SIZE 64
-#define SWITCH_INIT_FLUSH_MAX_READS 10
 
 namespace controllerlib
 {
@@ -30,25 +29,14 @@ namespace controllerlib
             return Status::InvalidEndpoint;
         }
 
-        // Flush the input buffer. Third party controllers (HOJA firmware) already stream 0x30
-        // reports on enumeration, faster than the read timeout, so draining until a timeout
-        // would never end: stop as soon as the device reports it is already in 0x30 mode.
-        uint8_t buffer[SWITCH_INPUT_BUFFER_SIZE]{0x00};
-        for (size_t idx = 0; idx < SWITCH_INIT_FLUSH_MAX_READS; idx++)
-        {
-            size_t size = sizeof(buffer);
-            if (m_inPipe[0]->Read(buffer, &size, 100 * 1000 /*timeout_us*/) != Status::Success)
-                break;
-
-            if (size >= sizeof(SwitchButtonData) && buffer[0] == 0x30)
-                break;
-        }
-
-        // Send the initialization packet
+        /* The first transfer on the interface must be this OUT. Reading the IN endpoint before
+           it (the old pre-handshake flush) makes usb:hs stall the very first OUT for ~33 s on
+           pads that already stream 0x30 reports at enumeration (HOJA). Stale 81 xx / 0x30
+           reports need no draining: ParseData discards anything that is not 0x30. */
         uint8_t initPacket1[SWITCH_INPUT_BUFFER_SIZE]{0x80, 0x02};
         (void)m_outPipe[0]->Write(initPacket1, sizeof(initPacket1));
 
-        // Read the response
+        uint8_t buffer[SWITCH_INPUT_BUFFER_SIZE]{0x00};
         size_t size = sizeof(buffer);
         (void)m_inPipe[0]->Read(buffer, &size, 500 * 1000 /*timeout_us*/);
 
