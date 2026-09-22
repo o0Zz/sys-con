@@ -1,8 +1,10 @@
 #include "SwitchMITMHandler.h"
+#include "SwitchHDLHandler.h"
 #include "SwitchLogger.h"
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+#include <mutex>
 
 using namespace controllerlib;
 
@@ -11,6 +13,13 @@ namespace
     // How long the console may take to publish the npad for a device hiddbg just created.
     constexpr int NpadAppearRetries = 100;
     constexpr u64 NpadAppearDelayNs = 10000000ULL; // 10 ms
+
+    /*
+        Two handlers attaching at the same time would each diff the npad mask across the
+        other's device and both claim the same slot, so the whole create-then-identify
+        window is serialized.
+    */
+    std::mutex g_attach_mutex;
 
     /*
         The npads the real hid is publishing right now. sys-con holds its own hid session
@@ -32,7 +41,9 @@ namespace
 
     /*
         hiddbg hands back a HiddbgHdlsHandle and nothing that names the npad the console gave
-        it, so the slot has to be recovered by watching which one appears.
+        it, so the slot has to be recovered by watching which one appears. A second npad
+        appearing in the same window makes the answer ambiguous, and guessing would have the
+        fake shared memory override a slot that belongs to somebody else.
     */
     bool WaitForNewNpad(u32 mask_before, uint8_t *player_idx_out)
     {
@@ -41,6 +52,9 @@ namespace
             const u32 appeared = GetRealNpadMask() & ~mask_before;
             if (appeared != 0)
             {
+                if ((appeared & (appeared - 1)) != 0)
+                    return false;
+
                 *player_idx_out = static_cast<uint8_t>(__builtin_ctz(appeared));
                 return true;
             }
@@ -85,18 +99,32 @@ Result SwitchMITMHandler::Initialize()
 }
 
 /*
-    Holding a player slot is not enough to call the pad attached: the console clears the npad
-    it gave us whenever the grip/order screen unassigns the controllers, and only it knows
-    that happened - the fake shared memory is ours and would always claim the pad is there.
-    Reporting it honestly is what re-arms the L+R re-attach in
-    SwitchVirtualGamepadHandler::UpdateInput.
+    The npad slot the fake shared memory overrides is the one hid gave to our hiddbg device,
+    so the pad exists exactly as long as that device does. hid destroys it on its own - the
+    grip/order screen unassigning the controllers, a game refusing another pad, a sleep cycle
+    - and only hid knows; the fake shared memory is ours and would always claim the pad is
+    there. Asking hiddbg is what tells them apart: an npad style set in that slot only says
+    somebody is there, which after a drop can be a real controller the console moved in.
+
+    Answering honestly is also what re-arms the L+R re-attach in
+    SwitchVirtualGamepadHandler::UpdateInput, and the slot is given back here so the manager
+    thread stops publishing a pad the console no longer has.
 */
 bool SwitchMITMHandler::IsControllerAttached(uint16_t input_idx)
 {
-    if (m_controllerList[input_idx] == nullptr)
+    if (m_hdlsHandle[input_idx].handle == 0)
         return false;
 
-    return hidGetNpadStyleSet(static_cast<HidNpadIdType>(m_controllerList[input_idx]->GetPlayerIndex())) != 0;
+    bool attached = false;
+    Result rc = hiddbgIsHdlsVirtualDeviceAttached(SwitchHDLHandler::GetHdlsSessionId(), m_hdlsHandle[input_idx], &attached);
+    if (R_SUCCEEDED(rc) && attached)
+        return true;
+
+    syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the device on input: %d (Error: 0x%08X), releasing player %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc, m_controllerList[input_idx]->GetPlayerIndex() + 1);
+
+    ReleaseController(input_idx);
+
+    return false;
 }
 
 // Hands back everything the pad owns. Safe to call whatever state it is in.
@@ -135,12 +163,10 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
     if (IsControllerAttached(input_idx))
         return 0;
 
-    // A re-attach arrives here still holding the device the console has already dropped, so
-    // give that one back before asking for another.
-    ReleaseController(input_idx);
-
     HiddbgHdlsDeviceInfo deviceInfo;
     BuildHdlsDeviceInfo(&deviceInfo);
+
+    std::unique_lock<std::mutex> attach_lock(g_attach_mutex);
 
     const u32 npad_mask_before = GetRealNpadMask();
 
@@ -153,9 +179,13 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
     }
 
     uint8_t player_idx = 0;
-    if (!WaitForNewNpad(npad_mask_before, &player_idx))
+    const bool identified = WaitForNewNpad(npad_mask_before, &player_idx);
+
+    attach_lock.unlock();
+
+    if (!identified)
     {
-        syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] The console published no npad for the device on input: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+        syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] The console published no single npad for the device on input: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
         ReleaseController(input_idx);
         return MAKERESULT(Module_Libnx, LibnxError_NotFound);
     }
