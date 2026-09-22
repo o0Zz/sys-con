@@ -62,6 +62,14 @@ TEST(Controller, test_switch_init_handshake_writes_before_reading)
             EXPECT_EQ(inBuffer[1], 0x04);
             return Status::Success;
         }));
+    EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, 12))
+        .InSequence(seq)
+        .WillOnce(testing::Invoke([](const uint8_t *inBuffer, size_t) {
+            EXPECT_EQ(inBuffer[0], 0x01);
+            EXPECT_EQ(inBuffer[10], 0x48);
+            EXPECT_EQ(inBuffer[11], 0x01);
+            return Status::Success;
+        }));
 
     SwitchController controller(std::make_unique<MockDevice>(0x057e, 0x2009, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
     EXPECT_EQ(controller.Initialize(), Status::Success);
