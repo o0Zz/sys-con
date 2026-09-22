@@ -28,6 +28,10 @@ protected:
     bool m_ThreadIsRunning = false;
     bool m_removable = true; // see SetRemovable()
 
+    // Describes the pad to hiddbg. Both handlers create their devices through it, so the
+    // description is built once here from the controller's config.
+    void BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo);
+
     // Fills out the HDL state with the specified button data and passes it to HID
     virtual bool IsControllerAttached(uint16_t input_idx) = 0;
     virtual Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) = 0;

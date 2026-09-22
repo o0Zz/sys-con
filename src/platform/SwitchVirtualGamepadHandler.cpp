@@ -252,6 +252,20 @@ Result SwitchVirtualGamepadHandler::UpdateOutput()
     return 0;
 }
 
+void SwitchVirtualGamepadHandler::BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo)
+{
+    memset(deviceInfo, 0, sizeof(*deviceInfo));
+
+    deviceInfo->deviceType = ControllerTypeToDeviceType(m_controller->GetConfig().controllerType);
+    deviceInfo->npadInterfaceType = HidNpadInterfaceType_USB;
+
+    // The grip colors are for Pro-Controller on [9.0.0+].
+    deviceInfo->singleColorBody = __builtin_bswap32(m_controller->GetConfig().bodyColor.rgbaValue);
+    deviceInfo->singleColorButtons = __builtin_bswap32(m_controller->GetConfig().buttonsColor.rgbaValue);
+    deviceInfo->colorLeftGrip = __builtin_bswap32(m_controller->GetConfig().leftGripColor.rgbaValue);
+    deviceInfo->colorRightGrip = __builtin_bswap32(m_controller->GetConfig().rightGripColor.rgbaValue);
+}
+
 void SwitchVirtualGamepadHandler::ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out)
 {
     float floatRange = 2.0f;

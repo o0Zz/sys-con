@@ -58,7 +58,7 @@ class HidSharedMemoryController
 public:
     static constexpr uint8_t VibrationDeviceCount = 2;
 
-    HidSharedMemoryController(uint8_t player_idx);
+    HidSharedMemoryController(uint8_t player_idx, u32 body_color, u32 buttons_color);
     ~HidSharedMemoryController();
 
     uint8_t GetPlayerIndex() const { return m_player_idx; }
@@ -80,6 +80,8 @@ public:
 
 private:
     uint8_t m_player_idx;
+    u32 m_body_color;
+    u32 m_buttons_color;
     u64 m_sampling_number;
 
     u64 m_buttons;
@@ -102,7 +104,10 @@ public:
 
     static HidSharedMemoryManager &GetHidSharedMemoryManager();
 
-    std::shared_ptr<HidSharedMemoryController> AttachController();
+    // The slot is dictated by the caller, not chosen here: the pad has already been created
+    // through hiddbg and the console has given it an npad, and it is that npad the fake
+    // shared memory has to override.
+    std::shared_ptr<HidSharedMemoryController> AttachControllerAt(uint8_t player_idx, u32 body_color, u32 buttons_color);
     void DetachController(std::shared_ptr<HidSharedMemoryController> controller);
 
     /*
@@ -132,7 +137,6 @@ private:
 
     // real -> fake, for everything but the npad slots sys-con owns.
     void Mirror(HidSharedMemoryEntry &entry);
-    bool IsPlayerIndexUsedByRealHid(uint8_t player_idx);
 
     void RunGarbageCollector();
     void DumpProcessesAndMemoryAddr();

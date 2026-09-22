@@ -57,10 +57,16 @@ namespace syscon
 
         AbortStep(usbHsInitialize(), 2);
         AbortStep(pscmInitialize(), 3);
+
+        // Own session on the real hid (sys-con's program id never passes ShouldMitm, so this
+        // is not intercepted). It is what lets a handler read back which npad the console
+        // gave a pad it just created - see SwitchMITMHandler::AttachController.
+        AbortStep(hidInitialize(), 6);
     }
 
     void FinalizeModules()
     {
+        hidExit();
         pscmExit();
         usbHsExit();
         if (g_hiddbg_initialized)
@@ -93,27 +99,31 @@ namespace syscon
         ::syscon::controllers::SetPollingParameters(globalConfig.polling_timeout_ms, globalConfig.polling_thread_priority);
         ::syscon::controllers::SetMode(globalConfig.mode);
 
+        /*
+            Both modes create their pads through hiddbg, because that is what makes hid own
+            the device: only then does the console announce it - player LED, the Controllers
+            screen, and the grip/order screen. MITM mode goes on to override that same npad
+            slot in the shared memory it hands each client, which is where its pad state,
+            and everything else it will want to fake, comes from.
+
+            Opened here rather than in InitializeModules because the console has a single
+            HDLS session and sys-con should hold it no longer than it runs.
+        */
+        ::syscon::logger::LogDebug("Initializing hiddbg HDLS ...");
+        AbortStep(hiddbgInitialize(), 1);
+        g_hiddbg_initialized = true;
+
         bool hdls_attached = false;
+        if (hosversionAtLeast(7, 0, 0))
+        {
+            AbortUnless(hiddbgAttachHdlsWorkBuffer(&::SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
+            hdls_attached = true;
+        }
+
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
         {
             ::syscon::logger::LogDebug("Initializing HID MITM (mode=mitm) ...");
             AbortUnless(::syscon::hid::mitm::Initialize());
-        }
-        else
-        {
-            ::syscon::logger::LogDebug("Initializing hiddbg HDLS (mode=hiddbg) ...");
-
-            // Opened here rather than in InitializeModules: the console has a single HDLS
-            // session, and a MITM-mode run that merely holds a hid:dbg session takes it
-            // away from whatever else is driving a virtual pad.
-            AbortStep(hiddbgInitialize(), 1);
-            g_hiddbg_initialized = true;
-
-            if (hosversionAtLeast(7, 0, 0))
-            {
-                AbortUnless(hiddbgAttachHdlsWorkBuffer(&::SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
-                hdls_attached = true;
-            }
         }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
@@ -136,7 +146,8 @@ namespace syscon
 
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
             ::syscon::hid::mitm::Finalize();
-        else if (hdls_attached && hosversionAtLeast(7, 0, 0))
+
+        if (hdls_attached && hosversionAtLeast(7, 0, 0))
             hiddbgReleaseHdlsWorkBuffer(::SwitchHDLHandler::GetHdlsSessionId());
 
         ::syscon::logger::Exit();

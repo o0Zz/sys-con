@@ -296,41 +296,31 @@ void HidSharedMemoryManager::ClearVibration(uint8_t player_idx)
         SetVibration(player_idx, device_idx, HidVibrationValue{});
 }
 
-bool HidSharedMemoryManager::IsPlayerIndexUsedByRealHid(uint8_t player_idx)
-{
-    std::lock_guard<std::recursive_mutex> lock(m_mutex_sharedmemory);
-
-    for (const auto &entry : m_sharedmemory_entry_list)
-    {
-        if (entry->GetRealAddr()->npad.entries[player_idx].internal_state.style_set != 0)
-            return true;
-    }
-
-    return false;
-}
-
-std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachController()
+std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControllerAt(uint8_t player_idx, u32 body_color, u32 buttons_color)
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
-    for (uint8_t i = 0; i < m_controller_list.size(); i++)
+    if (player_idx >= m_controller_list.size())
     {
-        if (IsPlayerIndexOwned(i) || IsPlayerIndexUsedByRealHid(i))
-            continue;
-
-        m_controller_list[i] = std::make_shared<HidSharedMemoryController>(i);
-        ClearVibration(i);
-        m_player_owned[i].store(true, std::memory_order_relaxed);
-
-        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-        m_controller_list[i]->Clear();
-
-        ::syscon::logger::LogInfo("HidSharedMemoryManager attached a controller on player %d", i + 1);
-        return m_controller_list[i];
+        ::syscon::logger::LogError("HidSharedMemoryManager cannot attach a controller on player %d, out of range !", player_idx + 1);
+        return nullptr;
     }
 
-    ::syscon::logger::LogError("HidSharedMemoryManager has no free player slot left, controller not attached !");
-    return nullptr;
+    if (IsPlayerIndexOwned(player_idx))
+    {
+        ::syscon::logger::LogError("HidSharedMemoryManager already owns player %d, controller not attached !", player_idx + 1);
+        return nullptr;
+    }
+
+    m_controller_list[player_idx] = std::make_shared<HidSharedMemoryController>(player_idx, body_color, buttons_color);
+    ClearVibration(player_idx);
+    m_player_owned[player_idx].store(true, std::memory_order_relaxed);
+
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+    m_controller_list[player_idx]->Clear();
+
+    ::syscon::logger::LogInfo("HidSharedMemoryManager attached a controller on player %d", player_idx + 1);
+    return m_controller_list[player_idx];
 }
 
 void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryController> controller)
@@ -619,8 +609,10 @@ void HidSharedMemoryManager::OnRun()
 
 /* ---------------------------------------- */
 
-HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx)
+HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u32 body_color, u32 buttons_color)
     : m_player_idx(player_idx),
+      m_body_color(body_color),
+      m_buttons_color(buttons_color),
       m_sampling_number(0),
       m_buttons(0),
       m_analog_stick_l{},
@@ -644,9 +636,11 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 
     internal_state->style_set = HidNpadStyleTag_NpadSystemExt | HidNpadStyleTag_NpadFullKey;
     internal_state->joy_assignment_mode = 0;
+    // The same colours the pad was created with, so a mitm'd applet draws it the way the
+    // Controllers menu - which reads the real hid - already does.
     internal_state->full_key_color.attribute = HidColorAttribute_Ok;
-    internal_state->full_key_color.full_key.main = 0xFF0000FF; // BodyColor
-    internal_state->full_key_color.full_key.sub = 0xFF0000FF;  // ButtonColor
+    internal_state->full_key_color.full_key.main = m_body_color;
+    internal_state->full_key_color.full_key.sub = m_buttons_color;
 
     internal_state->full_key_lifo.header.buffer_count = 17;
     internal_state->system_ext_lifo.header.buffer_count = 17;

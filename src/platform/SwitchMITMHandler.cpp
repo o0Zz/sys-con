@@ -9,6 +9,52 @@
 // library into the global namespace of everything downstream.
 using namespace controllerlib;
 
+namespace
+{
+    // How long the console may take to publish the npad for a device hiddbg just created.
+    constexpr int NpadAppearRetries = 100;
+    constexpr u64 NpadAppearDelayNs = 10000000ULL; // 10 ms
+
+    /*
+        The npads the real hid is publishing right now. sys-con holds its own hid session
+        (main.cpp) and its program id never passes ShouldMitm, so this is the console's real
+        view - not the fake shared memory the MITM hands to its clients.
+    */
+    u32 GetRealNpadMask()
+    {
+        u32 mask = 0;
+
+        for (u8 i = 0; i < 8; i++)
+        {
+            if (hidGetNpadStyleSet(static_cast<HidNpadIdType>(i)) != 0)
+                mask |= (1u << i);
+        }
+
+        return mask;
+    }
+
+    /*
+        hiddbg hands back a HiddbgHdlsHandle and nothing that names the npad the console gave
+        it, so the slot has to be recovered by watching which one appears.
+    */
+    bool WaitForNewNpad(u32 mask_before, uint8_t *player_idx_out)
+    {
+        for (int retry = 0; retry < NpadAppearRetries; retry++)
+        {
+            const u32 appeared = GetRealNpadMask() & ~mask_before;
+            if (appeared != 0)
+            {
+                *player_idx_out = static_cast<uint8_t>(__builtin_ctz(appeared));
+                return true;
+            }
+
+            svcSleepThread(NpadAppearDelayNs);
+        }
+
+        return false;
+    }
+} // namespace
+
 
 /******************************************************************************
  * SwitchMITMHandler Implementation
@@ -55,15 +101,54 @@ Result SwitchMITMHandler::DetachController(uint16_t input_idx)
     m_controllerList[input_idx] = nullptr;
     m_lastRumble[input_idx] = RumbleState{};
 
+    hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
+    m_hdlsHandle[input_idx].handle = 0;
+
     return 0;
 }
 
+/*
+    The pad is created through hiddbg first, so hid owns the device and the console announces
+    it - player LED, the Controllers screen, and the grip/order screen, none of which look at
+    the npad shared memory. Only then is the npad it produced claimed here, so the fake shared
+    memory overrides that very slot and the MITM stays the source of the pad's state.
+*/
 Result SwitchMITMHandler::AttachController(uint16_t input_idx)
 {
     if (IsControllerAttached(input_idx))
         return 0;
 
-    m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachController();
+    HiddbgHdlsDeviceInfo deviceInfo;
+    BuildHdlsDeviceInfo(&deviceInfo);
+
+    const u32 npad_mask_before = GetRealNpadMask();
+
+    Result rc = hiddbgAttachHdlsVirtualDevice(&m_hdlsHandle[input_idx], &deviceInfo);
+    if (R_FAILED(rc))
+    {
+        syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] Failed to create the device for input: %d (Error: 0x%08X) !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc);
+        m_hdlsHandle[input_idx].handle = 0;
+        return rc;
+    }
+
+    uint8_t player_idx = 0;
+    if (!WaitForNewNpad(npad_mask_before, &player_idx))
+    {
+        syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] The console published no npad for the device on input: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+        hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
+        m_hdlsHandle[input_idx].handle = 0;
+        return MAKERESULT(Module_Libnx, LibnxError_NotFound);
+    }
+
+    m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachControllerAt(player_idx, deviceInfo.singleColorBody, deviceInfo.singleColorButtons);
+    if (m_controllerList[input_idx] == nullptr)
+    {
+        hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
+        m_hdlsHandle[input_idx].handle = 0;
+        return MAKERESULT(Module_Libnx, LibnxError_NotFound);
+    }
+
+    syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] Created the device for input: %d, the console gave it player %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, player_idx + 1);
 
     return 0;
 }
