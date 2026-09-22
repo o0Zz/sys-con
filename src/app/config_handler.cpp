@@ -422,100 +422,20 @@ namespace syscon::config
             return 1; // Success
         }
 
-        /*
-            fgets-shaped line reader over an IFile, with a read-ahead buffer.
-
-            The previous implementation issued one IFile::read() per byte, which is one
-            virtual call per byte on the libnx build and one ams::fs::ReadFile syscall per
-            byte on the Atmosphere one. Since LoadControllerConfig re-parses the whole file
-            once per override layer, a single controller connection cost hundreds of
-            thousands of those over the shipped ~60 KB config.
-
-            It also got two edge cases wrong, both fixed here:
-              - running out of room in `str` returned nullptr, which inih reads as EOF, so an
-                over-long line silently discarded the rest of the file. fgets returns the
-                partial line instead and resumes on the next call, which is what inih expects.
-              - a final line with no trailing newline was dropped entirely.
-        */
-        class BufferedIniReader
-        {
-        public:
-            explicit BufferedIniReader(IFile *file)
-                : m_file(file)
-            {
-            }
-
-            char *ReadLine(char *str, int num)
-            {
-                if (str == nullptr || num <= 1)
-                    return nullptr;
-
-                int written = 0;
-
-                while (written < num - 1)
-                {
-                    if (m_pos == m_len && !Refill())
-                        break; // End of file.
-
-                    char c = m_buffer[m_pos++];
-                    if (c == '\n')
-                    {
-                        // Newline is dropped; inih rstrip()s the line anyway.
-                        break;
-                    }
-
-                    str[written++] = c;
-                }
-
-                // Nothing read and nothing buffered: genuine end of file.
-                if (written == 0 && m_pos == m_len && m_eof)
-                    return nullptr;
-
-                str[written] = '\0';
-                return str;
-            }
-
-        private:
-            bool Refill()
-            {
-                if (m_eof)
-                    return false;
-
-                m_len = m_file->read(m_buffer, sizeof(m_buffer));
-                m_pos = 0;
-
-                if (m_len == 0)
-                {
-                    m_eof = true;
-                    return false;
-                }
-
-                return true;
-            }
-
-            IFile *m_file;
-            char m_buffer[512];
-            std::size_t m_len{0}; // Valid bytes currently in m_buffer.
-            std::size_t m_pos{0}; // Next byte of m_buffer to consume.
-            bool m_eof{false};
-        };
-
-        char *IniReaderLineByLineCallback(char *str, int num, void *stream)
-        {
-            return static_cast<BufferedIniReader *>(stream)->ReadLine(str, num);
-        }
-
-        int ReadFromConfig(const char *path, ini_handler handler, void *config)
+        // The whole file is parsed from memory: LoadControllerConfig re-parses it once per
+        // override layer, and inih's own reader handles the line edge cases.
+        bool ReadConfigFile(const std::string &path, std::string *out)
         {
             std::unique_ptr<IFile> file = file_manager->open(path, OpenFlags_Read);
             if (!file)
             {
-                syscon::logger::LogError("Unable to open configuration file: '%s' !", path);
-                return -1;
+                syscon::logger::LogError("Unable to open configuration file: '%s' !", path.c_str());
+                return false;
             }
 
-            BufferedIniReader reader(file.get());
-            return ini_parse_stream(IniReaderLineByLineCallback, &reader, handler, config);
+            out->resize(file_manager->file_size(path));
+            out->resize(file->read(out->data(), out->size()));
+            return true;
         }
 
     } // namespace
@@ -527,18 +447,18 @@ namespace syscon::config
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config)
     {
-        ConfigINIData cfg("global", config);
-
         syscon::logger::LogDebug("Loading global config: '%s' ...", configFullPath.c_str());
 
-        int rc = ReadFromConfig(configFullPath.c_str(), ParseGlobalConfigLine, &cfg);
-        if (rc)
-        {
-            syscon::logger::LogError("Failed to load global config: '%s' (Error: 0x%08X) !", configFullPath.c_str(), rc);
-            return rc;
-        }
+        std::string contents;
+        if (!ReadConfigFile(configFullPath, &contents))
+            return -1;
 
-        return 0;
+        ConfigINIData cfg("global", config);
+        int rc = ini_parse_string(contents.c_str(), ParseGlobalConfigLine, &cfg);
+        if (rc)
+            syscon::logger::LogError("Failed to load global config: '%s' (Error: 0x%08X) !", configFullPath.c_str(), rc);
+
+        return rc;
     }
 
     int AddControllerToConfig(const std::string &path, const std::string &section, const std::string &profile)
@@ -612,15 +532,19 @@ namespace syscon::config
         ConfigINIData cfg_default("default", config);
         ConfigINIData cfg_controller(controllerVidPid, config);
 
+        std::string contents;
+        if (!ReadConfigFile(configFullPath, &contents))
+            return -1;
+
         syscon::logger::LogDebug("Loading controller config: '%s' [default] ...", configFullPath.c_str());
 
-        int rc = ReadFromConfig(configFullPath.c_str(), ParseControllerConfigLine, &cfg_default);
+        int rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_default);
         if (rc)
             return rc;
 
         // Override with vendor specific config
         syscon::logger::LogDebug("Loading controller config: '%s' [%s] ...", configFullPath.c_str(), std::string(controllerVidPid).c_str());
-        rc = ReadFromConfig(configFullPath.c_str(), ParseControllerConfigLine, &cfg_controller);
+        rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
         if (rc)
             return rc;
 
@@ -632,7 +556,10 @@ namespace syscon::config
                 return rc;
 
             syscon::logger::LogDebug("Reloading controller config: '%s' [%s] ...", configFullPath.c_str(), std::string(controllerVidPid).c_str());
-            rc = ReadFromConfig(configFullPath.c_str(), ParseControllerConfigLine, &cfg_controller);
+            if (!ReadConfigFile(configFullPath, &contents))
+                return -1;
+
+            rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
             if (rc)
                 return rc;
         }
@@ -642,14 +569,14 @@ namespace syscon::config
         {
             syscon::logger::LogDebug("Loading controller config: '%s' (Profile: [%s]) ... ", configFullPath.c_str(), config->profile.c_str());
             ConfigINIData cfg_profile(config->profile, config);
-            rc = ReadFromConfig(configFullPath.c_str(), ParseControllerConfigLine, &cfg_profile);
+            rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_profile);
             if (rc)
                 return rc;
 
             // Re-Override with vendor specific config
             // We are doing this to allow the profile to be overrided by the vendor specific config
             // In other words we would like to have [default] overrided by [profile] overrided by [vid-pid]
-            rc = ReadFromConfig(configFullPath.c_str(), ParseControllerConfigLine, &cfg_controller);
+            rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
             if (rc)
                 return rc;
         }

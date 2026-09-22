@@ -1,11 +1,7 @@
 /*
-    Edge cases for the buffered line reader that feeds inih.
-
-    The reader used to issue one IFile::read() per byte and got two boundary cases wrong:
-    a final line with no trailing newline was dropped, and a line longer than INI_MAX_LINE
-    made it report EOF, silently discarding the rest of the file. Both are exercised here
-    through the real config parser rather than the reader directly, since the reader lives
-    in an anonymous namespace.
+    Edge cases for the config parser: a final line with no trailing newline, a line longer
+    than INI_MAX_LINE, CRLF and an empty file. All go through the real LoadGlobalConfig,
+    which is what reads the file and hands it to inih.
 */
 #include <gtest/gtest.h>
 
