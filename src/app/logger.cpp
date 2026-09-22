@@ -26,7 +26,7 @@ namespace syscon::logger
 
         static std::filesystem::path sLogPath;
         static LogLevel sLogLevel = LogLevel::Trace;
-        static std::unique_ptr<IFileManager> sFileManager;
+        static IFileManager *sFileManager = nullptr;
 
         constexpr size_t LogLineMax = 512;
 
@@ -63,10 +63,10 @@ namespace syscon::logger
         }
     } // namespace
 
-    void Initialize(const std::string &log, std::unique_ptr<IFileManager> &&file)
+    void Initialize(const std::string &log, IFileManager &file)
     {
         sLogPath = std::filesystem::path(log);
-        sFileManager = std::move(file);
+        sFileManager = &file;
 
         std::lock_guard<std::mutex> printLock(sLogMutex);
         std::filesystem::path basePath = sLogPath.parent_path();
@@ -80,7 +80,7 @@ namespace syscon::logger
     void Exit()
     {
         std::lock_guard<std::mutex> printLock(sLogMutex);
-        sFileManager.reset();
+        sFileManager = nullptr;
     }
 
     /* The file is reopened per line on purpose: holding a write handle on log.txt for the process

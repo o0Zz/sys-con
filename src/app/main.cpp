@@ -21,24 +21,15 @@ namespace syscon
 
         bool g_hiddbg_initialized = false;
 
-        // libnx's R_ABORT_UNLESS is a macro private to its runtime file, and stratosphere's
-        // must not be pulled into this shared file, so use a small helper. diagAbortWithResult
-        // is libnx and available in both builds.
-        void AbortUnless(Result rc)
+        // Aborting with a step-tagged result rather than the service's own keeps
+        // the failing call identifiable: the compiler merges these into a single
+        // diagAbortWithResult, so the stack trace alone cannot say which one it was.
+        void AbortStep(Result rc, u32 step)
         {
             if (R_FAILED(rc)) [[unlikely]]
-                diagAbortWithResult(rc);
+                diagAbortWithResult(MAKERESULT(420, step));
         }
     } // namespace
-
-    // Aborting with a step-tagged result rather than the service's own keeps
-    // the failing call identifiable: the compiler merges these into a single
-    // diagAbortWithResult, so the stack trace alone cannot say which one it was.
-    void AbortStep(Result rc, u32 step)
-    {
-        if (R_FAILED(rc)) [[unlikely]]
-            diagAbortWithResult(MAKERESULT(420, step));
-    }
 
     void InitializeModules()
     {
@@ -73,21 +64,19 @@ namespace syscon
             hiddbgExit();
     }
 
-    void RunApp(FileManagerFactory makeFileManager, BannerFn logExtraBanner)
+    void RunApp(IFileManager &fileManager)
     {
-        ::syscon::logger::Initialize(CONFIG_PATH "log.txt", makeFileManager());
+        ::syscon::logger::Initialize(CONFIG_PATH "log.txt", fileManager);
 
         u32 version = hosversionGet();
         ::syscon::logger::LogInfo("-----------------------------------------------------");
         ::syscon::logger::LogInfo("SYS-CON started %s+%d-%s (Build date: %s %s) - https://github.com/o0Zz/sys-con", version::syscon_tag, version::syscon_commit_count, version::syscon_git_hash, __DATE__, __TIME__);
         ::syscon::logger::LogInfo("OS version: %d.%d.%d", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version));
-        if (logExtraBanner != nullptr)
-            logExtraBanner();
 
         ::syscon::logger::LogDebug("Initializing configuration ...");
 
         ::syscon::config::GlobalConfig globalConfig;
-        ::syscon::config::Initialize(makeFileManager());
+        ::syscon::config::Initialize(fileManager);
         ::syscon::config::LoadGlobalConfig(CONFIG_FULLPATH, &globalConfig);
 
         ::syscon::logger::SetLogLevel(globalConfig.log_level);
@@ -116,14 +105,14 @@ namespace syscon
         bool hdls_attached = false;
         if (hosversionAtLeast(7, 0, 0))
         {
-            AbortUnless(hiddbgAttachHdlsWorkBuffer(&::SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)));
+            AbortStep(hiddbgAttachHdlsWorkBuffer(&::SwitchHDLHandler::GetHdlsSessionId(), &g_hdls_buffer, sizeof(g_hdls_buffer)), 7);
             hdls_attached = true;
         }
 
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
         {
             ::syscon::logger::LogDebug("Initializing HID MITM (mode=mitm) ...");
-            AbortUnless(::syscon::hid::mitm::Initialize());
+            AbortStep(::syscon::hid::mitm::Initialize(), 8);
         }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
@@ -147,7 +136,7 @@ namespace syscon
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
             ::syscon::hid::mitm::Finalize();
 
-        if (hdls_attached && hosversionAtLeast(7, 0, 0))
+        if (hdls_attached)
             hiddbgReleaseHdlsWorkBuffer(::SwitchHDLHandler::GetHdlsSessionId());
 
         ::syscon::logger::Exit();

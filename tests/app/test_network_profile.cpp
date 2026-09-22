@@ -47,7 +47,8 @@ namespace
     ControllerConfig LoadNetworkProfile()
     {
         ControllerConfig config;
-        ::syscon::config::Initialize(std::make_unique<syscon::StdFileManager>());
+        syscon::StdFileManager fileManager;
+        ::syscon::config::Initialize(fileManager);
         ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, kNetworkVendorId, kNetworkProductId, false, "network");
         return config;
     }

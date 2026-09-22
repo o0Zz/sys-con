@@ -22,7 +22,8 @@ namespace
 
     syscon::config::GlobalConfig LoadFrom(const std::string &contents)
     {
-        ::syscon::config::Initialize(std::make_unique<MemoryFileManager>(contents));
+        MemoryFileManager fileManager(contents);
+        ::syscon::config::Initialize(fileManager);
 
         syscon::config::GlobalConfig config;
         ::syscon::config::LoadGlobalConfig(kConfigPath, &config);

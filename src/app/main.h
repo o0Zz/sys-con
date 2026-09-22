@@ -1,7 +1,6 @@
 #pragma once
 
 #include "IFileManager.h"
-#include <memory>
 
 /*
  * The flavour-agnostic sysmodule program: shared bring-up helpers and the application body.
@@ -15,16 +14,11 @@
  */
 namespace syscon
 {
-    // Returns a fresh IFileManager per call (the logger and the config each take their own).
-    using FileManagerFactory = std::unique_ptr<IFileManager> (*)();
-
-    // Logs flavour-specific banner lines right after the logger is initialized. May be null.
-    using BannerFn = void (*)();
-
     // Shared bring-up, called from each flavour's system init (where SM is already up).
     void InitializeModules(); // usbHs, pscm
     void FinalizeModules();
 
     // The application body: config -> controllers -> mode -> USB -> PSC loop -> teardown.
-    void RunApp(FileManagerFactory makeFileManager, BannerFn logExtraBanner = nullptr);
+    // fileManager must outlive the call; the logger and the config borrow it.
+    void RunApp(IFileManager &fileManager);
 } // namespace syscon

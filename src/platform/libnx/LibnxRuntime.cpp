@@ -9,7 +9,6 @@
 #include <switch.h>
 #include "main.h"
 #include "StdFileManager.h"
-#include <memory>
 
 // Size of the inner heap (adjust as necessary).
 #define INNER_HEAP_SIZE 0x80000 // 512 KiB
@@ -58,18 +57,12 @@ extern "C"
     }
 }
 
-namespace
-{
-    std::unique_ptr<syscon::IFileManager> MakeFileManager()
-    {
-        return std::make_unique<syscon::StdFileManager>();
-    }
-} // namespace
-
 int main(int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
-    syscon::RunApp(&MakeFileManager);
+
+    syscon::StdFileManager fileManager;
+    syscon::RunApp(fileManager);
     return 0;
 }

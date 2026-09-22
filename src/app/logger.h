@@ -9,7 +9,7 @@
 
 namespace syscon::logger
 {
-    void Initialize(const std::string &logPath, std::unique_ptr<IFileManager> &&file);
+    void Initialize(const std::string &logPath, IFileManager &file);
     void Exit();
 
     void SetLogLevel(controllerlib::LogLevel level);

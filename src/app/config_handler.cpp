@@ -26,7 +26,7 @@ namespace syscon::config
 {
     namespace
     {
-        std::unique_ptr<IFileManager> file_manager;
+        IFileManager *file_manager = nullptr;
 
         // Utils function
         std::string convertToLowercase(const std::string &str)
@@ -520,10 +520,9 @@ namespace syscon::config
 
     } // namespace
 
-    int Initialize(std::unique_ptr<IFileManager> &&fileManager)
+    void Initialize(IFileManager &fileManager)
     {
-        file_manager = std::move(fileManager);
-        return 0;
+        file_manager = &fileManager;
     }
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config)

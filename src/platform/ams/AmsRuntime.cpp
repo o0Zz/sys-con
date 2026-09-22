@@ -9,10 +9,8 @@
  */
 #include <switch.h>
 #include <stratosphere.hpp>
-#include <memory>
 
 #include "main.h"
-#include "logger.h"
 #include "AMSFileManager.h"
 
 
@@ -102,27 +100,10 @@ namespace ams
 
     } // namespace init
 
-    namespace
-    {
-        std::unique_ptr<::syscon::IFileManager> MakeFileManager()
-        {
-            return std::make_unique<::syscon::AMSFileManager>();
-        }
-
-        // ams-only banner line: the Atmosphere version and the HOS version it targets. The
-        // common banner (name, build, OS version) is logged by RunApp; these macros only
-        // exist here.
-        void LogAmsBanner()
-        {
-            ::syscon::logger::LogInfo("Atmosphere: %d.%d.%d (Max supported HOS: %d.%d.%d)",
-                                      ATMOSPHERE_RELEASE_VERSION,
-                                      ATMOSPHERE_SUPPORTED_HOS_VERSION_MAJOR, ATMOSPHERE_SUPPORTED_HOS_VERSION_MINOR, ATMOSPHERE_SUPPORTED_HOS_VERSION_MICRO);
-        }
-    } // namespace
-
     void Main()
     {
-        ::syscon::RunApp(&MakeFileManager, &LogAmsBanner);
+        ::syscon::AMSFileManager fileManager;
+        ::syscon::RunApp(fileManager);
     }
 } // namespace ams
 

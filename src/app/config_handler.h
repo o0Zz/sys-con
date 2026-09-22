@@ -87,7 +87,7 @@ namespace syscon::config
         uint16_t network_controller_port{56789};
     };
 
-    int Initialize(std::unique_ptr<IFileManager> &&fileManager);
+    void Initialize(IFileManager &fileManager);
 
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config);
 
