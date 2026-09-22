@@ -6,7 +6,6 @@ VERSION_HEADER := app/version.h
 TARGETS := companion app
 TOPTARGETS := all clean mrproper
 
-ATMOSPHERE_GIT_HASH := $(shell git -C ../external/Atmosphere-libs rev-parse --short HEAD)
 SYSCON_GIT_HASH := $(shell git rev-parse --short HEAD)
 SYSCON_GIT_TAG := $(shell git describe --tags `git rev-list --tags --max-count=1`)
 SYSCON_GIT_TAG_COMMIT_COUNT := $(shell git rev-list  `git rev-list --tags --no-walk --max-count=1`..HEAD --count)
@@ -37,7 +36,6 @@ $(VERSION_HEADER): ../.git/HEAD ../.git/index
 	@echo "const char * syscon_tag = \"$(SYSCON_GIT_TAG)\";" >> $@.tmp
 	@echo "const char * syscon_git_hash = \"$(SYSCON_GIT_HASH)\";" >> $@.tmp
 	@echo "const unsigned int syscon_commit_count = $(SYSCON_GIT_TAG_COMMIT_COUNT);" >> $@.tmp
-	@echo "const char * atmosphere_version = \"$(ATMOSPHERE_VERSION)-$(ATMOSPHERE_GIT_HASH)\";" >> $@.tmp
 	@echo "}" >> $@.tmp
 	@if [ -f $@ ] && cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
 

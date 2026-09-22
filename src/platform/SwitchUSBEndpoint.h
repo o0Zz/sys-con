@@ -30,15 +30,10 @@ public:
 
     // The data received will be put in the outBuffer array for the length of the specified size.
     virtual controllerlib::Status Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs) override;
-    virtual controllerlib::Status ReadSync(uint8_t *outBuffer, size_t *bufferSizeInOut);
-    virtual controllerlib::Status ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs);
 
     // Gets the direction of this endpoint (IN or OUT)
     virtual controllerlib::IUSBEndpoint::Direction GetDirection() override;
 
     // get the endpoint descriptor
     virtual controllerlib::IUSBEndpoint::EndpointDescriptor *GetDescriptor() override;
-
-    // Get the current EpSession (after it was opened)
-    inline UsbHsClientEpSession &GetSession() { return m_epSession; }
 };

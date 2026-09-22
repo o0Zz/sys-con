@@ -10,11 +10,9 @@ namespace controllerlib
 
         ControllerLib does no logging of its own beyond this interface: a host implements
         ILogger and hands one to each controller, so the library never assumes a sink, a format
-        or a platform. There used to be three competing severity tables across the code that
-        embeds it, one of which was missing a level, so everything above it was off by one.
-        Scoping the enum means the remaining int boundary -- hosts typically persist a log level
-        as a number in their own config -- has to be crossed explicitly, through
-        LogLevelFromInt() below, instead of implicitly anywhere.
+        or a platform. Scoping the enum means the int boundary -- hosts typically persist a log
+        level as a number in their own config -- has to be crossed explicitly, through
+        LogLevelFromInt() below.
 
         The numeric values are part of this library's public API. Hosts persist them, so do not
         renumber them.

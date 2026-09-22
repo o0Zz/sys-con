@@ -24,6 +24,33 @@ namespace controllerlib
         return Status::Success;
     }
 
+    void Xbox360Controller::DecodeReport(const Xbox360ButtonData *buttonData, RawInputData *rawData)
+    {
+        rawData->buttons[1] = buttonData->button1;
+        rawData->buttons[2] = buttonData->button2;
+        rawData->buttons[3] = buttonData->button3;
+        rawData->buttons[4] = buttonData->button4;
+        rawData->buttons[5] = buttonData->button5;
+        rawData->buttons[6] = buttonData->button6;
+        rawData->buttons[7] = buttonData->button7;
+        rawData->buttons[8] = buttonData->button8;
+        rawData->buttons[9] = buttonData->button9;
+        rawData->buttons[10] = buttonData->button10;
+        rawData->buttons[11] = buttonData->button11;
+
+        rawData->analog[AnalogAxis::Rx] = BaseController::Normalize(buttonData->Rx, 0, 255);
+        rawData->analog[AnalogAxis::Ry] = BaseController::Normalize(buttonData->Ry, 0, 255);
+        rawData->analog[AnalogAxis::X] = BaseController::Normalize(buttonData->X, -32768, 32767);
+        rawData->analog[AnalogAxis::Y] = BaseController::Normalize(-buttonData->Y, -32768, 32767);
+        rawData->analog[AnalogAxis::Z] = BaseController::Normalize(buttonData->Z, -32768, 32767);
+        rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(-buttonData->Rz, -32768, 32767);
+
+        rawData->buttons[DPAD_UP_BUTTON_ID] = buttonData->dpad_up;
+        rawData->buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;
+        rawData->buttons[DPAD_DOWN_BUTTON_ID] = buttonData->dpad_down;
+        rawData->buttons[DPAD_LEFT_BUTTON_ID] = buttonData->dpad_left;
+    }
+
     Status Xbox360Controller::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
     {
         (void)input_idx;
@@ -34,43 +61,12 @@ namespace controllerlib
 
         if (buttonData->type == XBOX360INPUT_BUTTON) // Button data
         {
-            rawData->buttons[1] = buttonData->button1;
-            rawData->buttons[2] = buttonData->button2;
-            rawData->buttons[3] = buttonData->button3;
-            rawData->buttons[4] = buttonData->button4;
-            rawData->buttons[5] = buttonData->button5;
-            rawData->buttons[6] = buttonData->button6;
-            rawData->buttons[7] = buttonData->button7;
-            rawData->buttons[8] = buttonData->button8;
-            rawData->buttons[9] = buttonData->button9;
-            rawData->buttons[10] = buttonData->button10;
-            rawData->buttons[11] = buttonData->button11;
-
-            rawData->analog[AnalogAxis::Rx] = BaseController::Normalize(buttonData->Rx, 0, 255);
-            rawData->analog[AnalogAxis::Ry] = BaseController::Normalize(buttonData->Ry, 0, 255);
-
-            rawData->analog[AnalogAxis::X] = BaseController::Normalize(buttonData->X, -32768, 32767);
-            rawData->analog[AnalogAxis::Y] = BaseController::Normalize(-buttonData->Y, -32768, 32767);
-            rawData->analog[AnalogAxis::Z] = BaseController::Normalize(buttonData->Z, -32768, 32767);
-            rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(-buttonData->Rz, -32768, 32767);
-
-            rawData->buttons[DPAD_UP_BUTTON_ID] = buttonData->dpad_up;
-            rawData->buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;
-            rawData->buttons[DPAD_DOWN_BUTTON_ID] = buttonData->dpad_down;
-            rawData->buttons[DPAD_LEFT_BUTTON_ID] = buttonData->dpad_left;
+            DecodeReport(buttonData, rawData);
 
             return Status::Success;
         }
 
         return Status::UnexpectedData;
-    }
-
-    bool Xbox360Controller::Support(ControllerFeature feature)
-    {
-        if (feature == SUPPORTS_RUMBLE)
-            return true;
-
-        return false;
     }
 
     Status Xbox360Controller::SetRumble(uint16_t input_idx, float amp_high, float amp_low)

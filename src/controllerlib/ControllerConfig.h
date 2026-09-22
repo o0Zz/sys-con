@@ -8,7 +8,6 @@
 #include <string.h>
 #include <string>
 
-#define MAX_JOYSTICKS      2
 #define MAX_PIN_BY_BUTTONS 2
 
 #define MAX_CONTROLLER_COMBO 16
@@ -66,9 +65,8 @@ namespace controllerlib
         uint32_t outputMaxPacketSize{0};
 
         ControllerType controllerType{ControllerType_Pro};
-        // EnumArray, so these can only be indexed with an AnalogAxis. The previous plain arrays
-        // were a trap: `uint8_t analogFactorPercent[N]{100}` sets only element 0 to 100 and the
-        // rest to 0, which is why the constructor below had to re-fill them by hand.
+        // EnumArray, so these can only be indexed with an AnalogAxis, and the braced value
+        // initializes every element (a plain array would set only element 0).
         AnalogPercentages analogDeadzonePercent{0};
         AnalogPercentages analogFactorPercent{100};
 

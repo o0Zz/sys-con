@@ -10,7 +10,7 @@ public:
     bool m_is_connected = false;
 };
 
-// This class is a base class for SwitchHDLHandler and SwitchAbstractedPaadHandler.
+// Base class for SwitchHDLHandler (hiddbg) and SwitchMITMHandler (mitm).
 class SwitchVirtualGamepadHandler
 {
     friend void SwitchVirtualGamepadHandlerThreadFunc(void *arg);

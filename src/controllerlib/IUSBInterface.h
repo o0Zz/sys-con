@@ -29,7 +29,5 @@ namespace controllerlib
 
         virtual IUSBEndpoint *GetEndpoint(IUSBEndpoint::Direction direction, uint8_t index) = 0;
         virtual InterfaceDescriptor *GetDescriptor() = 0;
-
-        virtual Status Reset() = 0;
     };
 } // namespace controllerlib

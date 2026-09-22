@@ -14,13 +14,9 @@ namespace controllerlib
         normalizes to; a host maps them onto whatever its own output device expects.
 
         This is deliberately distinct from a physical pin (see PinId): a driver reports pins, a
-        host's configuration maps pins onto these, and only these leave the library. The two
-        used to be plain bool arrays of identical size, so nothing stopped one being indexed
-        with the other's values.
-
-        Scoping the enum also stops it exporting NONE, X, A, B, Y, L, R, ZL, ZR, MINUS, PLUS,
-        HOME, CAPTURE and COUNT into the global namespace of every translation unit that
-        includes IController.h -- which matters more for a library than for an application.
+        host's configuration maps pins onto these, and only these leave the library. Scoping the
+        enum also keeps NONE, X, A, B, Y, L, R, ZL, ZR, MINUS, PLUS, HOME, CAPTURE and COUNT out
+        of the global namespace of every translation unit that includes IController.h.
     */
     enum class GamepadButton : uint8_t
     {
@@ -61,9 +57,6 @@ namespace controllerlib
         The buttons that are mapped straight from a pin, i.e. everything except NONE and the
         eight stick directions (those are derived from analog axes instead, see
         InputNormalizer/MapRawInputToNormalized).
-
-        BaseController.cpp used to carry this as a hand-written 18-entry array that had to be
-        kept in step with the enum by eye.
     */
     inline constexpr std::array<GamepadButton, 18> AllDigitalButtons{
         GamepadButton::X,

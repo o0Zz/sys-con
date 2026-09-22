@@ -3,11 +3,7 @@
 #include <cmath>
 #include <chrono>
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 static HiddbgHdlsSessionId g_hdlsSessionId;
 

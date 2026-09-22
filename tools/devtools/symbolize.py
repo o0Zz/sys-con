@@ -25,8 +25,6 @@ import subprocess
 import elf
 import repo
 
-HEX = r"0x([0-9A-Fa-f]{6,16})"
-
 
 def parse_crash_report(text):
     """Extracts what is needed from an /atmosphere/crash_reports/*.log."""

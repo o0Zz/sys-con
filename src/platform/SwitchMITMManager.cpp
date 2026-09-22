@@ -11,9 +11,6 @@
 
 static HidSharedMemoryManager g_HidSharedMemoryManager;
 
-#define MITM_CONFIG_REUSE_SHARED_MEMORY 0 // Set to 1 to reuse the shared memory on maximum
-#define MITM_CONFIG_GC_ENABLED          1 // Set to 1 to enable garbage collection for the shared memory
-
 static_assert(sizeof(HidSharedMemory) == HID_SHARED_MEMORY_SIZE, "HidSharedMemory size is not good!");
 
 namespace
@@ -346,17 +343,6 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
 {
-    std::shared_ptr<HidSharedMemoryEntry> entry;
-
-#if MITM_CONFIG_REUSE_SHARED_MEMORY
-    entry = Get(processId, programId);
-    if (entry != nullptr)
-    {
-        ::syscon::logger::LogDebug("HidSharedMemoryManager::CreateIfNotExists entry already exists (Process id: 0x%016" PRIx64 ", Program id: 0x%016" PRIx64 ")", processId, programId);
-        return entry;
-    }
-#endif
-
     /*
         Reclaim before allocating, not after. Every mitm'd process costs a 256 KiB fake
         shared memory plus a mapping of the real one, and applets come and go constantly -
@@ -365,11 +351,9 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(
         Running it from Add() would be too late: the allocation that needs the room
         happens in the constructor below.
     */
-#if MITM_CONFIG_GC_ENABLED
     RunGarbageCollector();
-#endif
 
-    entry = std::make_shared<HidSharedMemoryEntry>(hid_service, processId, programId);
+    std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(hid_service, processId, programId);
 
     // A half-built entry must never reach the client: its fake shared memory handle is
     // invalid, and handing that out as a copy handle is worse than failing the command.
@@ -409,19 +393,6 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
     DumpProcessesAndMemoryAddr();
 
     return 0;
-}
-
-std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::Get(u64 processId, u64 programId)
-{
-    std::lock_guard<std::recursive_mutex> lock(m_mutex_sharedmemory);
-
-    for (const auto &entry : m_sharedmemory_entry_list)
-    {
-        if (processId == entry->GetProcessId() && programId == entry->GetProgramId())
-            return entry;
-    }
-
-    return nullptr;
 }
 
 void HidSharedMemoryManager::RunGarbageCollector()
@@ -622,12 +593,6 @@ HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u32 bod
 
 /* ---------------------------------------- */
 
-HidSharedMemoryController::~HidSharedMemoryController()
-{
-}
-
-/* ---------------------------------------- */
-
 void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 {
     ::syscon::logger::LogDebug("HidSharedMemoryController::Initialize initializing player %d ...", m_player_idx + 1);
@@ -720,22 +685,7 @@ Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState 
 
 /* ---------------------------------------- */
 
-void HidSharedMemoryController::SetVibration(uint8_t device_idx, const HidVibrationValue &value)
-{
-    g_HidSharedMemoryManager.SetVibration(m_player_idx, device_idx, value);
-}
-
-HidVibrationValue HidSharedMemoryController::GetVibration(uint8_t device_idx) const
-{
-    return g_HidSharedMemoryManager.GetVibration(m_player_idx, device_idx);
-}
-
 void HidSharedMemoryController::GetRumble(float *amp_high, float *amp_low) const
 {
     g_HidSharedMemoryManager.GetRumble(m_player_idx, amp_high, amp_low);
-}
-
-void HidSharedMemoryController::ClearVibration()
-{
-    g_HidSharedMemoryManager.ClearVibration(m_player_idx);
 }

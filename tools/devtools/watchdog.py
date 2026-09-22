@@ -88,10 +88,3 @@ def should_retry(state, outcome, signature_hash):
         return False, ("same crash signature as the previous run (%s); this is "
                        "a code bug, not a flaky console" % signature_hash)
     return True, "new failure, worth one more attempt"
-
-
-def reset():
-    state = {"consecutive_failures": 0, "consecutive_healthy": 0,
-             "last_signature_hash": None, "signature_streak": 0, "history": []}
-    save(state)
-    return state

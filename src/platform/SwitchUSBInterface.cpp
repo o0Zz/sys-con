@@ -5,11 +5,7 @@
 #include <malloc.h>
 #include <cstring>
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 SwitchUSBInterface::SwitchUSBInterface(UsbHsInterface &interface)
     : m_interface(interface)
@@ -41,10 +37,6 @@ Status SwitchUSBInterface::Open()
             ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Input endpoint found 0x%x (Idx: %d)", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, epdesc.bEndpointAddress, i);
             m_inEndpoints[i] = std::make_unique<SwitchUSBEndpoint>(m_session, epdesc);
         }
-        else
-        {
-            //::syscon::logger::LogWarning("SwitchUSBInterface[%04x-%04x] Input endpoint %d is null", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, i);
-        }
     }
 
     for (int i = 0; i < SWITCH_USB_MAX_ENDPOINTS; i++)
@@ -54,10 +46,6 @@ Status SwitchUSBInterface::Open()
         {
             ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Output endpoint found 0x%x (Idx: %d)", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, epdesc.bEndpointAddress, i);
             m_outEndpoints[i] = std::make_unique<SwitchUSBEndpoint>(m_session, epdesc);
-        }
-        else
-        {
-            //::syscon::logger::LogWarning("SwitchUSBInterface[%04x-%04x] Output endpoint %d is null", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, i);
         }
     }
 
@@ -166,14 +154,4 @@ IUSBEndpoint *SwitchUSBInterface::GetEndpoint(IUSBEndpoint::Direction direction,
         return m_inEndpoints[index].get();
     else
         return m_outEndpoints[index].get();
-}
-
-Status SwitchUSBInterface::Reset()
-{
-    ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Reset...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
-
-    SwitchUSBLock usbLock;
-    usbHsIfResetDevice(&m_session);
-
-    return Status::Success;
 }

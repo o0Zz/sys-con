@@ -9,11 +9,6 @@
 namespace ams::syscon::hid::mitm
 {
 
-    namespace
-    {
-        constexpr sm::ServiceName HidServiceName = sm::ServiceName::Encode("hid");
-    }
-
     // HidMitmService implementation
     HidMitmService::HidMitmService(std::shared_ptr<::Service> &&s, sm::MitmProcessInfo &client_info)
         : sf::MitmServiceImplBase(std::forward<std::shared_ptr<::Service>>(s), client_info)

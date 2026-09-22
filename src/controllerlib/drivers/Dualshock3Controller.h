@@ -7,13 +7,7 @@ namespace controllerlib
     enum Dualshock3FeatureValue : uint16_t
     {
         Ds3FeatureUnknown1 = 0x0201,
-        Ds3FeatureUnknown2 = 0x0301,
-        Ds3FeatureDeviceAddress = 0x03F2,
         Ds3FeatureStartDevice = 0x03F4,
-        Ds3FeatureHostAddress = 0x03F5,
-        Ds3FeatureUnknown3 = 0x03F7,
-        Ds3FeatureUnknown4 = 0x03EF,
-        Ds3FeatureUnknown5 = 0x03F8,
     };
 
     enum Dualshock3InputPacketType : uint8_t
@@ -98,15 +92,6 @@ namespace controllerlib
     enum Dualshock3LEDValue : uint8_t
     {
         DS3LED_1 = 0x01,
-        DS3LED_2 = 0x02,
-        DS3LED_3 = 0x04,
-        DS3LED_4 = 0x08,
-        DS3LED_5 = 0x09,
-        DS3LED_6 = 0x0A,
-        DS3LED_7 = 0x0C,
-        DS3LED_8 = 0x0D,
-        DS3LED_9 = 0x0E,
-        DS3LED_10 = 0x0F,
     };
 
     class Dualshock3Controller : public BaseController

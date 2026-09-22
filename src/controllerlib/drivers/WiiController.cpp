@@ -129,14 +129,6 @@ namespace controllerlib
         return m_is_connected[input_idx];
     }
 
-    bool WiiController::Support(ControllerFeature feature)
-    {
-        if (feature == SUPPORTS_RUMBLE)
-            return true;
-
-        return false;
-    }
-
     Status WiiController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
         (void)amp_low; // Not supported by Wii controller

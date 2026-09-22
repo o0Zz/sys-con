@@ -57,12 +57,6 @@ namespace controllerlib
         return m_connected;
     }
 
-    bool NetworkController::Support(ControllerFeature feature)
-    {
-        (void)feature;
-        return false;
-    }
-
     Status NetworkController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
         (void)input_idx;

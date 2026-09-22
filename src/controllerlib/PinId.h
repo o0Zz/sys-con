@@ -19,11 +19,10 @@ namespace controllerlib
           1..31    HID button usage ids, as reported by the device.
           32..35   the d-pad/hat directions, which have no button usage of their own.
 
-        This is a distinct type from GamepadButton on purpose. Both index a bool array and the
-        two arrays used to share one size constant, so nothing stopped one being subscripted
-        with the other's values. The constructor is deliberately implicit: drivers legitimately
-        write `rawData->buttons[3]`, and requiring PinId{3} everywhere would add noise without
-        catching anything, whereas `rawData->buttons[GamepadButton::X]` is now a compile error.
+        This is a distinct type from GamepadButton on purpose: both index a bool array, and
+        confusing the two index spaces is now a compile error. The constructor is deliberately
+        implicit, because drivers legitimately write `rawData->buttons[3]` and requiring
+        PinId{3} everywhere would add noise without catching anything.
     */
     class PinId
     {
@@ -36,7 +35,6 @@ namespace controllerlib
         {
         }
 
-        constexpr bool IsMapped() const { return m_value != Unmapped; }
         constexpr uint8_t Raw() const { return m_value; }
 
         constexpr explicit operator std::size_t() const { return m_value; }
@@ -54,9 +52,6 @@ namespace controllerlib
         The d-pad occupies four pseudo-pins above the HID button range, because a hat switch
         reports a direction rather than four button usages. These values are user-facing: the
         README documents 32-35 and configs in the wild use them, so do not renumber.
-
-        These were macros defined as `MAX_HID_CONTROLLER_BUTTONS + 0` with no parentheses, so
-        `DPAD_UP_BUTTON_ID * 2` silently evaluated as `32 + (0 * 2)`.
     */
     inline constexpr PinId DPAD_UP_BUTTON_ID{static_cast<uint8_t>(MaxHidPins + 0)};
     inline constexpr PinId DPAD_DOWN_BUTTON_ID{static_cast<uint8_t>(MaxHidPins + 1)};

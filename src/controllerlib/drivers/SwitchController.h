@@ -70,6 +70,10 @@ namespace controllerlib
 
         size_t GetMaxInputBufferSize() override;
 
-        bool Support(ControllerFeature feature) override;
+        bool Support(ControllerFeature feature) const override
+        {
+            (void)feature;
+            return false;
+        }
     };
 } // namespace controllerlib

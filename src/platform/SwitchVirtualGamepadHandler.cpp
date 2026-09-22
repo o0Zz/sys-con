@@ -4,10 +4,36 @@
 #include <chrono>
 #include <cassert>
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
+
+namespace
+{
+    constexpr struct
+    {
+        GamepadButton button;
+        u64 npad_mask;
+    } NpadButtons[] = {
+        {GamepadButton::X, HidNpadButton_X},
+        {GamepadButton::A, HidNpadButton_A},
+        {GamepadButton::B, HidNpadButton_B},
+        {GamepadButton::Y, HidNpadButton_Y},
+        {GamepadButton::LSTICK_CLICK, HidNpadButton_StickL},
+        {GamepadButton::RSTICK_CLICK, HidNpadButton_StickR},
+        {GamepadButton::L, HidNpadButton_L},
+        {GamepadButton::R, HidNpadButton_R},
+        {GamepadButton::ZL, HidNpadButton_ZL},
+        {GamepadButton::ZR, HidNpadButton_ZR},
+        {GamepadButton::MINUS, HidNpadButton_Minus},
+        {GamepadButton::PLUS, HidNpadButton_Plus},
+        {GamepadButton::DPAD_UP, HidNpadButton_Up},
+        {GamepadButton::DPAD_RIGHT, HidNpadButton_Right},
+        {GamepadButton::DPAD_DOWN, HidNpadButton_Down},
+        {GamepadButton::DPAD_LEFT, HidNpadButton_Left},
+        {GamepadButton::CAPTURE, HiddbgNpadButton_Capture},
+        {GamepadButton::HOME, HiddbgNpadButton_Home},
+    };
+} // namespace
+
 
 
 SwitchVirtualGamepadHandler::SwitchVirtualGamepadHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
@@ -175,42 +201,11 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 
     auto startTimer = std::chrono::steady_clock::now();
 
-    if (buttonData.buttons[GamepadButton::X])
-        buttons |= HidNpadButton_X;
-    if (buttonData.buttons[GamepadButton::A])
-        buttons |= HidNpadButton_A;
-    if (buttonData.buttons[GamepadButton::B])
-        buttons |= HidNpadButton_B;
-    if (buttonData.buttons[GamepadButton::Y])
-        buttons |= HidNpadButton_Y;
-    if (buttonData.buttons[GamepadButton::LSTICK_CLICK])
-        buttons |= HidNpadButton_StickL;
-    if (buttonData.buttons[GamepadButton::RSTICK_CLICK])
-        buttons |= HidNpadButton_StickR;
-    if (buttonData.buttons[GamepadButton::L])
-        buttons |= HidNpadButton_L;
-    if (buttonData.buttons[GamepadButton::R])
-        buttons |= HidNpadButton_R;
-    if (buttonData.buttons[GamepadButton::ZL])
-        buttons |= HidNpadButton_ZL;
-    if (buttonData.buttons[GamepadButton::ZR])
-        buttons |= HidNpadButton_ZR;
-    if (buttonData.buttons[GamepadButton::MINUS])
-        buttons |= HidNpadButton_Minus;
-    if (buttonData.buttons[GamepadButton::PLUS])
-        buttons |= HidNpadButton_Plus;
-    if (buttonData.buttons[GamepadButton::DPAD_UP])
-        buttons |= HidNpadButton_Up;
-    if (buttonData.buttons[GamepadButton::DPAD_RIGHT])
-        buttons |= HidNpadButton_Right;
-    if (buttonData.buttons[GamepadButton::DPAD_DOWN])
-        buttons |= HidNpadButton_Down;
-    if (buttonData.buttons[GamepadButton::DPAD_LEFT])
-        buttons |= HidNpadButton_Left;
-    if (buttonData.buttons[GamepadButton::CAPTURE])
-        buttons |= HiddbgNpadButton_Capture;
-    if (buttonData.buttons[GamepadButton::HOME])
-        buttons |= HiddbgNpadButton_Home;
+    for (const auto &entry : NpadButtons)
+    {
+        if (buttonData.buttons[entry.button])
+            buttons |= entry.npad_mask;
+    }
 
     ConvertAxisToSwitchAxis(buttonData.sticks[0].axis_x, buttonData.sticks[0].axis_y, &analog_stick_l.x, &analog_stick_l.y);
     ConvertAxisToSwitchAxis(buttonData.sticks[1].axis_x, buttonData.sticks[1].axis_y, &analog_stick_r.x, &analog_stick_r.y);
@@ -277,28 +272,29 @@ void SwitchVirtualGamepadHandler::ConvertAxisToSwitchAxis(float x, float y, int3
 
 u8 SwitchVirtualGamepadHandler::ControllerTypeToDeviceType(ControllerType type)
 {
-    if (type == ControllerType_ProWithBattery)
-        return HidDeviceType_FullKey3;
-    else if (type == ControllerType_Tarragon)
-        return HidDeviceType_FullKey6;
-    else if (type == ControllerType_Snes)
-        return HidDeviceType_Lucia;
-    else if (type == ControllerType_PokeballPlus)
-        return HidDeviceType_Palma;
-    else if (type == ControllerType_Gamecube)
-        return HidDeviceType_FullKey13;
-    else if (type == ControllerType_Pro)
-        return HidDeviceType_FullKey15;
-    else if (type == ControllerType_3rdPartyPro)
-        return HidDeviceType_System19;
-    else if (type == ControllerType_N64)
-        return HidDeviceType_Lagon;
-    else if (type == ControllerType_Sega)
-        return HidDeviceType_Lager;
-    else if (type == ControllerType_Nes)
-        return HidDeviceType_LarkNesLeft;
-    else if (type == ControllerType_Famicom)
-        return HidDeviceType_LarkHvcLeft;
+    constexpr struct
+    {
+        ControllerType type;
+        u8 device_type;
+    } DeviceTypes[] = {
+        {ControllerType_ProWithBattery, HidDeviceType_FullKey3},
+        {ControllerType_Tarragon, HidDeviceType_FullKey6},
+        {ControllerType_Snes, HidDeviceType_Lucia},
+        {ControllerType_PokeballPlus, HidDeviceType_Palma},
+        {ControllerType_Gamecube, HidDeviceType_FullKey13},
+        {ControllerType_Pro, HidDeviceType_FullKey15},
+        {ControllerType_3rdPartyPro, HidDeviceType_System19},
+        {ControllerType_N64, HidDeviceType_Lagon},
+        {ControllerType_Sega, HidDeviceType_Lager},
+        {ControllerType_Nes, HidDeviceType_LarkNesLeft},
+        {ControllerType_Famicom, HidDeviceType_LarkHvcLeft},
+    };
+
+    for (const auto &entry : DeviceTypes)
+    {
+        if (type == entry.type)
+            return entry.device_type;
+    }
 
     return HidDeviceType_FullKey15;
 }

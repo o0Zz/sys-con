@@ -5,11 +5,7 @@
 #include <cstring>
 #include <malloc.h>
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 SwitchUSBEndpoint::SwitchUSBEndpoint(UsbHsClientIfSession &if_session, usb_endpoint_descriptor &desc)
     : m_ifSession(&if_session),
@@ -62,7 +58,7 @@ Status SwitchUSBEndpoint::PostRead()
 
     if (R_FAILED(rc))
     {
-        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadAsync post failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
+        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Read post failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
         return Status::ReadFailed;
     }
 
@@ -111,47 +107,6 @@ Status SwitchUSBEndpoint::Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 
     if (GetDirection() == USB_ENDPOINT_OUT)
         ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Trying to read an OUTPUT endpoint!", m_descriptor->bEndpointAddress);
 
-    if (aTimeoutUs == UINT64_MAX)
-        return ReadSync(outBuffer, bufferSizeInOut);
-
-    return ReadAsync(outBuffer, bufferSizeInOut, aTimeoutUs);
-}
-
-Status SwitchUSBEndpoint::ReadSync(uint8_t *outBuffer, size_t *bufferSizeInOut)
-{
-    Result rc;
-    u32 transferredSize = 0;
-
-    {
-        SwitchUSBLock usbLock;
-
-        rc = usbHsEpPostBuffer(&m_epSession, m_usb_buffer_in, *bufferSizeInOut, &transferredSize);
-        if (R_SUCCEEDED(rc))
-            memcpy(outBuffer, m_usb_buffer_in, transferredSize);
-    }
-
-    if (R_FAILED(rc))
-    {
-        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadSync post failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
-        return Status::ReadFailed;
-    }
-
-    *bufferSizeInOut = transferredSize;
-
-    if (transferredSize == 0)
-    {
-        ::syscon::logger::LogDebug("SwitchUSBEndpoint[0x%02X] ReadSync returned no data !", m_descriptor->bEndpointAddress);
-        return Status::NoDataAvailable;
-    }
-
-    ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] ReadSync %d bytes", m_descriptor->bEndpointAddress, *bufferSizeInOut);
-    ::syscon::logger::LogBuffer(LogLevel::Trace, outBuffer, *bufferSizeInOut);
-
-    return Status::Success;
-}
-
-Status SwitchUSBEndpoint::ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs)
-{
     u32 count = 0;
     UsbHsXferReport report;
     u32 tmpXcferId = 0;
@@ -189,19 +144,19 @@ Status SwitchUSBEndpoint::ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut,
 
     if (R_FAILED(rc))
     {
-        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadAsync report failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
+        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Read report failed: 0x%08X", m_descriptor->bEndpointAddress, rc);
         return Status::ReadFailed;
     }
 
     if ((count <= 0) || (tmpXcferId != report.xferId))
     {
-        ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] ReadAsync no report (Count: %d, xferId %d/%d)", m_descriptor->bEndpointAddress, count, tmpXcferId, report.xferId);
+        ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] Read no report (Count: %d, xferId %d/%d)", m_descriptor->bEndpointAddress, count, tmpXcferId, report.xferId);
         return Status::NoDataAvailable;
     }
 
     if (R_FAILED(report.res))
     {
-        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] ReadAsync transfer failed: 0x%08X", m_descriptor->bEndpointAddress, report.res);
+        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Read transfer failed: 0x%08X", m_descriptor->bEndpointAddress, report.res);
         return Status::ReadFailed;
     }
 
@@ -210,7 +165,7 @@ Status SwitchUSBEndpoint::ReadAsync(uint8_t *outBuffer, size_t *bufferSizeInOut,
     if (copySize == 0)
         return Status::NoDataAvailable;
 
-    ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] ReadAsync %d bytes", m_descriptor->bEndpointAddress, *bufferSizeInOut);
+    ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] Read %d bytes", m_descriptor->bEndpointAddress, *bufferSizeInOut);
     ::syscon::logger::LogBuffer(LogLevel::Trace, outBuffer, *bufferSizeInOut);
 
     return Status::Success;

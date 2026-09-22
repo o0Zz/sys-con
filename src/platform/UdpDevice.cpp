@@ -130,11 +130,6 @@ namespace syscon
         g_socket_initialized = false;
     }
 
-    size_t UdpSocketTransferMemorySize()
-    {
-        return g_socket_tmem_size;
-    }
-
     // -----------------------------------------------------------------------------------
     // Endpoint
     // -----------------------------------------------------------------------------------
@@ -340,11 +335,6 @@ namespace syscon
         return &m_descriptor;
     }
 
-    Status UdpInterface::Reset()
-    {
-        return Status::Success;
-    }
-
     // -----------------------------------------------------------------------------------
     // Device
     // -----------------------------------------------------------------------------------
@@ -370,9 +360,5 @@ namespace syscon
     {
         for (auto &&interface : m_interfaces)
             interface->Close();
-    }
-
-    void UdpDevice::Reset()
-    {
     }
 } // namespace syscon

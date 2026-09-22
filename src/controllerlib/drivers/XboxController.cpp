@@ -46,14 +46,6 @@ namespace controllerlib
         return Status::Success;
     }
 
-    bool XboxController::Support(ControllerFeature feature)
-    {
-        if (feature == SUPPORTS_RUMBLE)
-            return true;
-
-        return false;
-    }
-
     Status XboxController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
         uint8_t rumbleData[]{0x00, 0x06, 0x00, (uint8_t)(amp_high * 255), (uint8_t)(amp_low * 255), 0x00, 0x00, 0x00};

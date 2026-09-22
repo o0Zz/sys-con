@@ -50,7 +50,11 @@ namespace controllerlib
 
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
-        bool Support(ControllerFeature feature) override;
+        bool Support(ControllerFeature feature) const override
+        {
+            (void)feature;
+            return false;
+        }
         Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
 
         /*

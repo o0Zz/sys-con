@@ -19,10 +19,6 @@ import repo
 import watchdog
 import symbolize as symbolize_mod
 
-OUTCOMES = ("HEALTHY", "CRASHED", "BOOT_HANG", "UNSTABLE", "DEPLOY_FAILED",
-            "BUILD_FAILED", "HOST_TESTS_FAILED")
-
-
 def _stamp():
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 

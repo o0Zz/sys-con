@@ -7,11 +7,9 @@
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
+#include <string_view>
 #include <chrono>
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
 
 // _WIN32, not WIN32: MSVC always defines the former, while the latter only appears if
@@ -60,62 +58,48 @@ namespace syscon::config
             }
         };
 
+        constexpr struct
+        {
+            std::string_view name;
+            GamepadButton button;
+        } ButtonNames[] = {
+            {"b", GamepadButton::B},
+            {"a", GamepadButton::A},
+            {"x", GamepadButton::X},
+            {"y", GamepadButton::Y},
+            {"lstick_click", GamepadButton::LSTICK_CLICK},
+            {"lstick_left", GamepadButton::LSTICK_LEFT},
+            {"lstick_right", GamepadButton::LSTICK_RIGHT},
+            {"lstick_up", GamepadButton::LSTICK_UP},
+            {"lstick_down", GamepadButton::LSTICK_DOWN},
+            {"rstick_click", GamepadButton::RSTICK_CLICK},
+            {"rstick_left", GamepadButton::RSTICK_LEFT},
+            {"rstick_right", GamepadButton::RSTICK_RIGHT},
+            {"rstick_up", GamepadButton::RSTICK_UP},
+            {"rstick_down", GamepadButton::RSTICK_DOWN},
+            {"l", GamepadButton::L},
+            {"r", GamepadButton::R},
+            {"zl", GamepadButton::ZL},
+            {"zr", GamepadButton::ZR},
+            {"minus", GamepadButton::MINUS},
+            {"plus", GamepadButton::PLUS},
+            {"dpad_up", GamepadButton::DPAD_UP},
+            {"dpad_right", GamepadButton::DPAD_RIGHT},
+            {"dpad_down", GamepadButton::DPAD_DOWN},
+            {"dpad_left", GamepadButton::DPAD_LEFT},
+            {"capture", GamepadButton::CAPTURE},
+            {"home", GamepadButton::HOME},
+        };
+
         GamepadButton stringToButton(const char *name)
         {
             std::string nameStr = convertToLowercase(name);
 
-            if (nameStr == "b")
-                return GamepadButton::B;
-            else if (nameStr == "a")
-                return GamepadButton::A;
-            else if (nameStr == "x")
-                return GamepadButton::X;
-            else if (nameStr == "y")
-                return GamepadButton::Y;
-            else if (nameStr == "lstick_click")
-                return GamepadButton::LSTICK_CLICK;
-            else if (nameStr == "lstick_left")
-                return GamepadButton::LSTICK_LEFT;
-            else if (nameStr == "lstick_right")
-                return GamepadButton::LSTICK_RIGHT;
-            else if (nameStr == "lstick_up")
-                return GamepadButton::LSTICK_UP;
-            else if (nameStr == "lstick_down")
-                return GamepadButton::LSTICK_DOWN;
-            else if (nameStr == "rstick_click")
-                return GamepadButton::RSTICK_CLICK;
-            else if (nameStr == "rstick_left")
-                return GamepadButton::RSTICK_LEFT;
-            else if (nameStr == "rstick_right")
-                return GamepadButton::RSTICK_RIGHT;
-            else if (nameStr == "rstick_up")
-                return GamepadButton::RSTICK_UP;
-            else if (nameStr == "rstick_down")
-                return GamepadButton::RSTICK_DOWN;
-            else if (nameStr == "l")
-                return GamepadButton::L;
-            else if (nameStr == "r")
-                return GamepadButton::R;
-            else if (nameStr == "zl")
-                return GamepadButton::ZL;
-            else if (nameStr == "zr")
-                return GamepadButton::ZR;
-            else if (nameStr == "minus")
-                return GamepadButton::MINUS;
-            else if (nameStr == "plus")
-                return GamepadButton::PLUS;
-            else if (nameStr == "dpad_up")
-                return GamepadButton::DPAD_UP;
-            else if (nameStr == "dpad_right")
-                return GamepadButton::DPAD_RIGHT;
-            else if (nameStr == "dpad_down")
-                return GamepadButton::DPAD_DOWN;
-            else if (nameStr == "dpad_left")
-                return GamepadButton::DPAD_LEFT;
-            else if (nameStr == "capture")
-                return GamepadButton::CAPTURE;
-            else if (nameStr == "home")
-                return GamepadButton::HOME;
+            for (const auto &entry : ButtonNames)
+            {
+                if (nameStr == entry.name)
+                    return entry.button;
+            }
 
             return GamepadButton::NONE;
         }
@@ -145,6 +129,24 @@ namespace syscon::config
             return color;
         }
 
+        constexpr struct
+        {
+            std::string_view name;
+            AnalogAxis axis;
+        } AxisNames[] = {
+            {"x", AnalogAxis::X},
+            {"y", AnalogAxis::Y},
+            {"z", AnalogAxis::Z},
+            {"rz", AnalogAxis::Rz},
+            {"rx", AnalogAxis::Rx},
+            {"ry", AnalogAxis::Ry},
+            {"slider", AnalogAxis::Slider},
+            {"dial", AnalogAxis::Dial},
+            {"brake", AnalogAxis::Brake},
+            {"accelerator", AnalogAxis::Accelerator},
+            {"none", AnalogAxis::Unknown},
+        };
+
         bool stringToAnalogConfig(const std::string &cfg, ControllerAnalogConfig *analogCfg)
         {
             std::string stickcfg = convertToLowercase(cfg);
@@ -155,32 +157,16 @@ namespace syscon::config
             if (stickcfg[0] == '-' || stickcfg[0] == '+')
                 stickcfg = stickcfg.substr(1);
 
-            if (stickcfg == "x")
-                analogCfg->bind = AnalogAxis::X;
-            else if (stickcfg == "y")
-                analogCfg->bind = AnalogAxis::Y;
-            else if (stickcfg == "z")
-                analogCfg->bind = AnalogAxis::Z;
-            else if (stickcfg == "rz")
-                analogCfg->bind = AnalogAxis::Rz;
-            else if (stickcfg == "rx")
-                analogCfg->bind = AnalogAxis::Rx;
-            else if (stickcfg == "ry")
-                analogCfg->bind = AnalogAxis::Ry;
-            else if (stickcfg == "slider")
-                analogCfg->bind = AnalogAxis::Slider;
-            else if (stickcfg == "dial")
-                analogCfg->bind = AnalogAxis::Dial;
-            else if (stickcfg == "brake")
-                analogCfg->bind = AnalogAxis::Brake;
-            else if (stickcfg == "accelerator")
-                analogCfg->bind = AnalogAxis::Accelerator;
-            else if (stickcfg == "none")
-                analogCfg->bind = AnalogAxis::Unknown;
-            else
-                return false;
+            for (const auto &entry : AxisNames)
+            {
+                if (stickcfg == entry.name)
+                {
+                    analogCfg->bind = entry.axis;
+                    return true;
+                }
+            }
 
-            return true;
+            return false;
         }
 
         void parseHotKey(const char *value, GamepadButton hotkeys[2])
@@ -244,32 +230,33 @@ namespace syscon::config
             }
         }
 
+        constexpr struct
+        {
+            std::string_view name;
+            ControllerType type;
+        } ControllerTypeNames[] = {
+            {"prowithbattery", ControllerType_ProWithBattery},
+            {"tarragon", ControllerType_Tarragon},
+            {"snes", ControllerType_Snes},
+            {"pokeballplus", ControllerType_PokeballPlus},
+            {"gamecube", ControllerType_Gamecube},
+            {"pro", ControllerType_Pro},
+            {"3rdpartypro", ControllerType_3rdPartyPro},
+            {"n64", ControllerType_N64},
+            {"sega", ControllerType_Sega},
+            {"nes", ControllerType_Nes},
+            {"famicom", ControllerType_Famicom},
+        };
+
         ControllerType stringToControllerType(const char *value)
         {
             std::string type = convertToLowercase(value);
 
-            if (type == "prowithbattery")
-                return ControllerType_ProWithBattery;
-            else if (type == "tarragon")
-                return ControllerType_Tarragon;
-            else if (type == "snes")
-                return ControllerType_Snes;
-            else if (type == "pokeballplus")
-                return ControllerType_PokeballPlus;
-            else if (type == "gamecube")
-                return ControllerType_Gamecube;
-            else if (type == "pro")
-                return ControllerType_Pro;
-            else if (type == "3rdpartypro")
-                return ControllerType_3rdPartyPro;
-            else if (type == "n64")
-                return ControllerType_N64;
-            else if (type == "sega")
-                return ControllerType_Sega;
-            else if (type == "nes")
-                return ControllerType_Nes;
-            else if (type == "famicom")
-                return ControllerType_Famicom;
+            for (const auto &entry : ControllerTypeNames)
+            {
+                if (type == entry.name)
+                    return entry.type;
+            }
 
             return ControllerType_Unknown;
         }
@@ -280,7 +267,6 @@ namespace syscon::config
             std::string sectionStr = convertToLowercase(section);
             std::string nameStr = convertToLowercase(name);
 
-            // syscon::logger::LogTrace("Parsing global config line: %s, %s, %s (expect: %s)", section, name, value, ini_data->ini_section.c_str());
             if (ini_data->ini_section != sectionStr)
                 return 1; // Not the section we are looking for (return success to continue parsing)
 
@@ -335,7 +321,6 @@ namespace syscon::config
             std::string sectionStr = convertToLowercase(section);
             std::string nameStr = convertToLowercase(name);
 
-            // syscon::logger::LogTrace("Parsing controller config line: %s, %s, %s (expect: %s)", section, name, value, ini_data->ini_section.c_str());
             if (ini_data->ini_section != sectionStr)
                 return 1; // Not the section we are looking for (return success to continue parsing)
 

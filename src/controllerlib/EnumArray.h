@@ -31,10 +31,6 @@ namespace controllerlib
         constexpr Value &operator[](Index index) { return m_values[static_cast<std::size_t>(index)]; }
         constexpr const Value &operator[](Index index) const { return m_values[static_cast<std::size_t>(index)]; }
 
-        constexpr void Fill(Value value) { m_values.fill(value); }
-
-        constexpr std::size_t Size() const { return N; }
-
         // Iteration yields values, not indices; use the enum's own AllX table to walk indices.
         constexpr auto begin() { return m_values.begin(); }
         constexpr auto end() { return m_values.end(); }

@@ -82,14 +82,6 @@ namespace controllerlib
         return Status::Success;
     }
 
-    bool SInputController::Support(ControllerFeature feature)
-    {
-        if (feature == SUPPORTS_RUMBLE)
-            return true;
-
-        return false;
-    }
-
     Status SInputController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
         if (m_outPipe.size() <= input_idx)

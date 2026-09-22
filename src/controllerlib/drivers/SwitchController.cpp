@@ -110,12 +110,6 @@ namespace controllerlib
         return Status::Success;
     }
 
-    bool SwitchController::Support(ControllerFeature feature)
-    {
-        (void)feature;
-        return false;
-    }
-
     size_t SwitchController::GetMaxInputBufferSize()
     {
         return SWITCH_INPUT_BUFFER_SIZE;

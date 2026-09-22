@@ -40,31 +40,6 @@ std::string buttonToStr(u64 ButtonMask)
         buttonStr += "Right ";
     if (ButtonMask & HidNpadButton_Down)
         buttonStr += "Down ";
-    /*if (ButtonMask & HidNpadButton_StickLLeft)
-        buttonStr += "StickLLeft ";
-    if (ButtonMask & HidNpadButton_StickLUp)
-        buttonStr += "StickLUp ";
-    if (ButtonMask & HidNpadButton_StickLRight)
-        buttonStr += "StickLRight ";
-    if (ButtonMask & HidNpadButton_StickLDown)
-        buttonStr += "StickLDown ";
-    if (ButtonMask & HidNpadButton_StickRLeft)
-        buttonStr += "StickRLeft ";
-    if (ButtonMask & HidNpadButton_StickRUp)
-        buttonStr += "StickRUp ";
-    if (ButtonMask & HidNpadButton_StickRRight)
-        buttonStr += "StickRRight ";
-    if (ButtonMask & HidNpadButton_StickRDown)
-        buttonStr += "StickRDown ";
-    if (ButtonMask & HidNpadButton_LeftSL)
-        buttonStr += "LeftSL ";
-    if (ButtonMask & HidNpadButton_LeftSR)
-        buttonStr += "LeftSR ";
-    if (ButtonMask & HidNpadButton_RightSL)
-        buttonStr += "RightSL ";
-    if (ButtonMask & HidNpadButton_RightSR)
-        buttonStr += "RightSR ";
-    */
 
     buttonStr.erase(buttonStr.find_last_not_of(' ') + 1);
 

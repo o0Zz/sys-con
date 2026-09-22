@@ -6,7 +6,6 @@
 class SwitchUSBDevice : public controllerlib::IUSBDevice
 {
 public:
-    SwitchUSBDevice();
     ~SwitchUSBDevice();
 
     // Initialize the class with the SetInterfaces call.
@@ -16,7 +15,4 @@ public:
     virtual controllerlib::Status Open() override;
     // Closes all the interfaces associated with the class
     virtual void Close() override;
-
-    // Resets the device
-    virtual void Reset() override;
 };

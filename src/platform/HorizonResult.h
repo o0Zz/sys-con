@@ -9,12 +9,9 @@ namespace syscon
     /*
         sys-con's module number for Horizon Result codes.
 
-        Horizon packs a Result as MAKERESULT(module, description). ControllerLib's Status
-        used to be handed to Horizon raw -- `return Status::InvalidIndex;` from a function
-        returning Result produced the integer 117, which decodes as "module 117,
-        description 0": a module sys-con does not own, and a description of zero, i.e. it
-        lost the actual error. The library now keeps its Status inside its own namespace,
-        which is the other half of the same fix.
+        Horizon packs a Result as MAKERESULT(module, description), so a ControllerLib Status
+        handed to Horizon raw would decode as a module sys-con does not own with a description
+        of zero, losing the actual error. Convert through ToHorizonResult() instead.
 
         The number below is arbitrary. It sits in the range Atmosphere leaves to homebrew
         and is not claimed by libnx or Atmosphere, but nothing enforces that, so treat it as

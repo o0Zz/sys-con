@@ -3,9 +3,7 @@
 /*
     Declares the subset of syscon::logger that ControllerSwitch needs, without dragging in
     logger.h (and with it IFileManager.h). Log levels come from ILogger.h so that there is
-    exactly one definition of them: this header used to carry its own LOG_LEVEL_* table that
-    had drifted out of step with logger.h's (it was missing PERF, so every level from INFO
-    upwards was off by one).
+    exactly one definition of them.
 */
 #include "ILogger.h"
 

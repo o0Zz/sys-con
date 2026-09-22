@@ -15,5 +15,4 @@ public:
 
     controllerlib::Status Open() { return controllerlib::Status::Success; }
     void Close() {}
-    void Reset() {}
 };

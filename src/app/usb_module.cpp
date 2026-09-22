@@ -8,14 +8,11 @@
 #include "HorizonResult.h"
 #include "logger.h"
 #include <string.h>
+#include <algorithm>
 
 #define MS_TO_NS(x) (x * 1000000ul)
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 namespace syscon::usb
 {
@@ -44,8 +41,46 @@ namespace syscon::usb
         size_t g_usbEventCount = 0;
 
         s32 QueryAcquiredInterfaces(UsbHsInterface *interfaces, size_t interfaces_maxsize);
-        s32 QueryAvailableInterfacesByClass(UsbHsInterface *interfaces, size_t interfaces_maxsize, u8 iclass);
-        s32 QueryAvailableInterfacesByClassSubClassProtocol(UsbHsInterface *interfaces, size_t interfaces_maxsize, u8 iclass, u8 isubclass, u8 iprotocol);
+        s32 QueryAvailableInterfaces(UsbHsInterface *interfaces, size_t interfaces_maxsize, const UsbHsInterfaceFilter &filter);
+
+        constexpr u16 InterfaceClassSubClassProtocol = UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass | UsbHsInterfaceFilterFlags_bInterfaceProtocol;
+
+        // Probed in order; the first match decides the profile the config falls back to.
+        constexpr struct
+        {
+            UsbHsInterfaceFilter filter;
+            const char *default_profile;
+        } ProbedInterfaces[] = {
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x01}, "xbox360"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, "xbox360w"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, "xboxone"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = 0x58, .bInterfaceSubClass = 0x42, .bInterfaceProtocol = 0x00}, "xbox"},
+            {{.Flags = UsbHsInterfaceFilterFlags_bInterfaceClass, .bInterfaceClass = USB_CLASS_HID}, ""},
+        };
+
+        template <typename T>
+        std::unique_ptr<IController> MakeController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
+        {
+            return std::make_unique<T>(std::move(device), config, std::make_unique<syscon::logger::Logger>());
+        }
+
+        constexpr struct
+        {
+            const char *driver;
+            const char *name;
+            std::unique_ptr<IController> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
+        } Drivers[] = {
+            {"dualshock3", "Dualshock 3", MakeController<Dualshock3Controller>},
+            {"xbox360w", "Xbox 360 Wireless", MakeController<Xbox360WirelessController>},
+            {"xbox360", "Xbox 360", MakeController<Xbox360Controller>},
+            /* One XboxOne controller exposes 2 interfaces, thus we have to take all of them */
+            {"xboxone", "Xbox One", MakeController<XboxOneController>},
+            {"xbox", "Xbox 1st gen", MakeController<XboxController>},
+            {"switch", "Switch", MakeController<SwitchController>},
+            {"wii", "Wii", MakeController<WiiController>},
+            {"sinput", "SInput", MakeController<SInputController>},
+            {"steam2026", "Steam Controller 2026", MakeController<SteamController2026>},
+        };
 
         Result AddEvent(UsbHsInterfaceFilter *filter, const std::string &name);
 
@@ -75,19 +110,23 @@ namespace syscon::usb
                     */
 
                     SwitchUSBLock usbLock;
-                    s32 total_interfaces_hid = 0, total_interfaces_xbox360 = 0, total_interfaces_xboxone = 0, total_interfaces_xbox360w = 0, total_interfaces_xbox = 0;
 
-                    if (
-                        (total_interfaces_xbox360 = QueryAvailableInterfacesByClassSubClassProtocol(interfaces, sizeof(interfaces), USB_CLASS_VENDOR_SPEC, 0x5D, 0x01)) > 0 ||  // XBOX360 Wired
-                        (total_interfaces_xbox360w = QueryAvailableInterfacesByClassSubClassProtocol(interfaces, sizeof(interfaces), USB_CLASS_VENDOR_SPEC, 0x5D, 0x81)) > 0 || // XBOX360 Wireless
-                        (total_interfaces_xboxone = QueryAvailableInterfacesByClassSubClassProtocol(interfaces, sizeof(interfaces), USB_CLASS_VENDOR_SPEC, 0x47, 0xD0)) > 0 ||  // XBOX ONE
-                        (total_interfaces_xbox = QueryAvailableInterfacesByClassSubClassProtocol(interfaces, sizeof(interfaces), 0x58, 0x42, 0x00)) > 0 ||                      // XBOX Original
-                        (total_interfaces_hid = QueryAvailableInterfacesByClass(interfaces, sizeof(interfaces), USB_CLASS_HID)) > 0                                             // Generic HID
-                    )
+                    s32 total_entries = 0;
+                    std::string default_profile;
+                    for (const auto &probe : ProbedInterfaces)
+                    {
+                        total_entries = QueryAvailableInterfaces(interfaces, sizeof(interfaces), probe.filter);
+                        if (total_entries > 0)
+                        {
+                            default_profile = probe.default_profile;
+                            break;
+                        }
+                    }
+
+                    if (total_entries > 0)
                     {
                         timeoutNs = MS_TO_NS(1); // Everytime we find a controller we reset the timeout to loop again on next controllers
 
-                        s32 total_entries = total_interfaces_hid + total_interfaces_xbox360 + total_interfaces_xboxone + total_interfaces_xbox360w + total_interfaces_xbox;
                         if (controllers::IsAtControllerLimit())
                         {
                             syscon::logger::LogError("Reach controller limit - Can't add anymore controller !");
@@ -104,64 +143,16 @@ namespace syscon::usb
                                                 interface->device_desc.bDeviceProtocol,
                                                 interface->device_desc.bcdDevice);
 
-                        std::string default_profile = "";
-                        if (total_interfaces_xbox360 > 0)
-                            default_profile = "xbox360";
-                        else if (total_interfaces_xbox360w > 0)
-                            default_profile = "xbox360w";
-                        else if (total_interfaces_xboxone > 0)
-                            default_profile = "xboxone";
-                        else if (total_interfaces_xbox > 0)
-                            default_profile = "xbox";
-
                         ControllerConfig config;
                         ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, interface->device_desc.idVendor, interface->device_desc.idProduct, g_auto_add_controller, default_profile);
 
-                        if (config.driver == "dualshock3")
+                        const auto *driver = std::find_if(std::begin(Drivers), std::end(Drivers), [&config](const auto &candidate)
+                                                          { return config.driver == candidate.driver; });
+
+                        if (driver != std::end(Drivers))
                         {
-                            syscon::logger::LogInfo("Initializing Dualshock 3 controller (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<Dualshock3Controller>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "xbox360w")
-                        {
-                            syscon::logger::LogInfo("Initializing Xbox 360 Wireless controller (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<Xbox360WirelessController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "xbox360")
-                        {
-                            syscon::logger::LogInfo("Initializing Xbox 360 controller (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<Xbox360Controller>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "xboxone")
-                        {
-                            /* One XboxOne controller will expose 2 interfaces, thus we have to take all of them */
-                            syscon::logger::LogInfo("Initializing Xbox One controller (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<XboxOneController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "xbox")
-                        {
-                            syscon::logger::LogInfo("Initializing Xbox 1st gen (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<XboxController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "switch")
-                        {
-                            syscon::logger::LogInfo("Initializing Switch (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<SwitchController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "wii")
-                        {
-                            syscon::logger::LogInfo("Initializing Wii (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<WiiController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "sinput")
-                        {
-                            syscon::logger::LogInfo("Initializing SInput controller (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<SInputController>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                        else if (config.driver == "steam2026")
-                        {
-                            syscon::logger::LogInfo("Initializing Steam Controller 2026 (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<SteamController2026>(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config, std::make_unique<syscon::logger::Logger>()));
+                            syscon::logger::LogInfo("Initializing %s controller (Interface count: %d) ...", driver->name, total_entries);
+                            controllers::Insert(driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config));
                         }
                         else
                         {
@@ -217,33 +208,9 @@ namespace syscon::usb
             return 0;
         }
 
-        s32 QueryAvailableInterfacesByClassSubClassProtocol(UsbHsInterface *interfaces, size_t interfaces_maxsize, u8 iclass, u8 isubclass, u8 iprotocol)
+        s32 QueryAvailableInterfaces(UsbHsInterface *interfaces, size_t interfaces_maxsize, const UsbHsInterfaceFilter &filter)
         {
             SwitchUSBLock usbLock;
-
-            UsbHsInterfaceFilter filter{
-                .Flags = UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass | UsbHsInterfaceFilterFlags_bInterfaceProtocol,
-                .bInterfaceClass = iclass,
-                .bInterfaceSubClass = isubclass,
-                .bInterfaceProtocol = iprotocol,
-            };
-
-            s32 out_entries = 0;
-            memset(interfaces, 0, interfaces_maxsize);
-
-            if (R_SUCCEEDED(usbHsQueryAvailableInterfaces(&filter, interfaces, interfaces_maxsize, &out_entries)))
-                return out_entries;
-
-            return 0;
-        }
-
-        s32 QueryAvailableInterfacesByClass(UsbHsInterface *interfaces, size_t interfaces_maxsize, u8 iclass)
-        {
-            SwitchUSBLock usbLock;
-
-            UsbHsInterfaceFilter filter{
-                .Flags = UsbHsInterfaceFilterFlags_bInterfaceClass,
-                .bInterfaceClass = iclass};
 
             s32 out_entries = 0;
             memset(interfaces, 0, interfaces_maxsize);

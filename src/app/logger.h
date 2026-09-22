@@ -4,8 +4,7 @@
 #include "IFileManager.h"
 #include "ILogger.h"
 
-// Log levels live in ILogger.h -- this header used to carry a duplicate LOG_LEVEL_* macro
-// table, and SwitchLogger.h carried a third that had drifted out of step with it.
+// Log levels live in ILogger.h.
 
 namespace syscon::logger
 {

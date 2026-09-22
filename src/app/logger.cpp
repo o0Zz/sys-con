@@ -11,11 +11,7 @@
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 namespace syscon::logger
 {
@@ -143,53 +139,21 @@ namespace syscon::logger
         }
     }
 
-    void LogTrace(const char *fmt, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, fmt);
-        Log(LogLevel::Trace, fmt, vl);
-        va_end(vl);
+#define DEFINE_LOG_FUNCTION(name, level) \
+    void name(const char *fmt, ...)      \
+    {                                    \
+        ::std::va_list vl;               \
+        va_start(vl, fmt);               \
+        Log(LogLevel::level, fmt, vl);   \
+        va_end(vl);                      \
     }
 
-    void LogDebug(const char *fmt, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, fmt);
-        Log(LogLevel::Debug, fmt, vl);
-        va_end(vl);
-    }
-
-    void LogPerf(const char *fmt, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, fmt);
-        Log(LogLevel::Perf, fmt, vl);
-        va_end(vl);
-    }
-
-    void LogInfo(const char *fmt, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, fmt);
-        Log(LogLevel::Info, fmt, vl);
-        va_end(vl);
-    }
-
-    void LogWarning(const char *fmt, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, fmt);
-        Log(LogLevel::Warning, fmt, vl);
-        va_end(vl);
-    }
-
-    void LogError(const char *fmt, ...)
-    {
-        ::std::va_list vl;
-        va_start(vl, fmt);
-        Log(LogLevel::Error, fmt, vl);
-        va_end(vl);
-    }
+    DEFINE_LOG_FUNCTION(LogTrace, Trace)
+    DEFINE_LOG_FUNCTION(LogDebug, Debug)
+    DEFINE_LOG_FUNCTION(LogPerf, Perf)
+    DEFINE_LOG_FUNCTION(LogInfo, Info)
+    DEFINE_LOG_FUNCTION(LogWarning, Warning)
+    DEFINE_LOG_FUNCTION(LogError, Error)
 
     void Logger::Log(LogLevel lvl, const char *format, ...)
     {

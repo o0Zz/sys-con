@@ -2,11 +2,7 @@
 #include "SwitchLogger.h"
 #include <cstring> //for memset
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 SwitchUSBDevice::SwitchUSBDevice(UsbHsInterface interfaces[], int size)
 {
@@ -24,10 +20,6 @@ SwitchUSBDevice::~SwitchUSBDevice()
 {
 }
 
-SwitchUSBDevice::SwitchUSBDevice()
-{
-}
-
 Status SwitchUSBDevice::Open()
 {
     if (m_interfaces.size() == 0)
@@ -42,13 +34,4 @@ void SwitchUSBDevice::Close()
     {
         interface->Close();
     }
-}
-
-void SwitchUSBDevice::Reset()
-{
-    // I'm expecting all interfaces to point to one device decsriptor
-    //  as such resetting on any of them should do the trick
-    // TODO: needs testing
-    if (m_interfaces.size() != 0)
-        m_interfaces[0]->Reset();
 }

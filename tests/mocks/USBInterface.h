@@ -30,7 +30,6 @@ public:
         return nullptr;
     }
     MOCK_METHOD(InterfaceDescriptor *, GetDescriptor, (), (override));
-    MOCK_METHOD(controllerlib::Status, Reset, (), (override));
 
 private:
     std::unique_ptr<controllerlib::IUSBEndpoint> m_inEndpoint;

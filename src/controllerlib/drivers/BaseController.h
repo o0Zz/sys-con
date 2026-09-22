@@ -38,7 +38,11 @@ namespace controllerlib
         virtual Status OpenInterfaces();
         virtual void CloseInterfaces();
 
-        virtual bool Support(ControllerFeature feature) override;
+        bool Support(ControllerFeature feature) const override
+        {
+            (void)feature;
+            return false;
+        }
 
         virtual uint16_t GetInputCount() override;
 
@@ -53,6 +57,5 @@ namespace controllerlib
         static float Normalize(int32_t value, int32_t min, int32_t max, int32_t center);
         static float ApplyDeadzone(uint8_t deadzonePercent, float value);
         static uint32_t ReadBitsLE(uint8_t *buffer, uint32_t bitOffset, uint32_t bitLength);
-        static std::vector<uint8_t> StrToByteArray(const std::string &str);
     };
 } // namespace controllerlib

@@ -11,9 +11,6 @@
 #include <set>
 #include <string>
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
 
 TEST(Status, test_succeeded_and_failed_are_opposites)
@@ -31,9 +28,9 @@ TEST(Status, test_succeeded_and_failed_are_opposites)
 TEST(Status, test_every_value_has_a_distinct_name)
 {
     const Status all[] = {
-        Status::Success, Status::InvalidEndpoint, Status::BufferEmpty, Status::NothingTodo,
+        Status::Success, Status::InvalidEndpoint, Status::NothingTodo,
         Status::NotImplemented, Status::UnexpectedData, Status::InvalidArgument,
-        Status::InvalidReportDescriptor, Status::HidIsNotJoystick, Status::NoInterfaces,
+        Status::HidIsNotJoystick, Status::NoInterfaces,
         Status::NoDataAvailable, Status::OutOfMemory, Status::UsbInterfaceAcquire,
         Status::OpenFailed, Status::WriteFailed, Status::ReadFailed, Status::Timeout,
         Status::UsbEndpointOpen, Status::InvalidIndex, Status::UnknownError};

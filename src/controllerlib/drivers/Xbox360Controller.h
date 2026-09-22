@@ -59,12 +59,6 @@ namespace controllerlib
         XBOX360LED_TOPRIGHT,
         XBOX360LED_BOTTOMLEFT,
         XBOX360LED_BOTTOMRIGHT,
-        XBOX360LED_ROTATE,
-        XBOX360LED_BLINK,
-        XBOX360LED_SLOWBLINK,
-        XBOX360LED_ROTATE_2,
-        XBOX360LED_ALLSLOWBLINK,
-        XBOX360LED_BLINKONCE,
     };
 
     class Xbox360Controller : public BaseController
@@ -73,6 +67,9 @@ namespace controllerlib
         Status SetLED(uint16_t input_idx, Xbox360LEDValue value);
 
     public:
+        // The wireless receiver wraps the same report in a 4-byte header; both drivers decode it here.
+        static void DecodeReport(const Xbox360ButtonData *buttonData, RawInputData *rawData);
+
         Xbox360Controller(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
         virtual ~Xbox360Controller() override;
 
@@ -80,7 +77,7 @@ namespace controllerlib
 
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
-        bool Support(ControllerFeature feature) override;
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
 
         Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
     };

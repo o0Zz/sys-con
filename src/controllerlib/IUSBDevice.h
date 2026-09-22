@@ -31,9 +31,6 @@ namespace controllerlib
         virtual Status Open() = 0;
         virtual void Close() = 0;
 
-        // Reset the device.
-        virtual void Reset() = 0;
-
         // Get the raw reference to interfaces vector.
         virtual std::vector<std::unique_ptr<IUSBInterface>> &GetInterfaces() { return m_interfaces; }
 

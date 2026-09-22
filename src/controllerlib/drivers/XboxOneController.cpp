@@ -83,17 +83,10 @@ namespace controllerlib
         GIP_CMD_RUMBLE, 0x00, GIP_SEQ0, GIP_PL_LEN(9),
         0x00, GIP_MOTOR_ALL, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-    enum xboxone_data_type
-    {
-        XBOXONE_DATATYPE_BINARY = 0,
-        XBOXONE_DATATYPE_HEXSTR = 1
-    };
-
     struct xboxone_init_packet
     {
         uint16_t idVendor;
         uint16_t idProduct;
-        const xboxone_data_type type;
         const uint8_t *data;
         int16_t len;
     };
@@ -102,18 +95,8 @@ namespace controllerlib
     {                                       \
         .idVendor = (_vid),                 \
         .idProduct = (_pid),                \
-        .type = XBOXONE_DATATYPE_BINARY,    \
         .data = (_data),                    \
         .len = sizeof(_data),               \
-    }
-
-#define XBOXONE_INIT_PKT_STR(_vid, _pid, _data) \
-    {                                           \
-        .idVendor = (_vid),                     \
-        .idProduct = (_pid),                    \
-        .type = XBOXONE_DATATYPE_HEXSTR,        \
-        .data = (const uint8_t *)(_data),       \
-        .len = 0,                               \
     }
 
     static const struct xboxone_init_packet xboxone_init_packets[] = {
@@ -140,17 +123,6 @@ namespace controllerlib
         XBOXONE_INIT_PKT(0x24c6, 0x542a, xboxone_rumbleend_init),
         XBOXONE_INIT_PKT(0x24c6, 0x543a, xboxone_rumbleend_init),
     };
-
-    /*
-    static const struct xboxone_init_packet xboxone_init_packets[] = {
-        XBOXONE_INIT_PKT_STR(0x0000, 0x0000, "04200100"),
-        XBOXONE_INIT_PKT_STR(0x0000, 0x0000, "01200209000420220100001200"),
-        XBOXONE_INIT_PKT_STR(0x0000, 0x0000, "0520030100"),     // xboxone_power_on
-        XBOXONE_INIT_PKT_STR(0x0000, 0x0000, "0a200403000114"), // xboxone_pdp_led_on
-        XBOXONE_INIT_PKT_STR(0x0000, 0x0000, "06a004009202"),   // xboxone_pdp_auth0
-        XBOXONE_INIT_PKT_STR(0x0000, 0x0000, "062007020100"),   // xboxone_pdp_auth
-    };
-    */
 
     XboxOneController::XboxOneController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
         : BaseController(std::move(device), config, std::move(logger))
@@ -262,10 +234,7 @@ namespace controllerlib
             if (xboxone_init_packets[i].idProduct != 0 && xboxone_init_packets[i].idProduct != m_device->GetProduct())
                 continue;
 
-            if (xboxone_init_packets[i].type == XBOXONE_DATATYPE_HEXSTR)
-                bufferOut = BaseController::StrToByteArray(reinterpret_cast<const char *>(xboxone_init_packets[i].data));
-            else if (xboxone_init_packets[i].type == XBOXONE_DATATYPE_BINARY)
-                bufferOut = std::vector<uint8_t>(xboxone_init_packets[i].data, xboxone_init_packets[i].data + xboxone_init_packets[i].len);
+            bufferOut = std::vector<uint8_t>(xboxone_init_packets[i].data, xboxone_init_packets[i].data + xboxone_init_packets[i].len);
 
             // Make sure packet sequence is incremented (Otherwise some controller will not work) (Like PDP)
             bufferOut.data()[2] = packet_seq++;
@@ -296,14 +265,6 @@ namespace controllerlib
             return Status::Success;
 
         return m_outPipe[input_idx]->Write(report, sizeof(report));
-    }
-
-    bool XboxOneController::Support(ControllerFeature feature)
-    {
-        if (feature == SUPPORTS_RUMBLE)
-            return true;
-
-        return false;
     }
 
     Status XboxOneController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)

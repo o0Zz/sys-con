@@ -157,11 +157,6 @@ namespace syscon::networkpad
         g_enabled = true;
     }
 
-    bool IsEnabled()
-    {
-        return g_enabled;
-    }
-
     void OnWake()
     {
         if (!g_enabled)

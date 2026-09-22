@@ -18,21 +18,18 @@ namespace controllerlib
         Conversion is now the host's job and has to be written out, which keeps it to one
         function at the host's own boundary instead of happening implicitly anywhere.
 
-        The numeric values are sparse (0, then 100+) and several are never produced; collapsing
-        the four near-synonyms for "no input this tick" (NothingTodo, BufferEmpty,
-        NoDataAvailable, Timeout) is worth doing but is a behavioural change for every consumer,
-        so it is deliberately not done here.
+        The numeric values are sparse (0, then 100+); collapsing the near-synonyms for "no
+        input this tick" (NothingTodo, NoDataAvailable, Timeout) is worth doing but is a
+        behavioural change for every consumer, so it is deliberately not done here.
     */
     enum class [[nodiscard]] Status : uint8_t
     {
         Success = 0,
         InvalidEndpoint = 100,
-        BufferEmpty = 101,
         NothingTodo = 102,
         NotImplemented = 103,
         UnexpectedData = 104,
         InvalidArgument = 105,
-        InvalidReportDescriptor = 106,
         HidIsNotJoystick = 107,
         NoInterfaces = 108,
         NoDataAvailable = 109,

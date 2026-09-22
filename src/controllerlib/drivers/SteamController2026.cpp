@@ -25,12 +25,8 @@ namespace controllerlib
         if (result != Status::Success)
             return result;
 
-        /*
-            This has to happen after BaseController::Initialize(), which is what calls
-            OpenInterfaces() and fills m_interfaces. Computing it in the constructor (as this
-            used to) always saw an empty vector, so the count was stuck at 1 and a multi-pad
-            puck only ever exposed one controller.
-        */
+        // Has to happen after BaseController::Initialize(), which is what calls OpenInterfaces()
+        // and fills m_interfaces; in the constructor the vector is still empty.
         m_controller_count = (m_interfaces.size() > 1) ? STEAMCONTROLLER_MAX_INPUTS : 1;
 
         m_logger->Log(LogLevel::Debug, "SteamController2026[%04x-%04x] %d controller(s) detected on %d interface(s)", m_device->GetVendor(), m_device->GetProduct(), m_controller_count, (int)m_interfaces.size());

@@ -15,9 +15,7 @@ namespace controllerlib
 
     struct NormalizedButtonData
     {
-        // Indexed by GamepadButton, not by pin. This used to be a bool[MAX_CONTROLLER_BUTTONS]
-        // exactly like RawInputData::buttons, which is indexed by pin -- same name, same size
-        // constant, two unrelated index spaces, and nothing to stop them being confused.
+        // Indexed by GamepadButton, not by pin (RawInputData::buttons is the pin-indexed one).
         GamepadButtonStates buttons{};
         NormalizedStick sticks[2]{};
     };
@@ -43,7 +41,7 @@ namespace controllerlib
         virtual uint16_t GetInputCount() = 0;
         virtual Status ReadInput(NormalizedButtonData *normalData, uint16_t *input_idx, uint32_t timeout_us) = 0;
 
-        virtual bool Support(ControllerFeature aFeature) = 0;
+        virtual bool Support(ControllerFeature feature) const = 0;
 
         virtual Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) = 0;
 

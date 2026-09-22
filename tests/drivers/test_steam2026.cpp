@@ -7,11 +7,7 @@
 #include "mocks/USBInterface.h"
 #include "mocks/USBEndpoint.h"
 
-// ControllerLib lives in namespace controllerlib. Pulled in here rather than at
-// namespace scope in a header, so including a sys-con header does not drag the
-// library into the global namespace of everything downstream.
 using namespace controllerlib;
-
 
 TEST(Controller, test_steam2026_input_report)
 {

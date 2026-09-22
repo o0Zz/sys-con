@@ -22,9 +22,6 @@ namespace syscon::networkpad
     void Initialize(const config::GlobalConfig &globalConfig);
     void Exit();
 
-    // True once Initialize() has actually created the pad.
-    bool IsEnabled();
-
     /*
         Re-creates the pad after a sleep/wake cycle.
 

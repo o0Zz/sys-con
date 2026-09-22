@@ -59,7 +59,6 @@ public:
     static constexpr uint8_t VibrationDeviceCount = 2;
 
     HidSharedMemoryController(uint8_t player_idx, u32 body_color, u32 buttons_color);
-    ~HidSharedMemoryController();
 
     uint8_t GetPlayerIndex() const { return m_player_idx; }
 
@@ -67,13 +66,9 @@ public:
     // client's shared memory, at a steady rate the console expects from a real pad.
     Result Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r);
 
-    // Vibration flows the other way: a mitm'd hid command stores it here and the handler's
-    // polling thread drains it into the driver. device_idx is the VibrationDeviceHandle one
-    // (0 = left, 1 = right); a Pro Controller exposes both.
-    void SetVibration(uint8_t device_idx, const HidVibrationValue &value);
-    HidVibrationValue GetVibration(uint8_t device_idx) const;
+    // Vibration flows the other way: a mitm'd hid command stores it in the manager and the
+    // handler's polling thread drains it into the driver.
     void GetRumble(float *amp_high, float *amp_low) const;
-    void ClearVibration();
 
     void Publish();
     void Clear();
@@ -125,7 +120,6 @@ public:
     void ClearVibration(uint8_t player_idx);
 
     std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId);
-    std::shared_ptr<HidSharedMemoryEntry> Get(u64 processId, u64 programId);
 
     Result Add(const std::shared_ptr<HidSharedMemoryEntry> &entry);
 

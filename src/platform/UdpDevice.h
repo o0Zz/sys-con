@@ -36,9 +36,6 @@ namespace syscon
     Result UdpSocketInitialize();
     void UdpSocketFinalize();
 
-    /// Transfer memory the socket driver was asked for, for logging. Valid after Initialize.
-    size_t UdpSocketTransferMemorySize();
-
     class UdpEndpoint : public controllerlib::IUSBEndpoint
     {
     public:
@@ -86,7 +83,6 @@ namespace syscon
         controllerlib::IUSBEndpoint *GetEndpoint(controllerlib::IUSBEndpoint::Direction direction, uint8_t index) override;
         controllerlib::IUSBInterface::InterfaceDescriptor *GetDescriptor() override;
 
-        controllerlib::Status Reset() override;
 
     private:
         std::unique_ptr<UdpEndpoint> m_inEndpoint;
@@ -109,6 +105,5 @@ namespace syscon
 
         controllerlib::Status Open() override;
         void Close() override;
-        void Reset() override;
     };
 } // namespace syscon

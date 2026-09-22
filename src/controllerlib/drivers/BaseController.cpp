@@ -128,12 +128,6 @@ namespace controllerlib
         m_interfaces.clear();
     }
 
-    bool BaseController::Support(ControllerFeature feature)
-    {
-        (void)feature;
-        return false;
-    }
-
     Status BaseController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
         (void)input_idx;
@@ -208,8 +202,7 @@ namespace controllerlib
 
         /*
          All endpoints idle: block once (up to timeout_us) on the next endpoint to pace the input
-         thread. This replaces the previous one-blocking-read-per-endpoint behaviour (which burned a
-         full timeout on every idle endpoint each tick) with a single wait per sweep.
+         thread - a single wait per sweep, not one per endpoint.
         */
         uint16_t endpoint_idx = m_current_controller_idx;
         m_current_controller_idx = (endpoint_idx + 1) % endpoint_count;
@@ -436,17 +429,5 @@ namespace controllerlib
         }
 
         return result;
-    }
-
-    std::vector<uint8_t> BaseController::StrToByteArray(const std::string &str)
-    {
-        std::vector<uint8_t> byteArray;
-        for (size_t i = 0; i < str.size(); i += 2)
-        {
-            std::string byteStr = str.substr(i, 2);
-            uint8_t byte = static_cast<uint8_t>(std::stoi(byteStr, nullptr, 16));
-            byteArray.push_back(byte);
-        }
-        return byteArray;
     }
 } // namespace controllerlib

@@ -6,8 +6,8 @@ namespace syscon
     class StdFile final : public IFile
     {
     public:
-        StdFile(std::fstream &&fs, const std::filesystem::path &path)
-            : m_file(std::move(fs)), m_path(path)
+        explicit StdFile(std::fstream &&fs)
+            : m_file(std::move(fs))
         {
         }
 
@@ -50,7 +50,6 @@ namespace syscon
 
     private:
         std::fstream m_file;
-        std::filesystem::path m_path;
     };
 
     class StdFileManager final : public IFileManager
@@ -72,7 +71,7 @@ namespace syscon
             if (!logFile.is_open())
                 return nullptr;
 
-            return std::make_unique<StdFile>(std::move(logFile), path);
+            return std::make_unique<StdFile>(std::move(logFile));
         }
 
         bool create_directories(const std::filesystem::path &dir) override

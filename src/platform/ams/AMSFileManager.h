@@ -9,8 +9,8 @@ namespace syscon
     class AMSFile : public IFile
     {
     public:
-        AMSFile(ams::fs::FileHandle &&file, int flags, const std::filesystem::path &&path)
-            : m_file(std::move(file)), m_path(std::move(path)), m_fileoffset(0)
+        AMSFile(ams::fs::FileHandle &&file, int flags)
+            : m_file(std::move(file)), m_fileoffset(0)
         {
             if ((flags & ams::fs::OpenMode_AllowAppend))
                 ams::fs::GetFileSize(&m_fileoffset, m_file);
@@ -63,7 +63,6 @@ namespace syscon
 
     private:
         ams::fs::FileHandle m_file;
-        std::filesystem::path m_path;
         s64 m_fileoffset;
     };
 
@@ -92,7 +91,7 @@ namespace syscon
             if (R_FAILED(ams::fs::OpenFile(std::addressof(file), to_ams_path(path).c_str(), mode)))
                 return nullptr;
 
-            return std::make_unique<AMSFile>(std::move(file), (::syscon::OpenFlags)mode, std::move(path));
+            return std::make_unique<AMSFile>(std::move(file), mode);
         }
 
         bool create_directories(const std::filesystem::path &dir) override

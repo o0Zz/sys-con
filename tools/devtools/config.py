@@ -73,9 +73,6 @@ REBOOT_WAIT = 180  # fatal screen -> auto-reboot -> /status answers again
 REBOOT_POLL = 5
 
 SOAK_DEFAULT = 120
-# Anything touching a stack size, thread priority or heap size deserves this
-# instead: those bugs are latent and time-dependent (see psc_module.cpp:20).
-SOAK_LONG = 600
 
 # hiddbgInitialize leaks across launches, so only the first couple of starts in
 # a boot are sound. By the third the call quietly does nothing: sys-con either

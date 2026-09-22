@@ -29,15 +29,9 @@ public:
     // There are a total of 15 endpoints on a switch interface for each direction, get them by passing the desired parameters
     virtual controllerlib::IUSBEndpoint *GetEndpoint(controllerlib::IUSBEndpoint::Direction direction, uint8_t index) override;
 
-    // Reset the device
-    virtual controllerlib::Status Reset() override;
-
     // Get the unique session ID for this interface
     inline s32 GetID() { return m_session.ID; }
     // Get the raw interface
     inline UsbHsInterface &GetInterface() { return m_interface; }
-    // Get the raw session
-    inline UsbHsClientIfSession &GetSession() { return m_session; }
-
     virtual controllerlib::IUSBInterface::InterfaceDescriptor *GetDescriptor() override { return reinterpret_cast<controllerlib::IUSBInterface::InterfaceDescriptor *>(&m_interface.inf.interface_desc); }
 };
