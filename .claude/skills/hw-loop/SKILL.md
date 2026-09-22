@@ -160,6 +160,20 @@ The fix is always `power/restart`, never another start. Budget one reboot
 (~60 s) per two experiments and plan the session around that, rather than
 retrying and reading the wreckage.
 
+## Waking a sleeping console
+
+A console that has gone to sleep shows the lock screen on HOME. Dismissing it
+takes **four** taps in the middle of the screen:
+
+```sh
+python -m devtools touch 640 380   # x4
+```
+
+Fewer taps leave it on the lock screen; the fourth is what lets it through.
+Verified 2026-09-22. Handheld only, like every other touch (see CLAUDE.md).
+Do this before reading anything off a `screenshot`, and before treating exit
+`30` or a failed `doctor` `keep_awake` check as a console problem.
+
 ## Hard stops
 
 Stop, report, and do **not** retry on:
