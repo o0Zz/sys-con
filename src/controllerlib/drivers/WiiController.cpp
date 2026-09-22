@@ -17,7 +17,10 @@ namespace controllerlib
         : BaseController(std::move(device), config, std::move(logger))
     {
         for (int i = 0; i < WII_MAX_INPUTS; i++)
+        {
             m_is_connected[i] = false;
+            m_rumble_supported[i] = false;
+        }
     }
 
     WiiController::~WiiController()
@@ -131,11 +134,17 @@ namespace controllerlib
 
     Status WiiController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
-        (void)amp_low; // Not supported by Wii controller
-        if (input_idx >= 4)
+        if (input_idx >= WII_MAX_INPUTS)
             return Status::InvalidIndex;
 
-        rumbleData[1 + input_idx] = (uint8_t)(amp_high * 255);
+        if (m_outPipe.empty())
+            return Status::InvalidEndpoint;
+
+        // The adapter only knows on and off, and the port needs the extra power lead for it.
+        if (!m_rumble_supported[input_idx])
+            return Status::NotImplemented;
+
+        rumbleData[1 + input_idx] = (amp_high > 0.0f || amp_low > 0.0f) ? 1 : 0;
 
         return m_outPipe[0]->Write(rumbleData, sizeof(rumbleData));
     }

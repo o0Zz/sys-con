@@ -97,8 +97,11 @@ namespace controllerlib
     class Dualshock3Controller : public BaseController
     {
     private:
+        uint8_t m_rumble_left_force = 0;
+        bool m_rumble_right_on = false;
+
         Status SendCommand(Dualshock3FeatureValue feature, const void *buffer, uint16_t size);
-        Status SetLED(Dualshock3LEDValue value);
+        Status SendOutputReport(Dualshock3LEDValue led);
 
     public:
         Dualshock3Controller(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
@@ -108,5 +111,9 @@ namespace controllerlib
         virtual Status OpenInterfaces() override;
 
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
+
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
+
+        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
     };
 } // namespace controllerlib

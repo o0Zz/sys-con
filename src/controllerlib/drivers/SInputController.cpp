@@ -93,9 +93,9 @@ namespace controllerlib
             SINPUT_REPORT_ID_COMMAND,
             SINPUT_COMMAND_HAPTIC,
             SINPUT_HAPTIC_TYPE_RUMBLE,
-            static_cast<uint8_t>(amp_low * 255),
+            static_cast<uint8_t>(ScaleAmplitude(amp_low, 255)),
             0x00,
-            static_cast<uint8_t>(amp_high * 255),
+            static_cast<uint8_t>(ScaleAmplitude(amp_high, 255)),
             0x00};
 
         return m_outPipe[input_idx]->Write(rumbleData, sizeof(rumbleData));

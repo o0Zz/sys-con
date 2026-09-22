@@ -59,6 +59,9 @@ namespace controllerlib
         SwitchCalibration cal_left_y;
         SwitchCalibration cal_right_x;
         SwitchCalibration cal_right_y;
+        uint8_t m_packet_counter = 0;
+
+        static void EncodeRumble(uint8_t *data, float amplitude);
 
     public:
         SwitchController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
@@ -70,10 +73,8 @@ namespace controllerlib
 
         size_t GetMaxInputBufferSize() override;
 
-        bool Support(ControllerFeature feature) const override
-        {
-            (void)feature;
-            return false;
-        }
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
+
+        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
     };
 } // namespace controllerlib

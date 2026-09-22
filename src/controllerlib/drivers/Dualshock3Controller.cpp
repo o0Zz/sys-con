@@ -21,9 +21,7 @@ namespace controllerlib
         if (result != Status::Success)
             return result;
 
-        SetLED(DS3LED_1);
-
-        return Status::Success;
+        return SendOutputReport(DS3LED_1);
     }
 
     Status Dualshock3Controller::OpenInterfaces()
@@ -87,15 +85,37 @@ namespace controllerlib
         return m_interfaces[0]->ControlTransferOutput(0x21, 0x09, static_cast<uint16_t>(feature), 0, buffer, size);
     }
 
-    Status Dualshock3Controller::SetLED(Dualshock3LEDValue value)
+    /*
+        One report carries both the LEDs and the motors, so the rumble state has to be resent
+        with every LED change and the LEDs with every rumble change. The small motor is on/off
+        only; the big one takes a force. 0xff is an endless duration.
+    */
+    Status Dualshock3Controller::SendOutputReport(Dualshock3LEDValue led)
     {
-        const uint8_t ledPacket[]{
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            static_cast<uint8_t>(value << 1),
+        const uint8_t outputPacket[]{
+            0x00,
+            0xff, static_cast<uint8_t>(m_rumble_right_on ? 0x01 : 0x00),
+            0xff, m_rumble_left_force,
+            0x00, 0x00, 0x00, 0x00,
+            static_cast<uint8_t>(led << 1),
             LED_PERMANENT,
             LED_PERMANENT,
             LED_PERMANENT,
             LED_PERMANENT};
-        return SendCommand(Ds3FeatureUnknown1, ledPacket, sizeof(ledPacket));
+        return SendCommand(Ds3FeatureUnknown1, outputPacket, sizeof(outputPacket));
+    }
+
+    Status Dualshock3Controller::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    {
+        if (input_idx != 0)
+            return Status::InvalidIndex;
+
+        if (m_interfaces.empty())
+            return Status::InvalidEndpoint;
+
+        m_rumble_left_force = static_cast<uint8_t>(ScaleAmplitude(amp_low, 255));
+        m_rumble_right_on = amp_high > 0.0f;
+
+        return SendOutputReport(DS3LED_1);
     }
 } // namespace controllerlib

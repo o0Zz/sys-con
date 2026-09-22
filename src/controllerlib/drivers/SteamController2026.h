@@ -20,6 +20,9 @@ namespace controllerlib
 #define LIZARD_MODE_OFF               0x00
 #define SETTING_STEAM_WATCHDOG_ENABLE 0x47
 #define WATCHDOG_DISABLE              0x00
+#define ID_TRIGGER_RUMBLE_CMD         0xEB
+#define RUMBLE_TYPE_DEFAULT           0x00
+#define HAPTIC_INTENSITY_SYSTEM       0x00
 
     _PACKED(struct FeatureReportHeader {
         unsigned char type;
@@ -38,6 +41,20 @@ namespace controllerlib
     _PACKED(struct SetSettingsFeatureReportMsg {
         FeatureReportHeader header;
         MsgSetSettingsValues setSettingsValues;
+    });
+
+    _PACKED(struct MsgSimpleRumbleCmd {
+        uint8_t rumbleType;
+        uint16_t intensity;
+        uint16_t leftMotorSpeed;
+        uint16_t rightMotorSpeed;
+        int8_t leftGain;
+        int8_t rightGain;
+    });
+
+    _PACKED(struct SimpleRumbleFeatureReportMsg {
+        FeatureReportHeader header;
+        MsgSimpleRumbleCmd simpleRumble;
     });
 
     _PACKED(struct TritonWirelessStatus {
@@ -132,6 +149,7 @@ namespace controllerlib
         Status OnControllerConnect(uint16_t input_idx);
         Status OnControllerDisconnect(uint16_t input_idx);
         Status UpdateLizard(uint16_t input_idx);
+        Status SendFeatureReport(uint16_t input_idx, const uint8_t *buffer, uint16_t size);
 
     public:
         SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
@@ -143,5 +161,9 @@ namespace controllerlib
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
         virtual bool IsControllerConnected(uint16_t input_idx) override;
+
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
+
+        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
     };
 } // namespace controllerlib

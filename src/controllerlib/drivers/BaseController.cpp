@@ -363,6 +363,19 @@ namespace controllerlib
         }
     }
 
+    /* A game is free to ask for more than full scale; hid clamps it and so must we, or the
+       cast wraps and a maximum-strength effect comes out as a faint one. */
+    uint32_t BaseController::ScaleAmplitude(float amplitude, uint32_t max)
+    {
+        if (amplitude <= 0.0f)
+            return 0;
+
+        if (amplitude >= 1.0f)
+            return max;
+
+        return (uint32_t)(amplitude * max);
+    }
+
     float BaseController::ApplyDeadzone(uint8_t deadzonePercent, float value)
     {
         float deadzone = deadzonePercent / 100.0f;

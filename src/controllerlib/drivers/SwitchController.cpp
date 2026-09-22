@@ -2,6 +2,10 @@
 
 #define SWITCH_INPUT_BUFFER_SIZE 64
 
+#define SWITCH_OUTPUT_ID_SUBCOMMAND    0x01
+#define SWITCH_OUTPUT_ID_RUMBLE        0x10
+#define SWITCH_SUBCMD_ENABLE_VIBRATION 0x48
+
 namespace controllerlib
 {
     static_assert(SWITCH_INPUT_BUFFER_SIZE == 64, "Input byte for switch as to be 64 bytes long");
@@ -44,7 +48,47 @@ namespace controllerlib
         uint8_t initPacket2_ForceToUSB[SWITCH_INPUT_BUFFER_SIZE]{0x80, 0x04};
         (void)m_outPipe[0]->Write(initPacket2_ForceToUSB, sizeof(initPacket2_ForceToUSB));
 
+        // The motors ignore every rumble report until this subcommand turns them on.
+        uint8_t enableVibration[]{
+            SWITCH_OUTPUT_ID_SUBCOMMAND, (uint8_t)(m_packet_counter++ & 0x0F),
+            0x00, 0x01, 0x40, 0x40,
+            0x00, 0x01, 0x40, 0x40,
+            SWITCH_SUBCMD_ENABLE_VIBRATION, 0x01};
+        (void)m_outPipe[0]->Write(enableVibration, sizeof(enableVibration));
+
         return Status::Success;
+    }
+
+    /*
+        An actuator takes an encoded frequency/amplitude pair. The frequencies stay at the
+        defaults (160 Hz low, 320 Hz high), which is what makes the idle pair 00 01 40 40; only
+        the amplitude moves, over the 101 steps the pad encodes. Ref:
+        https://github.com/torvalds/linux/blob/master/drivers/hid/hid-nintendo.c (joycon_encode_rumble)
+    */
+    void SwitchController::EncodeRumble(uint8_t *data, float amplitude)
+    {
+        const uint32_t step = ScaleAmplitude(amplitude, 100);
+        const uint16_t amp_low = (uint16_t)(0x0040 + (step / 2) + ((step % 2) ? 0x8000 : 0x0000));
+
+        data[0] = 0x00;
+        data[1] = (uint8_t)(0x01 + (step * 2));
+        data[2] = (uint8_t)(0x40 + (amp_low >> 8));
+        data[3] = (uint8_t)(amp_low & 0xFF);
+    }
+
+    Status SwitchController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    {
+        if (input_idx != 0)
+            return Status::InvalidIndex;
+
+        if (m_outPipe.empty())
+            return Status::InvalidEndpoint;
+
+        uint8_t rumblePacket[10]{SWITCH_OUTPUT_ID_RUMBLE, (uint8_t)(m_packet_counter++ & 0x0F)};
+        EncodeRumble(&rumblePacket[2], amp_low);
+        EncodeRumble(&rumblePacket[6], amp_high);
+
+        return m_outPipe[0]->Write(rumblePacket, sizeof(rumblePacket));
     }
 
     Status SwitchController::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)

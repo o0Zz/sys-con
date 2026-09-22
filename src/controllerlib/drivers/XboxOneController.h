@@ -46,6 +46,7 @@ namespace controllerlib
     {
     private:
         RawInputData m_rawInput;
+        uint8_t m_rumble_sequence = 0;
         Status SendInitBytes(uint16_t input_idx);
         Status WriteAckModeReport(uint16_t input_idx, uint8_t sequence);
 

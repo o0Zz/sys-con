@@ -269,16 +269,18 @@ namespace controllerlib
 
     Status XboxOneController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
-        (void)input_idx;
-        const uint8_t rumble_data[]{
-            0x09, 0x00, 0x00,
-            0x09, 0x00, 0x0f, 0x00, 0x00,
-            (uint8_t)(amp_high * 255),
-            (uint8_t)(amp_low * 255),
-            0xff, 0x00, 0x00};
-
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
+
+        /* The last byte is the repeat count: with 0 the effect plays the on-period once and
+           dies, and nothing resends it while the game holds the same amplitude. */
+        const uint8_t rumble_data[]{
+            GIP_CMD_RUMBLE, 0x00, m_rumble_sequence++, GIP_PL_LEN(9),
+            0x00, GIP_MOTOR_ALL,
+            0x00, 0x00,
+            (uint8_t)ScaleAmplitude(amp_low, 255),
+            (uint8_t)ScaleAmplitude(amp_high, 255),
+            0xff, 0x00, 0xff};
 
         return m_outPipe[input_idx]->Write(rumble_data, sizeof(rumble_data));
     }

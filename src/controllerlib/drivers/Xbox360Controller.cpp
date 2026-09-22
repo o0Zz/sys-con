@@ -71,9 +71,13 @@ namespace controllerlib
 
     Status Xbox360Controller::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
-        uint8_t rumbleData[]{0x00, 0x08, 0x00, (uint8_t)(amp_high * 255), (uint8_t)(amp_low * 255), 0x00, 0x00, 0x00};
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
+
+        const uint8_t rumbleData[]{0x00, 0x08, 0x00,
+                                   (uint8_t)ScaleAmplitude(amp_low, 255),
+                                   (uint8_t)ScaleAmplitude(amp_high, 255),
+                                   0x00, 0x00, 0x00};
 
         return m_outPipe[input_idx]->Write(rumbleData, sizeof(rumbleData));
     }

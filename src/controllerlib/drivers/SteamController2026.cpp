@@ -147,14 +147,41 @@ namespace controllerlib
         msg->setSettingsValues.settings[1].settingValue = WATCHDOG_DISABLE;
         msg->header.length = 2 * sizeof(ControllerSetting);
 
-        m_interfaces[input_idx]->ControlTransferOutput(
+        return SendFeatureReport(input_idx, buffer, sizeof(buffer));
+    }
+
+    Status SteamController2026::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    {
+        if (input_idx >= STEAMCONTROLLER_MAX_INPUTS || input_idx >= m_interfaces.size())
+            return Status::InvalidIndex;
+
+        if (!m_controllerInfo[input_idx].m_is_connected)
+            return Status::NothingTodo;
+
+        uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
+
+        SimpleRumbleFeatureReportMsg *msg = reinterpret_cast<SimpleRumbleFeatureReportMsg *>(buffer + 1);
+
+        // header.length stays 0, as SDL's Steam Deck driver sends it: the command is fixed size.
+        msg->header.type = ID_TRIGGER_RUMBLE_CMD;
+        msg->simpleRumble.rumbleType = RUMBLE_TYPE_DEFAULT;
+        msg->simpleRumble.intensity = HAPTIC_INTENSITY_SYSTEM;
+        msg->simpleRumble.leftMotorSpeed = (uint16_t)ScaleAmplitude(amp_low, 65535);
+        msg->simpleRumble.rightMotorSpeed = (uint16_t)ScaleAmplitude(amp_high, 65535);
+        msg->simpleRumble.leftGain = 2;
+        msg->simpleRumble.rightGain = 0;
+
+        return SendFeatureReport(input_idx, buffer, sizeof(buffer));
+    }
+
+    Status SteamController2026::SendFeatureReport(uint16_t input_idx, const uint8_t *buffer, uint16_t size)
+    {
+        return m_interfaces[input_idx]->ControlTransferOutput(
             0x21,
             0x09,
             (3 << 8) | buffer[0],
             m_interfaces[input_idx]->GetDescriptor()->bInterfaceNumber,
             buffer,
-            sizeof(buffer));
-
-        return Status::Success;
+            size);
     }
 } // namespace controllerlib
