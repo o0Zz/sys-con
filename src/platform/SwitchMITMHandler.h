@@ -36,4 +36,7 @@ public:
 
     // Drains the vibration the MITM stored for our npad slots into the driver.
     virtual Result UpdateOutput() override;
+
+private:
+    void ReleaseController(uint16_t input_idx);
 };

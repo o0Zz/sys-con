@@ -87,22 +87,42 @@ Result SwitchMITMHandler::Initialize()
     return 0;
 }
 
+/*
+    Holding a player slot is not enough to call the pad attached: the console clears the npad
+    it gave us whenever the grip/order screen unassigns the controllers, and only it knows
+    that happened - the fake shared memory is ours and would always claim the pad is there.
+    Reporting it honestly is what re-arms the L+R re-attach in
+    SwitchVirtualGamepadHandler::UpdateInput.
+*/
 bool SwitchMITMHandler::IsControllerAttached(uint16_t input_idx)
 {
-    return m_controllerList[input_idx] != nullptr;
+    if (m_controllerList[input_idx] == nullptr)
+        return false;
+
+    return hidGetNpadStyleSet(static_cast<HidNpadIdType>(m_controllerList[input_idx]->GetPlayerIndex())) != 0;
+}
+
+// Hands back everything the pad owns. Safe to call whatever state it is in.
+void SwitchMITMHandler::ReleaseController(uint16_t input_idx)
+{
+    if (m_controllerList[input_idx] != nullptr)
+    {
+        HidSharedMemoryManager::GetHidSharedMemoryManager().DetachController(m_controllerList[input_idx]);
+        m_controllerList[input_idx] = nullptr;
+    }
+
+    m_lastRumble[input_idx] = RumbleState{};
+
+    if (m_hdlsHandle[input_idx].handle != 0)
+    {
+        hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
+        m_hdlsHandle[input_idx].handle = 0;
+    }
 }
 
 Result SwitchMITMHandler::DetachController(uint16_t input_idx)
 {
-    if (!IsControllerAttached(input_idx))
-        return 0;
-
-    HidSharedMemoryManager::GetHidSharedMemoryManager().DetachController(m_controllerList[input_idx]);
-    m_controllerList[input_idx] = nullptr;
-    m_lastRumble[input_idx] = RumbleState{};
-
-    hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
-    m_hdlsHandle[input_idx].handle = 0;
+    ReleaseController(input_idx);
 
     return 0;
 }
@@ -117,6 +137,10 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
 {
     if (IsControllerAttached(input_idx))
         return 0;
+
+    // A re-attach arrives here still holding the device the console has already dropped, so
+    // give that one back before asking for another.
+    ReleaseController(input_idx);
 
     HiddbgHdlsDeviceInfo deviceInfo;
     BuildHdlsDeviceInfo(&deviceInfo);
@@ -135,16 +159,14 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
     if (!WaitForNewNpad(npad_mask_before, &player_idx))
     {
         syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] The console published no npad for the device on input: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
-        hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
-        m_hdlsHandle[input_idx].handle = 0;
+        ReleaseController(input_idx);
         return MAKERESULT(Module_Libnx, LibnxError_NotFound);
     }
 
     m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachControllerAt(player_idx, deviceInfo.singleColorBody, deviceInfo.singleColorButtons);
     if (m_controllerList[input_idx] == nullptr)
     {
-        hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
-        m_hdlsHandle[input_idx].handle = 0;
+        ReleaseController(input_idx);
         return MAKERESULT(Module_Libnx, LibnxError_NotFound);
     }
 
