@@ -8,6 +8,8 @@
 #include "drivers/SwitchController.h"
 #include "drivers/WiiController.h"
 #include "drivers/GenericHIDController.h"
+#include "drivers/HIDKeyboardController.h"
+#include "drivers/HIDMouseController.h"
 #include "drivers/SInputController.h"
 #include "drivers/SteamController2026.h"
 #include "drivers/NetworkController.h"

@@ -46,7 +46,7 @@ namespace
         ControllerConfig config;
         syscon::StdFileManager fileManager;
         ::syscon::config::Initialize(fileManager);
-        ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, kNetworkVendorId, kNetworkProductId, false, "network");
+        ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, kNetworkVendorId, kNetworkProductId, false, "network", controllerlib::InputDeviceKind::Gamepad);
         return config;
     }
 

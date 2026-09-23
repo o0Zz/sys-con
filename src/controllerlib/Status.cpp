@@ -20,6 +20,12 @@ namespace controllerlib
                 return "InvalidArgument";
             case Status::HidIsNotJoystick:
                 return "HidIsNotJoystick";
+            case Status::HidIsNotKeyboard:
+                return "HidIsNotKeyboard";
+            case Status::HidIsNotMouse:
+                return "HidIsNotMouse";
+            case Status::HidProtocolFailed:
+                return "HidProtocolFailed";
             case Status::NoInterfaces:
                 return "NoInterfaces";
             case Status::NoDataAvailable:

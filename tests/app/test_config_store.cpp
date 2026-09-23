@@ -17,7 +17,7 @@ TEST(Configuration, test_load_config_unknown)
 
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0000, 0x0000, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0000, 0x0000, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.driver, "");
@@ -35,7 +35,7 @@ TEST(Configuration, test_load_config_no_profile)
 
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x0cda, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x0cda, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.driver, "");
@@ -53,7 +53,7 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
 
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x045e, 0x02dd, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x045e, 0x02dd, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.driver, "xboxone");
@@ -74,7 +74,7 @@ TEST(Configuration, test_load_config_with_profile_wii)
 
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x057e, 0x0337, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x057e, 0x0337, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.driver, "wii");
@@ -88,7 +88,7 @@ TEST(Configuration, test_load_config_with_profile_sinput)
 
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x2e8a, 0x10df, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x2e8a, 0x10df, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.driver, "sinput");
@@ -113,7 +113,7 @@ TEST(Configuration, test_load_config_vibration_template_dualshock4)
 
     // DualShock 4 v2. These assertions track the shipped config.ini and have to be updated
     // with it; the parser itself is covered in tests/core/test_rumble_template.cpp.
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x09cc, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x09cc, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.profile, "dualshock4");
@@ -136,7 +136,7 @@ TEST(Configuration, test_load_config_vibration_template_stadia)
     ::syscon::config::Initialize(fileManager);
 
     // Google Stadia, whose template sits in its own VID/PID section.
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x18d1, 0x9400, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x18d1, 0x9400, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_TRUE(config.rumble.IsValid());
@@ -154,7 +154,7 @@ TEST(Configuration, test_load_config_vibration_template_dualsense)
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
 
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x0ce6, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x0ce6, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.profile, "dualsense5");
@@ -172,7 +172,7 @@ TEST(Configuration, test_load_config_vibration_template_gamecube_adapter)
     syscon::StdFileManager fileManager;
     ::syscon::config::Initialize(fileManager);
 
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0079, 0x1846, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0079, 0x1846, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.rumble.packetSize, 2);
@@ -189,7 +189,7 @@ TEST(Configuration, test_load_config_motorless_stick_on_the_dualshock4_profile)
 
     // Qanba Obsidian: an arcade stick that shares the dualshock4 profile, so the profile must
     // not be the thing that carries the rumble report.
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x2c22, 0x2300, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x2c22, 0x2300, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_EQ(config.profile, "dualshock4");
@@ -204,8 +204,38 @@ TEST(Configuration, test_load_config_without_vibration_template)
     ::syscon::config::Initialize(fileManager);
 
     // A pad with no motors must not claim rumble support.
-    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0583, 0x2060, false, "");
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0583, 0x2060, false, "", controllerlib::InputDeviceKind::Gamepad);
     EXPECT_EQ(rc, 0);
 
     EXPECT_FALSE(config.rumble.IsValid());
+}
+
+TEST(Configuration, test_load_config_keyboard_uses_its_own_baseline)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x046d, 0xc31c, false, "keyboard", controllerlib::InputDeviceKind::Keyboard);
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.driver, "keyboard");
+
+    // [default] is gamepad-shaped and must not reach a keyboard.
+    EXPECT_EQ(config.analogDeadzonePercent[AnalogAxis::X], 0);
+    EXPECT_EQ(config.buttonsPin[GamepadButton::DPAD_UP][0], 0);
+}
+
+TEST(Configuration, test_load_config_mouse_reads_its_sensitivity)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x046d, 0xc077, false, "mouse", controllerlib::InputDeviceKind::Mouse);
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.driver, "mouse");
+    EXPECT_EQ(config.mouseSensitivityPercent, 100);
+    EXPECT_EQ(config.analogDeadzonePercent[AnalogAxis::X], 0);
 }

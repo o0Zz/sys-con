@@ -93,7 +93,10 @@ into everything downstream.
 ```
 ControllerLib/
   Status.h/.cpp         the library's only error type
-  IController.h         the driver interface + normalized output
+  InputDeviceBase.h     what every input device has: device, config, logger, lifecycle
+  IGamepad.h            the gamepad interface + normalized output
+  IKeyboard.h/IMouse.h  the keyboard and mouse interfaces
+  InputState.h          keyboard and mouse state, host-independent
   IUSBDevice/Interface/Endpoint.h, ILogger.h    what the host implements
   ControllerConfig.h    mapping, deadzones, combos
   PinId.h               physical input pin (what a driver reports)
@@ -101,7 +104,7 @@ ControllerLib/
   AnalogAxis.h          normalized axis
   EnumArray.h           array indexable only by one enum type
   Controllers.h         convenience header: every driver
-  drivers/              BaseController + one file per controller family
+  drivers/              UsbPipeSet, BaseController + one file per controller family
 ```
 
 ## Adding a driver

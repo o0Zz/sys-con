@@ -1,7 +1,7 @@
 #pragma once
 
-#include "IController.h"
-#include <vector>
+#include "IGamepad.h"
+#include "drivers/UsbPipeSet.h"
 
 namespace controllerlib
 {
@@ -13,12 +13,9 @@ namespace controllerlib
         AnalogValues analog{};
     };
 
-    class BaseController : public IController
+    class BaseController : public IGamepad, protected UsbPipeSet
     {
     protected:
-        std::vector<IUSBEndpoint *> m_inPipe;
-        std::vector<IUSBEndpoint *> m_outPipe;
-        std::vector<IUSBInterface *> m_interfaces;
         uint8_t m_current_controller_idx = 0;
 
         virtual Status ReadNextBuffer(uint8_t *buffer, size_t *size, uint16_t *input_idx, uint32_t timeout_us);

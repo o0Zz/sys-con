@@ -71,7 +71,7 @@ namespace
  * SwitchMITMHandler Implementation
  *****************************************************************************/
 
-SwitchMITMHandler::SwitchMITMHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
+SwitchMITMHandler::SwitchMITMHandler(std::unique_ptr<IGamepad> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
     : SwitchVirtualGamepadHandler(std::move(controller), polling_timeout_ms, thread_priority)
 {
 }

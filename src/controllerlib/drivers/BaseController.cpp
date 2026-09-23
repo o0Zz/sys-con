@@ -8,7 +8,7 @@ namespace controllerlib
     // https://www.usb.org/sites/default/files/documents/hid1_11.pdf  p55
 
     BaseController::BaseController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
-        : IController(std::move(device), config, std::move(logger))
+        : IGamepad(std::move(device), config, std::move(logger))
     {
         m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Created !", m_device->GetVendor(), m_device->GetProduct());
     }
@@ -48,84 +48,12 @@ namespace controllerlib
 
     Status BaseController::OpenInterfaces()
     {
-        m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Opening interfaces ...", m_device->GetVendor(), m_device->GetProduct());
-
-        Status result = m_device->Open();
-        if (result != Status::Success)
-        {
-            m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open device !", m_device->GetVendor(), m_device->GetProduct());
-            return result;
-        }
-
-        std::vector<std::unique_ptr<IUSBInterface>> &interfaces = m_device->GetInterfaces();
-        for (auto &&interface : interfaces)
-        {
-            m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] Opening interface %d/%d ...", m_device->GetVendor(), m_device->GetProduct(), m_interfaces.size() + 1, interfaces.size());
-
-            Status interfaceResult = interface->Open();
-            if (interfaceResult != Status::Success)
-            {
-                m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open interface !", m_device->GetVendor(), m_device->GetProduct());
-                return interfaceResult;
-            }
-
-            for (uint8_t idx = 0; idx < 15; idx++)
-            {
-                IUSBEndpoint *inEndpoint = interface->GetEndpoint(IUSBEndpoint::USB_ENDPOINT_IN, idx);
-                if (inEndpoint == NULL)
-                    continue;
-
-                Status endpointResult = inEndpoint->Open(GetConfig().inputMaxPacketSize);
-                if (endpointResult != Status::Success)
-                {
-                    m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open input endpoint idx: %d !", m_device->GetVendor(), m_device->GetProduct(), idx);
-                    return endpointResult;
-                }
-
-                m_inPipe.push_back(inEndpoint);
-            }
-
-            for (uint8_t idx = 0; idx < 15; idx++)
-            {
-                IUSBEndpoint *outEndpoint = interface->GetEndpoint(IUSBEndpoint::USB_ENDPOINT_OUT, idx);
-                if (outEndpoint == NULL)
-                    continue;
-
-                Status endpointResult = outEndpoint->Open(GetConfig().outputMaxPacketSize);
-                if (endpointResult != Status::Success)
-                {
-                    m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open output endpoint idx: %d !", m_device->GetVendor(), m_device->GetProduct(), idx);
-                    return endpointResult;
-                }
-
-                m_outPipe.push_back(outEndpoint);
-            }
-
-            m_interfaces.push_back(interface.get());
-        }
-
-        if (m_inPipe.empty())
-        {
-            m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Not input endpoint found !", m_device->GetVendor(), m_device->GetProduct());
-            return Status::InvalidEndpoint;
-        }
-
-        m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] successfully opened !", m_device->GetVendor(), m_device->GetProduct());
-        return Status::Success;
+        return OpenPipes(m_device.get(), GetConfig(), m_logger.get());
     }
 
     void BaseController::CloseInterfaces()
     {
-        m_device->Close();
-
-        /*
-            m_inPipe/m_outPipe/m_interfaces are non-owning pointers into the device we just
-            closed. Drop them so a later ReadInput()/SetRumble() can't dereference endpoints
-            that no longer exist; both now see empty pipe lists and fail cleanly instead.
-        */
-        m_inPipe.clear();
-        m_outPipe.clear();
-        m_interfaces.clear();
+        ClosePipes(m_device.get());
     }
 
     static void StoreAmplitude(uint8_t *packet, const ControllerRumbleField &field, float amplitude)
@@ -163,15 +91,12 @@ namespace controllerlib
 
     Status BaseController::ReadEndpointLatest(uint16_t endpoint_idx, uint8_t *buffer, size_t *size, uint32_t timeout_us)
     {
-        const size_t capacity = std::min((size_t)m_inPipe[endpoint_idx]->GetDescriptor()->wMaxPacketSize, *size);
+        const size_t capacity = *size;
 
         size_t latestSize = capacity;
-        Status result = m_inPipe[endpoint_idx]->Read(buffer, &latestSize, timeout_us);
+        Status result = ReadEndpointOnce(endpoint_idx, buffer, &latestSize, timeout_us);
         if (result != Status::Success)
             return result;
-
-        if (latestSize == 0)
-            return Status::NothingTodo;
 
         /*
          Drain any further reports that are already queued, keeping only the freshest one.
@@ -183,7 +108,7 @@ namespace controllerlib
         for (;;)
         {
             size_t drainSize = capacity;
-            if (m_inPipe[endpoint_idx]->Read(drainBuffer, &drainSize, 0) != Status::Success || drainSize == 0)
+            if (ReadEndpointOnce(endpoint_idx, drainBuffer, &drainSize, 0) != Status::Success)
                 break;
 
             memcpy(buffer, drainBuffer, drainSize);

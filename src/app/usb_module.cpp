@@ -55,20 +55,36 @@ namespace syscon::usb
             {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, "xbox360w"},
             {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, "xboxone"},
             {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = 0x58, .bInterfaceSubClass = 0x42, .bInterfaceProtocol = 0x00}, "xbox"},
+            /*
+                Boot protocol is what tells a keyboard or a mouse apart from a gamepad before
+                anything is acquired, and on a multi-interface gaming keyboard it is set on
+                exactly one interface -- the real keyboard. The others (NKRO bitmap, consumer
+                controls, vendor macro channels) are subclass 0 and fall through below.
+            */
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = 0x01, .bInterfaceProtocol = 0x01}, "keyboard"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = 0x01, .bInterfaceProtocol = 0x02}, "mouse"},
             {{.Flags = UsbHsInterfaceFilterFlags_bInterfaceClass, .bInterfaceClass = USB_CLASS_HID}, ""},
         };
 
-        template <typename T>
-        std::unique_ptr<IController> MakeController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
+        template <typename T, typename Interface>
+        std::unique_ptr<Interface> MakeDevice(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
         {
             return std::make_unique<T>(std::move(device), config, std::make_unique<syscon::logger::Logger>());
         }
 
+        template <typename T>
+        std::unique_ptr<IGamepad> MakeController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
+        {
+            return MakeDevice<T, IGamepad>(std::move(device), config);
+        }
+
+        // One table per interface kind rather than one tagged table: the factories return
+        // different types, and the host never holds a device pointer it has to downcast.
         constexpr struct
         {
             const char *driver;
             const char *name;
-            std::unique_ptr<IController> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
+            std::unique_ptr<IGamepad> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
         } Drivers[] = {
             {"dualshock3", "Dualshock 3", MakeController<Dualshock3Controller>},
             {"xbox360w", "Xbox 360 Wireless", MakeController<Xbox360WirelessController>},
@@ -81,6 +97,35 @@ namespace syscon::usb
             {"sinput", "SInput", MakeController<SInputController>},
             {"steam2026", "Steam Controller 2026", MakeController<SteamController2026>},
         };
+
+        constexpr struct
+        {
+            const char *driver;
+            const char *name;
+            std::unique_ptr<IKeyboard> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
+        } KeyboardDrivers[] = {
+            {"keyboard", "HID Keyboard", MakeDevice<HIDKeyboardController, IKeyboard>},
+        };
+
+        constexpr struct
+        {
+            const char *driver;
+            const char *name;
+            std::unique_ptr<IMouse> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
+        } MouseDrivers[] = {
+            {"mouse", "HID Mouse", MakeDevice<HIDMouseController, IMouse>},
+        };
+
+        // The probe settled the kind from the USB interface descriptor, before anything was
+        // acquired; it is what picks the baseline config section a device gets.
+        InputDeviceKind KindFromProfile(const std::string &profile)
+        {
+            if (profile == "keyboard")
+                return InputDeviceKind::Keyboard;
+            if (profile == "mouse")
+                return InputDeviceKind::Mouse;
+            return InputDeviceKind::Gamepad;
+        }
 
         Result AddEvent(UsbHsInterfaceFilter *filter, const std::string &name);
 
@@ -144,12 +189,28 @@ namespace syscon::usb
                                                 interface->device_desc.bcdDevice);
 
                         ControllerConfig config;
-                        ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, interface->device_desc.idVendor, interface->device_desc.idProduct, g_auto_add_controller, default_profile);
+                        ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, interface->device_desc.idVendor, interface->device_desc.idProduct, g_auto_add_controller, default_profile, KindFromProfile(default_profile));
 
+                        const auto *keyboard = std::find_if(std::begin(KeyboardDrivers), std::end(KeyboardDrivers), [&config](const auto &candidate)
+                                                            { return config.driver == candidate.driver; });
+                        const auto *mouse = std::find_if(std::begin(MouseDrivers), std::end(MouseDrivers), [&config](const auto &candidate)
+                                                         { return config.driver == candidate.driver; });
                         const auto *driver = std::find_if(std::begin(Drivers), std::end(Drivers), [&config](const auto &candidate)
                                                           { return config.driver == candidate.driver; });
 
-                        if (driver != std::end(Drivers))
+                        if (keyboard != std::end(KeyboardDrivers))
+                        {
+                            // One device per interface: a keyboard and a mouse behind the same
+                            // dongle are two separate interfaces and two separate handlers.
+                            syscon::logger::LogInfo("Initializing %s ...", keyboard->name);
+                            controllers::Insert(keyboard->Make(std::make_unique<SwitchUSBDevice>(interfaces, 1), config));
+                        }
+                        else if (mouse != std::end(MouseDrivers))
+                        {
+                            syscon::logger::LogInfo("Initializing %s ...", mouse->name);
+                            controllers::Insert(mouse->Make(std::make_unique<SwitchUSBDevice>(interfaces, 1), config));
+                        }
+                        else if (driver != std::end(Drivers))
                         {
                             syscon::logger::LogInfo("Initializing %s controller (Interface count: %d) ...", driver->name, total_entries);
                             controllers::Insert(driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config));

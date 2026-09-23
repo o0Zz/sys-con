@@ -1,7 +1,7 @@
 #pragma once
 
 #include <switch.h>
-#include "IController.h"
+#include "IGamepad.h"
 #include "SwitchVirtualGamepadHandler.h"
 
 // HDLS stands for "HID (Human Interface Devices) Device List Setting".
@@ -38,7 +38,7 @@ protected:
 
 public:
     // Initialize the class with specified controller
-    SwitchHDLHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
+    SwitchHDLHandler(std::unique_ptr<controllerlib::IGamepad> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
     virtual ~SwitchHDLHandler();
 
     // Initialize controller handler, HDL state

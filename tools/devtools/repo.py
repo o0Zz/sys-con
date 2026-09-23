@@ -37,8 +37,10 @@ AFE_PARSER = os.path.join(ROOT, "tools", "AFE_Parser.exe")
 
 
 def _run(args, timeout=60):
+    # git emits UTF-8 whatever the console code page is, and a diff touching a source file
+    # with box drawing or accents is otherwise undecodable on a cp1252 host.
     return subprocess.run(args, capture_output=True, text=True, timeout=timeout,
-                          cwd=ROOT)
+                          cwd=ROOT, encoding="utf-8", errors="replace")
 
 
 @functools.cache

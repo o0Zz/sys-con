@@ -1,4 +1,5 @@
 #include "SwitchMITMManager.h"
+#include "SwitchVirtualHid.h"
 #include "SwitchLogger.h"
 #include <string.h> // memcpy
 #include <algorithm>
@@ -21,6 +22,18 @@ namespace
     constexpr size_t AfterNpadOffset = NpadOffset + NpadSize;
     // Everything past console_six_axis_sensor is unused padding, so it is never mirrored.
     constexpr size_t AfterNpadSize = offsetof(HidSharedMemory, unk_x3C220) - AfterNpadOffset;
+
+    constexpr size_t MouseOffset = offsetof(HidSharedMemory, mouse);
+    constexpr size_t MouseSize = sizeof(HidMouseSharedMemoryFormat);
+    constexpr size_t KeyboardOffset = offsetof(HidSharedMemory, keyboard);
+    constexpr size_t KeyboardSize = sizeof(HidKeyboardSharedMemoryFormat);
+    constexpr size_t AfterKeyboardOffset = KeyboardOffset + KeyboardSize;
+
+    static_assert(KeyboardOffset == MouseOffset + MouseSize, "mouse and keyboard are expected to be adjacent");
+    // memcpy_64 falls off its fast path on anything else.
+    static_assert(MouseOffset % 8 == 0 && MouseSize % 8 == 0 && KeyboardSize % 8 == 0 && (NpadOffset - AfterKeyboardOffset) % 8 == 0);
+
+    constexpr size_t LifoBufferCount = 17;
 
     u8 *ByteAddr(HidSharedMemory *shmem, size_t offset)
     {
@@ -83,6 +96,34 @@ static HidNpadSharedMemoryEntry *FakeNpadEntries()
 {
     HidSharedMemory *fake = static_cast<HidSharedMemory *>(shmemGetAddr(&g_fake_shared_memory));
     return fake != nullptr ? fake->npad.entries : nullptr;
+}
+
+static HidSharedMemory *FakeSharedMemory()
+{
+    return static_cast<HidSharedMemory *>(shmemGetAddr(&g_fake_shared_memory));
+}
+
+template <typename Lifo, typename State>
+static void AppendLifoState(Lifo *lifo, const State &state)
+{
+    u64 current_tail = lifo->header.tail + 1;
+    if (current_tail >= lifo->header.buffer_count)
+        current_tail = 0;
+
+    lifo->storage[current_tail].sampling_number = state.sampling_number;
+    lifo->storage[current_tail].state = state;
+
+    __atomic_store_n(&lifo->header.tail, current_tail, __ATOMIC_RELEASE);
+
+    if (lifo->header.count < lifo->header.buffer_count)
+        __atomic_store_n(&lifo->header.count, lifo->header.count + 1, __ATOMIC_RELEASE);
+}
+
+template <typename Lifo>
+static void InitializeLifo(Lifo *lifo)
+{
+    memset(lifo, 0, sizeof(*lifo));
+    lifo->header.buffer_count = LifoBufferCount;
 }
 
 static void memcpy_64(void *dest, const void *src, size_t n)
@@ -386,6 +427,12 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
             controller->Clear();
     }
 
+    if (m_keyboard_owned.load())
+        m_keyboard.Reset();
+
+    if (m_mouse_owned.load())
+        m_mouse.Reset();
+
     m_mutex_sharedmemory.lock();
     m_sharedmemory_entry_list.push_back(entry);
     m_mutex_sharedmemory.unlock();
@@ -525,7 +572,16 @@ void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
     HidSharedMemory *real = entry.GetRealAddr();
     HidSharedMemory *fake = entry.GetFakeAddr();
 
-    memcpy_64(fake, real, NpadOffset);
+    memcpy_64(fake, real, MouseOffset);
+
+    // A section sys-con drives is its own, exactly as an owned npad slot is below.
+    if (!m_mouse_owned.load(std::memory_order_relaxed))
+        memcpy_64(ByteAddr(fake, MouseOffset), ByteAddr(real, MouseOffset), MouseSize);
+
+    if (!m_keyboard_owned.load(std::memory_order_relaxed))
+        memcpy_64(ByteAddr(fake, KeyboardOffset), ByteAddr(real, KeyboardOffset), KeyboardSize);
+
+    memcpy_64(ByteAddr(fake, AfterKeyboardOffset), ByteAddr(real, AfterKeyboardOffset), NpadOffset - AfterKeyboardOffset);
     memcpy_64(ByteAddr(fake, AfterNpadOffset), ByteAddr(real, AfterNpadOffset), AfterNpadSize);
 
     for (size_t i = 0; i < NpadEntryCount; i++)
@@ -569,6 +625,12 @@ void HidSharedMemoryManager::OnRun()
                     if (controller != nullptr)
                         controller->Publish();
                 }
+
+                if (m_keyboard_owned.load(std::memory_order_relaxed))
+                    m_keyboard.Publish();
+
+                if (m_mouse_owned.load(std::memory_order_relaxed))
+                    m_mouse.Publish();
             }
         }
 
@@ -607,8 +669,8 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
     internal_state->full_key_color.full_key.main = m_body_color;
     internal_state->full_key_color.full_key.sub = m_buttons_color;
 
-    internal_state->full_key_lifo.header.buffer_count = 17;
-    internal_state->system_ext_lifo.header.buffer_count = 17;
+    internal_state->full_key_lifo.header.buffer_count = LifoBufferCount;
+    internal_state->system_ext_lifo.header.buffer_count = LifoBufferCount;
 
     internal_state->device_type = HidDeviceTypeBits_FullKey;
     internal_state->system_properties.is_abxy_button_oriented = 1;
@@ -622,21 +684,6 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 }
 
 /* ---------------------------------------- */
-
-static void AppendNpadState(HidNpadCommonLifo *lifo, const HidNpadCommonState &state)
-{
-    u64 current_tail = lifo->header.tail + 1;
-    if (current_tail >= lifo->header.buffer_count)
-        current_tail = 0;
-
-    lifo->storage[current_tail].sampling_number = state.sampling_number;
-    lifo->storage[current_tail].state = state;
-
-    __atomic_store_n(&lifo->header.tail, current_tail, __ATOMIC_RELEASE);
-
-    if (lifo->header.count < lifo->header.buffer_count)
-        __atomic_store_n(&lifo->header.count, lifo->header.count + 1, __ATOMIC_RELEASE);
-}
 
 /*
     Called from the manager thread, once per tick per client, whether or not the pad
@@ -657,8 +704,8 @@ void HidSharedMemoryController::Publish()
     state.analog_stick_r = m_analog_stick_r;
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
 
-    AppendNpadState(&internal_state->full_key_lifo, state);
-    AppendNpadState(&internal_state->system_ext_lifo, state);
+    AppendLifoState(&internal_state->full_key_lifo, state);
+    AppendLifoState(&internal_state->system_ext_lifo, state);
 
     m_sampling_number++;
 }
@@ -688,4 +735,110 @@ Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState 
 void HidSharedMemoryController::GetRumble(float *amp_high, float *amp_low) const
 {
     g_HidSharedMemoryManager.GetRumble(m_player_idx, amp_high, amp_low);
+}
+
+/* ---------------------------------------- */
+
+void HidSharedMemoryKeyboard::Reset()
+{
+    HidSharedMemory *fake = FakeSharedMemory();
+    if (fake == nullptr)
+        return;
+
+    InitializeLifo(&fake->keyboard.lifo);
+    m_sampling_number = 0;
+}
+
+void HidSharedMemoryKeyboard::Publish()
+{
+    HidSharedMemory *fake = FakeSharedMemory();
+    if (fake == nullptr)
+        return;
+
+    HidKeyboardState state{};
+    if (!::syscon::hid::VirtualKeyboard::Get().Compose(&state))
+        return;
+
+    state.sampling_number = m_sampling_number++;
+    AppendLifoState(&fake->keyboard.lifo, state);
+}
+
+void HidSharedMemoryMouse::Reset()
+{
+    HidSharedMemory *fake = FakeSharedMemory();
+    if (fake == nullptr)
+        return;
+
+    InitializeLifo(&fake->mouse.lifo);
+    m_sampling_number = 0;
+}
+
+void HidSharedMemoryMouse::Publish()
+{
+    HidSharedMemory *fake = FakeSharedMemory();
+    if (fake == nullptr)
+        return;
+
+    HidMouseState state{};
+    if (!::syscon::hid::VirtualMouse::Get().Drain(&state))
+        return;
+
+    state.sampling_number = m_sampling_number++;
+    AppendLifoState(&fake->mouse.lifo, state);
+}
+
+/* ---------------------------------------- */
+
+Result HidSharedMemoryManager::AttachKeyboard()
+{
+    std::lock_guard<std::recursive_mutex> controller_lock(m_mutex_controller);
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+
+    if (m_keyboard_owned.load())
+    {
+        ::syscon::logger::LogError("HidSharedMemoryManager::AttachKeyboard a keyboard is already attached !");
+        return MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
+    }
+
+    m_keyboard_owned.store(true);
+    m_keyboard.Reset();
+
+    ::syscon::logger::LogInfo("HidSharedMemoryManager::AttachKeyboard keyboard attached !");
+    return 0;
+}
+
+void HidSharedMemoryManager::DetachKeyboard()
+{
+    std::lock_guard<std::recursive_mutex> controller_lock(m_mutex_controller);
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+
+    // Stop owning it first: the next mirror tick then restores the console's own keyboard
+    // view, so a real USB keyboard keeps working once sys-con's is unplugged.
+    m_keyboard_owned.store(false);
+}
+
+Result HidSharedMemoryManager::AttachMouse()
+{
+    std::lock_guard<std::recursive_mutex> controller_lock(m_mutex_controller);
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+
+    if (m_mouse_owned.load())
+    {
+        ::syscon::logger::LogError("HidSharedMemoryManager::AttachMouse a mouse is already attached !");
+        return MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
+    }
+
+    m_mouse_owned.store(true);
+    m_mouse.Reset();
+
+    ::syscon::logger::LogInfo("HidSharedMemoryManager::AttachMouse mouse attached !");
+    return 0;
+}
+
+void HidSharedMemoryManager::DetachMouse()
+{
+    std::lock_guard<std::recursive_mutex> controller_lock(m_mutex_controller);
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+
+    m_mouse_owned.store(false);
 }

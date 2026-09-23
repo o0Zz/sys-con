@@ -108,6 +108,10 @@ set(SRC_FILES
     drivers/BaseController.cpp
     drivers/Dualshock3Controller.cpp
     drivers/GenericHIDController.cpp
+    drivers/HIDKeyboardController.cpp
+    drivers/HIDMouseController.cpp
+    drivers/HIDProtocol.cpp
+    drivers/UsbPipeSet.cpp
     drivers/NetworkController.cpp
     drivers/SInputController.cpp
     drivers/SteamController2026.cpp
@@ -129,14 +133,22 @@ set(HEADER_FILES
     ControllerConfig.h
     ControllerTypes.h
     Controllers.h
-    IController.h
+    IGamepad.h
+    IKeyboard.h
+    IMouse.h
     ILogger.h
+    InputDeviceBase.h
+    InputState.h
     IUSBDevice.h
     IUSBEndpoint.h
     IUSBInterface.h
     drivers/BaseController.h
     drivers/Dualshock3Controller.h
     drivers/GenericHIDController.h
+    drivers/HIDKeyboardController.h
+    drivers/HIDMouseController.h
+    drivers/HIDProtocol.h
+    drivers/UsbPipeSet.h
     drivers/NetworkController.h
     drivers/SInputController.h
     drivers/SteamController2026.h

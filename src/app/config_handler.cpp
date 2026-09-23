@@ -344,6 +344,8 @@ namespace syscon::config
                 ini_data->controller_config->outputMaxPacketSize = atoi(value);
             else if (nameStr == "controller_type")
                 ini_data->controller_config->controllerType = stringToControllerType(value);
+            else if (nameStr == "mouse_sensitivity")
+                ini_data->controller_config->mouseSensitivityPercent = (uint16_t)atoi(value);
             else if (nameStr.starts_with("simulate_"))
             {
                 GamepadButton btn = stringToButton(nameStr.substr(9).c_str());
@@ -652,17 +654,35 @@ namespace syscon::config
         return 0;
     }
 
-    int LoadControllerConfig(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile)
+    /*
+        The baseline layer is gamepad-shaped -- deadzones, stick bindings, button pins,
+        colours -- so a keyboard or a mouse takes its own instead of [default].
+    */
+    static const char *BaselineSection(controllerlib::InputDeviceKind kind)
+    {
+        switch (kind)
+        {
+            case controllerlib::InputDeviceKind::Keyboard:
+                return "keyboard";
+            case controllerlib::InputDeviceKind::Mouse:
+                return "mouse";
+            case controllerlib::InputDeviceKind::Gamepad:
+                break;
+        }
+        return "default";
+    }
+
+    int LoadControllerConfig(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile, controllerlib::InputDeviceKind kind)
     {
         ControllerVidPid controllerVidPid(vendor_id, product_id);
-        ConfigINIData cfg_default("default", config);
+        ConfigINIData cfg_default(BaselineSection(kind), config);
         ConfigINIData cfg_controller(controllerVidPid, config);
 
         std::string contents;
         if (!ReadConfigFile(configFullPath, &contents))
             return -1;
 
-        syscon::logger::LogDebug("Loading controller config: '%s' [default] ...", configFullPath.c_str());
+        syscon::logger::LogDebug("Loading controller config: '%s' [%s] ...", configFullPath.c_str(), BaselineSection(kind));
 
         int rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_default);
         if (rc)
@@ -705,6 +725,12 @@ namespace syscon::config
             rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
             if (rc)
                 return rc;
+        }
+
+        if (kind != controllerlib::InputDeviceKind::Gamepad)
+        {
+            syscon::logger::LogInfo("%s successfully loaded !", kind == controllerlib::InputDeviceKind::Keyboard ? "Keyboard" : "Mouse");
+            return 0;
         }
 
         if (config->buttonsPin[GamepadButton::B][0] == 0 && config->buttonsPin[GamepadButton::A][0] == 0 && config->buttonsPin[GamepadButton::Y][0] == 0 && config->buttonsPin[GamepadButton::X][0] == 0)

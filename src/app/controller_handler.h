@@ -1,6 +1,8 @@
 #pragma once
 
-#include "IController.h"
+#include "IGamepad.h"
+#include "IKeyboard.h"
+#include "IMouse.h"
 #include "config_handler.h"
 #include <switch.h>
 namespace syscon::controllers
@@ -9,8 +11,11 @@ namespace syscon::controllers
 
     // removable=false keeps RemoveAllNonPlugged() away from the handler, for a controller that
     // did not come from USB and so has no usbHs interface to be found among the plugged ones.
-    // See SwitchVirtualGamepadHandler::SetRemovable.
-    Result Insert(std::unique_ptr<controllerlib::IController> &&controllerPtr, bool removable = true);
+    // See SwitchVirtualDeviceHandler::SetRemovable.
+    Result Insert(std::unique_ptr<controllerlib::IGamepad> &&gamepadPtr, bool removable = true);
+    Result Insert(std::unique_ptr<controllerlib::IKeyboard> &&keyboardPtr, bool removable = true);
+    Result Insert(std::unique_ptr<controllerlib::IMouse> &&mousePtr, bool removable = true);
+
     void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged);
 
     void SetPollingParameters(int32_t _polling_timeout_ms, s8 _thread_priority);

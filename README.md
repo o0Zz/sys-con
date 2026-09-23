@@ -49,7 +49,7 @@ Reboot the Nintendo Switch.
 - [x] Network controller over UDP, for scripted input during testing (off by default)
 - [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
 - [ ] Motion controls
-- [ ] HID keyboard / mouse support
+- [x] HID keyboard and mouse passthrough (a USB keyboard/mouse appears to the console as one)
 
 ## Supported controller
 - [x] All PC Controllers
@@ -58,6 +58,7 @@ Reboot the Nintendo Switch.
 - [x] Steam Controllers
 - [x] [SInput](https://github.com/HandHeldLegend/SInput-HID) gamepads (Hand Held Legend ProGCC / GC Ultimate, Void Gaming, ...)
 - [x] Wheels
+- [x] USB keyboards and mice
 
 A complete list of tested controller is available 
 [here](https://github.com/o0Zz/sys-con/blob/master/doc/TestedControllers.md)
@@ -281,6 +282,36 @@ Capture a rumble report from the PC driver with Wireshark
 not in `config.ini` yet.
 
 Rumble is only delivered to the pad in `mode=mitm`.
+
+## Keyboard and mouse
+
+A USB keyboard or mouse is published to the console **as a keyboard or a mouse** - scan codes
+and mouse deltas pass straight through - not mapped onto a virtual gamepad. There is nothing
+to configure for a normal device: sys-con recognises it from its USB boot-protocol descriptor
+and loads the `[keyboard]` or `[mouse]` profile.
+
+A device that does not declare boot protocol (some wireless dongles, and the extra NKRO or
+macro interfaces of gaming keyboards) is not recognised automatically. Point it at the right
+driver by hand:
+
+```
+[046d-c52b]
+profile=keyboard
+```
+
+Mouse pointer speed is a percentage applied to the raw USB counts:
+
+```
+[mouse]
+mouse_sensitivity=100
+```
+
+Both `mode=hiddbg` and `mode=mitm` are supported, but two limits are inherent to hiddbg's
+auto-pilot commands and do not apply to `mode=mitm`:
+
+- horizontal scroll is not representable, only vertical;
+- one keyboard state is published per poll, so a press and release inside the same 10 ms
+  window can be lost.
 
 ## Network controller (for testing)
 sys-con can present a controller that is driven from a PC over the network instead of by

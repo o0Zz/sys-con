@@ -2,7 +2,7 @@
 
 #include <switch.h>
 
-#include "IController.h"
+#include "IGamepad.h"
 
 #include <vector>
 #include <memory>
@@ -88,6 +88,42 @@ private:
 
 /* ------------------------------------------------ */
 
+/*
+    The console has exactly one keyboard view and one mouse view, so these are single objects
+    rather than a per-device list. What several physical devices look like merged into one
+    state is decided in syscon::hid::VirtualKeyboard / VirtualMouse; this only paints it.
+*/
+class HidSharedMemoryKeyboard
+{
+public:
+    /*
+        Empties the lifo and restarts the sampling numbers, which has to happen the moment
+        sys-con takes the section over. The fake shared memory is seeded from the real one,
+        so the lifo already carries the console's own keyboard samples; appending ours after
+        them leaves a gap, and libnx's _hidGetStates restarts its read from scratch whenever
+        two consecutive entries differ by anything but one -- an unbounded retry loop inside
+        the mitm'd process. An empty lifo is the one state a reader always copes with.
+    */
+    void Reset();
+    void Publish();
+
+private:
+    // Never skipped between a Reset and the next one.
+    u64 m_sampling_number = 0;
+};
+
+class HidSharedMemoryMouse
+{
+public:
+    void Reset();
+    void Publish();
+
+private:
+    u64 m_sampling_number = 0;
+};
+
+/* ------------------------------------------------ */
+
 class HidSharedMemoryManager
 {
     friend void HidSharedMemoryManagerThreadFunc(void *arg);
@@ -104,6 +140,12 @@ public:
     // shared memory has to override.
     std::shared_ptr<HidSharedMemoryController> AttachControllerAt(uint8_t player_idx, u32 body_color, u32 buttons_color);
     void DetachController(std::shared_ptr<HidSharedMemoryController> controller);
+
+    // One keyboard and one mouse; a second attach is refused rather than merged here.
+    Result AttachKeyboard();
+    void DetachKeyboard();
+    Result AttachMouse();
+    void DetachMouse();
 
     /*
         The vibration side of the manager takes no lock, and nothing below may be made to.
@@ -157,6 +199,13 @@ protected:
     };
 
     std::array<std::atomic<bool>, 8> m_player_owned;
+
+    // Read by the mirror thread without a lock, like m_player_owned.
+    std::atomic<bool> m_keyboard_owned{false};
+    std::atomic<bool> m_mouse_owned{false};
+
+    HidSharedMemoryKeyboard m_keyboard;
+    HidSharedMemoryMouse m_mouse;
     std::array<VibrationSlot, 8 * HidSharedMemoryController::VibrationDeviceCount> m_vibration;
 
     std::recursive_mutex m_mutex_sharedmemory;

@@ -33,16 +33,20 @@ and becomes a fourth submodule, exactly as HIDDataInterpreter did.
                    │  config_handler · logger · psc_module       │  config, logging, sleep/wake
                    │  network_module                             │  the network pad (opt-in)
                    └───────────────┬─────────────────────────────┘
-                                   │ IController, ILogger, IFileManager
+                                   │ IGamepad/IKeyboard/IMouse, ILogger, IFileManager
                    ┌───────────────┴─────────────────────────────┐
-src/controllerlib/ │  BaseController  +  11 drivers (drivers/)   │  standalone library.
-                   │  IUSBDevice · IUSBInterface · IUSBEndpoint  │  No libnx, no ams, no sys-con.
+src/controllerlib/ │  BaseController + 11 drivers (drivers/)     │  standalone library.
+                   │  HIDKeyboardController · HIDMouseController │  No libnx, no ams, no sys-con.
+                   │  IUSBDevice · IUSBInterface · IUSBEndpoint  │
                    └───────────────┬─────────────────────────────┘
                                    │ implemented by
                    ┌───────────────┴─────────────────────────────┐
    src/platform/   │  SwitchUSBDevice/Interface/Endpoint         │  libnx, both flavours
                    │  UdpDevice · UdpInterface · UdpEndpoint     │  a socket, shaped like USB
-                   │  SwitchVirtualGamepadHandler                │  the polling thread
+                   │  SwitchVirtualDeviceHandler                 │  the polling thread
+                   │  SwitchVirtualGamepadHandler                │  gamepad specifics
+                   │  SwitchKeyboardHandler · SwitchMouseHandler │  keyboard and mouse
+                   │  SwitchVirtualHid · SwitchAutoPilotHid      │  the merged kb/mouse state
                    │  SwitchHDLHandler · SwitchMITMHandler       │  both handlers, both flavours
                    ├─────────────────────────────────────────────┤
      …/libnx/      │  LibnxRuntime · sm_mitm · HidMitmServer     │  ATMOSPHERE=0 only
@@ -64,7 +68,7 @@ standalone on every push. Give it a dependency on anything in `src/app/` or `src
 and that job fails.
 
 Everything the library declares lives in `namespace controllerlib`. sys-con's headers
-qualify (`controllerlib::Status`, `controllerlib::IController`); its `.cpp` files open the
+qualify (`controllerlib::Status`, `controllerlib::IGamepad`); its `.cpp` files open the
 namespace with `using namespace controllerlib;` after their includes, so a sys-con header
 never re-exports the library into whatever includes it. `src/platform/HorizonResult.h` is
 where `controllerlib::Status` becomes a Horizon `Result`, and it is the only place the two
@@ -107,6 +111,42 @@ One pass of this runs per controller, per poll, on that controller's own thread:
  SwitchHDLHandler / SwitchMITMHandler    publish to the console as a virtual pad
 ```
 
+### Keyboard and mouse take a different path
+
+A USB keyboard or mouse is published to the console *as* a keyboard or mouse, not mapped onto
+a pad, so it skips the pin/button machinery entirely:
+
+```
+ USB endpoint
+     │  UsbPipeSet::ReadEndpointOnce()
+     ▼
+ HIDKeyboardController / HIDMouseController   HIDKeyboard / HIDMouse decode the report
+     │                                        descriptor fetched at Initialize()
+     ▼  KeyboardState / MouseState            host-independent; no libnx types
+ SwitchKeyboardHandler / SwitchMouseHandler
+     │
+     ▼  syscon::hid::VirtualKeyboard / VirtualMouse   several devices merged into one state
+     │
+     ├─ mode=hiddbg → SwitchAutoPilotHid       hiddbgSet{Keyboard,Mouse}AutoPilotState
+     └─ mode=mitm   → SwitchMITMManager        the mouse/keyboard lifos of the fake shmem
+```
+
+Three read policies, one per shape, all built on `UsbPipeSet::ReadEndpointOnce`:
+
+| device | policy | why |
+|---|---|---|
+| gamepad | keep latest (`ReadEndpointLatest`) | state is absolute; stale frames are worthless |
+| keyboard | one report per read, never coalesced | a press and its release inside one poll window are two states, and dropping either types a key the user did not press |
+| mouse | drain and **sum** | motion is a delta, so discarding a report deletes movement |
+
+The console has exactly one keyboard view and one mouse view, which is why the merge across
+devices lives in `SwitchVirtualHid.{h,cpp}` rather than in either publisher — both need the
+same answer. Two limits belong to `mode=hiddbg` and not to `mode=mitm`:
+`HiddbgMouseAutoPilotState` has a single wheel field, and only one keyboard state can be
+pushed per tick.
+
+---
+
 ### The two button index spaces
 
 This trips up nearly everyone, so it is worth stating plainly. There are **two different
@@ -137,7 +177,8 @@ Two consequences to be careful about:
 | main | `main.cpp` | — | init, then waits |
 | USB event | `usb_module.cpp` | `0x3A`, any core | waits on USB events, probes interfaces, builds controllers |
 | USB interface change | `usb_module.cpp` | `0x2C`, any core | notices unplugs, calls `RemoveAllNonPlugged` |
-| per-controller polling | `SwitchVirtualGamepadHandler::InitThread` | config `polling_thread_priority`, **core 3** | the pipeline above, one thread per controller |
+| per-device polling | `SwitchVirtualDeviceHandler::InitThread` | config `polling_thread_priority`, **core 3** | the pipeline above, one thread per device |
+| hid auto-pilot publisher | `SwitchAutoPilotHid.cpp`; `mode=hiddbg` with a keyboard or mouse only | `38`, core 3 | re-pushes the merged keyboard/mouse state at 200 Hz |
 | PSC | `psc_module.cpp` | `0x2C`, any core | sleep/wake; calls `controllers::Clear()` |
 | HID MITM | `HidMitmServer.cpp` (libnx) / `HidMitmModule.cpp` (ams); `mode=mitm` only | `0x20`/`20`, core 3 | serves the MITM'd `hid` IPC |
 
@@ -306,7 +347,7 @@ Three things about it are easy to get wrong:
   transfer memory and `tmemCreate` takes it from the process heap, which is 512 KiB in total —
   so it does not merely waste memory, it fails. Zeroing the TCP buffers and setting
   `sb_efficiency = 1` brings it to 12 KiB. Do not "fix" a socket problem by enlarging this.
-- **The pad opts out of `RemoveAllNonPlugged`** (`SwitchVirtualGamepadHandler::SetRemovable`).
+- **The pad opts out of `RemoveAllNonPlugged`** (`SwitchVirtualDeviceHandler::SetRemovable`).
   That function decides "unplugged" by looking for usbHs interface IDs, which this pad has
   none of, so it would otherwise be destroyed the first time a real device was plugged in.
 - **Sleep destroys it and nothing re-creates it.** Real controllers come back because

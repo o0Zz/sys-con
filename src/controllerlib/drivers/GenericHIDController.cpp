@@ -1,24 +1,11 @@
 #include "drivers/GenericHIDController.h"
+#include "drivers/HIDProtocol.h"
 #include "HIDReportDescriptor.h"
 #include "HIDJoystick.h"
 #include <string.h>
 
-#define USB_DT_REPORT              0x22
-#define USB_REQUEST_GET_DESCRIPTOR 0x06
-#define USB_REQUEST_SET_IDLE       0x0A
-
 namespace controllerlib
 {
-    enum usb_request_recipient
-    {
-        USB_RECIPIENT_DEVICE = 0x00,
-        USB_RECIPIENT_INTERFACE = 0x01,
-        USB_RECIPIENT_ENDPOINT = 0x02,
-        USB_RECIPIENT_OTHER = 0x03,
-    };
-
-    // https://www.usb.org/sites/default/files/documents/hid1_11.pdf  p55
-
     GenericHIDController::GenericHIDController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
         : BaseController(std::move(device), config, std::move(logger)),
           m_joystick_count(0)
@@ -40,13 +27,11 @@ namespace controllerlib
         uint16_t size = sizeof(buffer);
         // https://www.usb.org/sites/default/files/hid1_11.pdf
 
-        /// SET_IDLE
-        result = m_interfaces[0]->ControlTransferOutput((uint8_t)IUSBEndpoint::USB_ENDPOINT_OUT | 0x20 | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_SET_IDLE, 0, m_interfaces[0]->GetDescriptor()->bInterfaceNumber, nullptr, 0);
+        result = hid::SetIdle(m_interfaces[0], 0, 0);
         if (result != Status::Success)
             m_logger->Log(LogLevel::Error, "GenericHIDController[%04x-%04x] SET_IDLE failed, continue anyway ...", m_device->GetVendor(), m_device->GetProduct());
 
-        // Get HID report descriptor
-        result = m_interfaces[0]->ControlTransferInput((uint8_t)IUSBEndpoint::USB_ENDPOINT_IN | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_GET_DESCRIPTOR, (USB_DT_REPORT << 8), m_interfaces[0]->GetDescriptor()->bInterfaceNumber, buffer, &size);
+        result = hid::GetReportDescriptor(m_interfaces[0], buffer, &size);
         if (result != Status::Success)
         {
             m_logger->Log(LogLevel::Error, "GenericHIDController[%04x-%04x] Failed to get HID report descriptor", m_device->GetVendor(), m_device->GetProduct());

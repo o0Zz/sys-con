@@ -23,6 +23,8 @@ set(TEST_FILES
     core/test_rumble_template.cpp
     core/test_status.cpp
     drivers/test_dualshock3.cpp
+    drivers/test_hid_keyboard.cpp
+    drivers/test_hid_mouse.cpp
     drivers/test_network_controller.cpp
     drivers/test_report_bounds.cpp
     drivers/test_sinput.cpp
@@ -37,6 +39,7 @@ set(TEST_FILES
 
 set(MOCK_FILES
     mocks/Device.h
+    mocks/HIDDevice.h
     mocks/Logger.h
     mocks/MemoryFileManager.h
     mocks/USBEndpoint.h

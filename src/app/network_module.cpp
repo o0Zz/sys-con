@@ -88,7 +88,7 @@ namespace syscon::networkpad
             // and appending another one to the user's file would be noise, not help.
             const int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config,
                                                                  UdpDevice::VendorId, UdpDevice::ProductId,
-                                                                 false, "network");
+                                                                 false, "network", controllerlib::InputDeviceKind::Gamepad);
 
             if (rc != 0 || config.driver != "network")
             {

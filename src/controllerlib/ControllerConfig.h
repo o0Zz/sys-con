@@ -86,6 +86,9 @@ namespace controllerlib
         uint32_t outputMaxPacketSize{0};
 
         ControllerType controllerType{ControllerType_Pro};
+
+        // Applied to the raw USB deltas of a mouse before they leave the driver.
+        uint16_t mouseSensitivityPercent{100};
         // EnumArray, so these can only be indexed with an AnalogAxis, and the braced value
         // initializes every element (a plain array would set only element 0).
         AnalogPercentages analogDeadzonePercent{0};

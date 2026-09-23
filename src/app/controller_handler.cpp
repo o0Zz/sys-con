@@ -5,6 +5,8 @@
 // runtime from the config `mode` (see SetMode / g_mode below).
 #include "SwitchMITMHandler.h"
 #include "SwitchHDLHandler.h"
+#include "SwitchKeyboardHandler.h"
+#include "SwitchMouseHandler.h"
 
 #include "SwitchUSBInterface.h"
 #include <algorithm>
@@ -20,7 +22,7 @@ namespace syscon::controllers
     namespace
     {
         constexpr size_t MaxControllerHandlersSize = 10;
-        std::vector<std::unique_ptr<SwitchVirtualGamepadHandler>> controllerHandlers;
+        std::vector<std::unique_ptr<SwitchVirtualDeviceHandler>> controllerHandlers;
         std::mutex controllerMutex;
         int32_t polling_timeout_ms = 0;
         int8_t polling_thread_priority = 0x30;
@@ -34,30 +36,51 @@ namespace syscon::controllers
         return controllerHandlers.size() >= MaxControllerHandlersSize;
     }
 
-    Result Insert(std::unique_ptr<IController> &&controllerPtr, bool removable)
+    namespace
     {
-        std::unique_ptr<SwitchVirtualGamepadHandler> switchHandler;
+        Result InsertHandler(std::unique_ptr<SwitchVirtualDeviceHandler> &&switchHandler, bool removable)
+        {
+            switchHandler->SetRemovable(removable);
+
+            const uint16_t vendor = switchHandler->GetDevice()->GetVendor();
+            const uint16_t product = switchHandler->GetDevice()->GetProduct();
+
+            Result rc = switchHandler->Initialize();
+            if (R_SUCCEEDED(rc))
+            {
+                syscon::logger::LogInfo("Device[%04x-%04x] plugged !", vendor, product);
+
+                std::lock_guard<std::mutex> scoped_lock(controllerMutex);
+                controllerHandlers.push_back(std::move(switchHandler));
+            }
+            else
+            {
+                syscon::logger::LogError("Device[%04x-%04x] Failed to initialize device: Error: 0x%X (Module: 0x%X, Desc: 0x%X)", vendor, product, rc, R_MODULE(rc), R_DESCRIPTION(rc));
+            }
+
+            return rc;
+        }
+    } // namespace
+
+    Result Insert(std::unique_ptr<IGamepad> &&gamepadPtr, bool removable)
+    {
+        std::unique_ptr<SwitchVirtualDeviceHandler> switchHandler;
         if (virtual_pad_mode == config::VirtualPadMode::MITM)
-            switchHandler = std::make_unique<SwitchMITMHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+            switchHandler = std::make_unique<SwitchMITMHandler>(std::move(gamepadPtr), polling_timeout_ms, polling_thread_priority);
         else
-            switchHandler = std::make_unique<SwitchHDLHandler>(std::move(controllerPtr), polling_timeout_ms, polling_thread_priority);
+            switchHandler = std::make_unique<SwitchHDLHandler>(std::move(gamepadPtr), polling_timeout_ms, polling_thread_priority);
 
-        switchHandler->SetRemovable(removable);
+        return InsertHandler(std::move(switchHandler), removable);
+    }
 
-        Result rc = switchHandler->Initialize();
-        if (R_SUCCEEDED(rc))
-        {
-            syscon::logger::LogInfo("Controller[%04x-%04x] plugged !", switchHandler->GetController()->GetDevice()->GetVendor(), switchHandler->GetController()->GetDevice()->GetProduct());
+    Result Insert(std::unique_ptr<IKeyboard> &&keyboardPtr, bool removable)
+    {
+        return InsertHandler(std::make_unique<SwitchKeyboardHandler>(std::move(keyboardPtr), virtual_pad_mode, polling_timeout_ms, polling_thread_priority), removable);
+    }
 
-            std::lock_guard<std::mutex> scoped_lock(controllerMutex);
-            controllerHandlers.push_back(std::move(switchHandler));
-        }
-        else
-        {
-            syscon::logger::LogError("Controller[%04x-%04x] Failed to initialize controller: Error: 0x%X (Module: 0x%X, Desc: 0x%X)", switchHandler->GetController()->GetDevice()->GetVendor(), switchHandler->GetController()->GetDevice()->GetProduct(), rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        }
-
-        return rc;
+    Result Insert(std::unique_ptr<IMouse> &&mousePtr, bool removable)
+    {
+        return InsertHandler(std::make_unique<SwitchMouseHandler>(std::move(mousePtr), virtual_pad_mode, polling_timeout_ms, polling_thread_priority), removable);
     }
 
     void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged)
@@ -67,7 +90,7 @@ namespace syscon::controllers
             run while controllerMutex is held. Move the unplugged handlers into this local
             vector under the lock and let it destroy them once the lock is released.
         */
-        std::vector<std::unique_ptr<SwitchVirtualGamepadHandler>> unpluggedHandlers;
+        std::vector<std::unique_ptr<SwitchVirtualDeviceHandler>> unpluggedHandlers;
 
         {
             std::lock_guard<std::mutex> scoped_lock(controllerMutex);
@@ -82,7 +105,7 @@ namespace syscon::controllers
 
                 bool found = false;
 
-                for (auto &&ptr : (*it)->GetController()->GetDevice()->GetInterfaces())
+                for (auto &&ptr : (*it)->GetDevice()->GetInterfaces())
                 {
                     for (auto &&interfaceID : interfaceIDsPlugged)
                     {
@@ -102,7 +125,7 @@ namespace syscon::controllers
                     continue;
                 }
 
-                syscon::logger::LogInfo("Controller[%04x-%04x] unplugged !", (*it)->GetController()->GetDevice()->GetVendor(), (*it)->GetController()->GetDevice()->GetProduct());
+                syscon::logger::LogInfo("Device[%04x-%04x] unplugged !", (*it)->GetDevice()->GetVendor(), (*it)->GetDevice()->GetProduct());
 
                 unpluggedHandlers.push_back(std::move(*it));
                 it = controllerHandlers.erase(it);

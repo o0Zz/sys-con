@@ -16,7 +16,7 @@ namespace controllerlib
         This is deliberately distinct from a physical pin (see PinId): a driver reports pins, a
         host's configuration maps pins onto these, and only these leave the library. Scoping the
         enum also keeps NONE, X, A, B, Y, L, R, ZL, ZR, MINUS, PLUS, HOME, CAPTURE and COUNT out
-        of the global namespace of every translation unit that includes IController.h.
+        of the global namespace of every translation unit that includes IGamepad.h.
     */
     enum class GamepadButton : uint8_t
     {

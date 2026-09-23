@@ -9,7 +9,7 @@
 namespace controllerlib
 {
     // What a driver can do beyond reporting buttons and axes; extend as drivers grow
-    // (accelerometer, gyro, ...). Queried through IController::Support().
+    // (accelerometer, gyro, ...). Queried through IGamepad::Support().
     enum ControllerFeature : uint8_t
     {
         SUPPORTS_RUMBLE,
