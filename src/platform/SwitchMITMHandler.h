@@ -22,6 +22,8 @@ private:
     std::array<HiddbgHdlsHandle, CONTROLLER_MAX_INPUTS> m_hdlsHandle{};
     std::array<u64, CONTROLLER_MAX_INPUTS> m_hdlsButtons{};
 
+    u64 m_lastActivityTick = 0;
+
 protected:
     bool IsControllerAttached(uint16_t input_idx) override;
     Result DetachController(uint16_t input_idx) override;

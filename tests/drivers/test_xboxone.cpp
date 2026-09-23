@@ -30,7 +30,7 @@ TEST(Controller, test_xboxone_unknown_controller_init)
         .WillOnce(testing::Return(Status::Success));
 
     XboxOneController controller(std::make_unique<MockDevice>(0x1234, 0x1234, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
-    controller.Initialize();
+    EXPECT_EQ(controller.Initialize(), Status::Success);
 }
 /*
 TEST(Controller, test_xboxone_pdp_controller_init)
@@ -61,7 +61,7 @@ TEST(Controller, test_xboxone_pdp_controller_init)
         .WillOnce(testing::Return(Status::Success));
 
     XboxOneController controller(std::make_unique<MockDevice>(0x1234, 0x1234, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
-    controller.Initialize();
+    EXPECT_EQ(controller.Initialize(), Status::Success);
 }
 */
 TEST(Controller, test_xboxone_s_init)
@@ -78,5 +78,5 @@ TEST(Controller, test_xboxone_s_init)
         .WillRepeatedly(testing::Return(Status::Success));
 
     XboxOneController controller(std::make_unique<MockDevice>(0x045e, 0x0b00, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
-    controller.Initialize();
+    EXPECT_EQ(controller.Initialize(), Status::Success);
 }

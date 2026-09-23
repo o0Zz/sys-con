@@ -3,6 +3,7 @@
 #include "SwitchLogger.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <chrono>
 #include <mutex>
 
@@ -13,6 +14,38 @@ namespace
     // How long the console may take to publish the npad for a device hiddbg just created.
     constexpr int NpadAppearRetries = 100;
     constexpr u64 NpadAppearDelayNs = 10000000ULL; // 10 ms
+
+    /*
+        A rate limit on idle:sys, not the thing that keeps the console awake - that is the pad
+        still not being at rest on the next tick. Without it a pad polling at 125 Hz would
+        issue an IPC every 8 ms.
+    */
+    constexpr u64 ActivityReportPeriodNs = 1000000000ULL; // 1 s
+
+    // ~25% of the +-32767 range: far enough out that only a deliberate push counts.
+    constexpr int32_t ActivityStickThreshold = 8000;
+
+    /*
+        A pad that is not at rest means somebody is there. Reporting on *change* instead would
+        miss the case this exists for: a held direction or button produces byte-identical HID
+        reports for as long as it is held, so the console would dim under the user's thumb.
+
+        The stick threshold is not tidiness. analogDeadzonePercent defaults to 0 and the
+        [network] profile ships with deadzone_x = 0, and outside a deadzone the raw value is
+        passed through - so a resting stick's noise never reads exactly zero, and a bare != 0
+        test would hold the console awake with nothing touching the pad. Motion is left out
+        entirely for the same reason: a pad on a table drifts forever.
+    */
+    bool IsUserActive(const SwitchPadState &state)
+    {
+        if (state.buttons != 0)
+            return true;
+
+        return std::abs(state.analog_stick_l.x) > ActivityStickThreshold ||
+               std::abs(state.analog_stick_l.y) > ActivityStickThreshold ||
+               std::abs(state.analog_stick_r.x) > ActivityStickThreshold ||
+               std::abs(state.analog_stick_r.y) > ActivityStickThreshold;
+    }
 
     /*
         Two handlers attaching at the same time would each diff the npad mask across the
@@ -207,6 +240,21 @@ Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uin
 {
     if (!IsControllerAttached(input_idx))
         return 0;
+
+    // Read from `state`, before Home and Capture are split off below: pressing either is still
+    // a user being present.
+    if (IsUserActive(state))
+    {
+        u64 now = armGetSystemTick();
+        if (armTicksToNs(now - m_lastActivityTick) >= ActivityReportPeriodNs)
+        {
+            m_lastActivityTick = now;
+
+            Result rc = idlesysReportUserIsActive();
+            if (R_FAILED(rc))
+                syscon::logger::LogError("SwitchMITMHandler idlesysReportUserIsActive failed: 0x%X", rc);
+        }
+    }
 
     /*
         Home and Capture only exist as hiddbg HDLS bits; in npad shared memory the same bits

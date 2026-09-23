@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <cstring>
+
 #include "drivers/SteamController2026.h"
 #include "mocks/Device.h"
 #include "mocks/Logger.h"

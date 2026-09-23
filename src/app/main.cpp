@@ -88,16 +88,6 @@ namespace syscon
         ::syscon::controllers::SetPollingParameters(globalConfig.polling_timeout_ms, globalConfig.polling_thread_priority);
         ::syscon::controllers::SetMode(globalConfig.mode);
 
-        /*
-            Both modes create their pads through hiddbg, because that is what makes hid own
-            the device: only then does the console announce it - player LED, the Controllers
-            screen, and the grip/order screen. MITM mode goes on to override that same npad
-            slot in the shared memory it hands each client, which is where its pad state,
-            and everything else it will want to fake, comes from.
-
-            Opened here rather than in InitializeModules because the console has a single
-            HDLS session and sys-con should hold it no longer than it runs.
-        */
         ::syscon::logger::LogDebug("Initializing hiddbg HDLS ...");
         AbortStep(hiddbgInitialize(), 1);
         g_hiddbg_initialized = true;
@@ -113,6 +103,7 @@ namespace syscon
         {
             ::syscon::logger::LogDebug("Initializing HID MITM (mode=mitm) ...");
             AbortStep(::syscon::hid::mitm::Initialize(), 8);
+            AbortStep(idlesysInitialize(), 9); //Report activity to system
         }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
@@ -134,7 +125,10 @@ namespace syscon
         ::syscon::networkpad::Exit();
 
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
+        {
+            idlesysExit();
             ::syscon::hid::mitm::Finalize();
+        }
 
         if (hdls_attached)
             hiddbgReleaseHdlsWorkBuffer(::SwitchHDLHandler::GetHdlsSessionId());

@@ -3,4 +3,3 @@ mixed controllerlib::LogLevel  with app. => inderr controllerlib should have its
 in ams there is multiple class mitm service etc... while there is no equivalent in libnx anyway to make everything more "generic and similar"
 
 - mitm
-- handle keyboard and mouse
