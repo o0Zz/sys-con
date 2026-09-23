@@ -48,6 +48,9 @@ namespace controllerlib
         rawData->analog[AnalogAxis::Z] = BaseController::Normalize(report.stick_right_x, -32768, 32767);
         rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(report.stick_right_y, -32768, 32767);
 
+        memcpy(rawData->motion.accel, report.accel, sizeof(report.accel));
+        memcpy(rawData->motion.gyro, report.gyro, sizeof(report.gyro));
+
         return Status::Success;
     }
 

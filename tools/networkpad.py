@@ -23,6 +23,7 @@ or from the shell:
     python networkpad.py --host 192.168.1.42 press ZL --hold 2
     python networkpad.py --host 192.168.1.42 stick left 0 1 --hold 1
     python networkpad.py --host 192.168.1.42 sequence A B DPAD_UP
+    python networkpad.py --host 192.168.1.42 --hold 2 motion --gyro 0 3.14 0
     python networkpad.py --host 192.168.1.42
 
 With no command it goes interactive: the terminal is put in raw mode and your keyboard
@@ -31,7 +32,10 @@ Enter is A and Backspace is B. Press ? there for the full map.
 
 The wire format is defined by NetworkPadReport in
 src/controllerlib/drivers/NetworkController.h, which is also where the button numbering
-below comes from. The two have to agree; test_network_report_is_20_bytes pins the size.
+below comes from. The two have to agree; test_network_report_is_44_bytes pins the size.
+
+Motion uses SDL's sensor convention (+X right, +Y up, +Z toward the player; accel in
+m/s^2, gyro in rad/s). At rest the pad reports lying flat: 9.8 m/s^2 up, no rotation.
 """
 
 import argparse
@@ -72,6 +76,10 @@ BUTTONS = {
 # missing sticks until the next one. Sending each change a few times is cheap insurance.
 DEFAULT_REPEAT = 3
 
+STANDARD_GRAVITY = 9.80665
+REST_ACCEL = (0.0, STANDARD_GRAVITY, 0.0)
+NO_ROTATION = (0.0, 0.0, 0.0)
+
 # Matches a real pad's report rate closely enough that held inputs look continuous.
 FRAME_RATE_HZ = 60
 
@@ -89,6 +97,8 @@ class NetworkPad:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._held = set()
         self._sticks = {"left": (0.0, 0.0), "right": (0.0, 0.0)}
+        self._accel = REST_ACCEL
+        self._gyro = NO_ROTATION
         self._connected = True
 
     # -- context manager -------------------------------------------------------------
@@ -115,7 +125,7 @@ class NetworkPad:
         lx, ly = self._sticks["left"]
         rx, ry = self._sticks["right"]
         return struct.pack(
-            "<IBBBBIhhhh",
+            "<IBBBBIhhhh6f",
             MAGIC,
             VERSION,
             0,  # pad_index
@@ -126,6 +136,8 @@ class NetworkPad:
             _axis_to_i16(ly),
             _axis_to_i16(rx),
             _axis_to_i16(ry),
+            *self._accel,
+            *self._gyro,
         )
 
     def send(self, repeat=DEFAULT_REPEAT):
@@ -189,10 +201,24 @@ class NetworkPad:
             self.send()
         return self
 
+    def motion(self, accel=REST_ACCEL, gyro=NO_ROTATION, hold=0.0):
+        """Report accel (m/s^2) and gyro (rad/s); with `hold`, go back to rest afterwards."""
+        self._accel = tuple(float(v) for v in accel)
+        self._gyro = tuple(float(v) for v in gyro)
+        self.send()
+        if hold > 0:
+            self._hold(hold)
+            self._accel = REST_ACCEL
+            self._gyro = NO_ROTATION
+            self.send()
+        return self
+
     def neutral(self):
-        """Release everything and centre both sticks."""
+        """Release everything, centre both sticks and put the pad back at rest."""
         self._held.clear()
         self._sticks = {"left": (0.0, 0.0), "right": (0.0, 0.0)}
+        self._accel = REST_ACCEL
+        self._gyro = NO_ROTATION
         self.send()
         return self
 
@@ -507,6 +533,12 @@ def main(argv=None):
     p_stick.add_argument("x", type=float)
     p_stick.add_argument("y", type=float)
 
+    p_motion = sub.add_parser("motion", help="report accelerometer and gyro values")
+    p_motion.add_argument("--accel", type=float, nargs=3, default=list(REST_ACCEL), metavar=("X", "Y", "Z"),
+                          help="m/s^2 (default: lying flat)")
+    p_motion.add_argument("--gyro", type=float, nargs=3, default=list(NO_ROTATION), metavar=("X", "Y", "Z"),
+                          help="rad/s (default: still)")
+
     p_seq = sub.add_parser("sequence", help="tap each button in turn")
     p_seq.add_argument("buttons", nargs="+")
 
@@ -538,6 +570,8 @@ def main(argv=None):
                 pad.release(*args.buttons)
             elif args.command == "stick":
                 pad.stick(args.side, args.x, args.y, hold=args.hold or 0.0)
+            elif args.command == "motion":
+                pad.motion(args.accel, args.gyro, hold=args.hold or 0.0)
             elif args.command == "sequence":
                 for button in args.buttons:
                     pad.tap(button, hold=args.hold if args.hold is not None else 0.1)

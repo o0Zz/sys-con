@@ -36,6 +36,8 @@ namespace controllerlib
         int16_t stick_left_y;   ///< -32768..32767. Positive is *up* (see [default]'s lstick_up=+Y).
         int16_t stick_right_x;
         int16_t stick_right_y;
+        float accel[3];     ///< m/s^2, in NormalizedMotion's frame: a pad lying flat sends {0, 9.8, 0}.
+        float gyro[3];      ///< rad/s, in NormalizedMotion's frame.
     });
 
     /// 'SCNP', little-endian. Guards against a stray datagram on the port being read as input.
@@ -50,11 +52,7 @@ namespace controllerlib
 
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
-        bool Support(ControllerFeature feature) const override
-        {
-            (void)feature;
-            return false;
-        }
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_MOTION; }
         Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
 
         /*

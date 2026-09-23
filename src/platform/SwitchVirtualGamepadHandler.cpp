@@ -154,9 +154,7 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 {
     uint16_t input_idx = 0;
     NormalizedButtonData buttonData{};
-    u64 buttons = 0;
-    HidAnalogStickState analog_stick_l;
-    HidAnalogStickState analog_stick_r;
+    SwitchPadState state{};
 
     Status read_rc = m_controller->ReadInput(&buttonData, &input_idx, timeout_us);
 
@@ -204,14 +202,18 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     for (const auto &entry : NpadButtons)
     {
         if (buttonData.buttons[entry.button])
-            buttons |= entry.npad_mask;
+            state.buttons |= entry.npad_mask;
     }
 
-    ConvertAxisToSwitchAxis(buttonData.sticks[0].axis_x, buttonData.sticks[0].axis_y, &analog_stick_l.x, &analog_stick_l.y);
-    ConvertAxisToSwitchAxis(buttonData.sticks[1].axis_x, buttonData.sticks[1].axis_y, &analog_stick_r.x, &analog_stick_r.y);
+    ConvertAxisToSwitchAxis(buttonData.sticks[0].axis_x, buttonData.sticks[0].axis_y, &state.analog_stick_l.x, &state.analog_stick_l.y);
+    ConvertAxisToSwitchAxis(buttonData.sticks[1].axis_x, buttonData.sticks[1].axis_y, &state.analog_stick_r.x, &state.analog_stick_r.y);
+
+    state.has_motion = m_controller->Support(SUPPORTS_MOTION);
+    if (state.has_motion)
+        ConvertMotionToSwitchMotion(buttonData.motion, &state.acceleration, &state.angular_velocity);
 
     if (!IsControllerAttached(input_idx) && !m_controllerData[input_idx].m_reattach_controller)
-        m_controllerData[input_idx].m_reattach_controller = (buttons & HidNpadButton_L) && (buttons & HidNpadButton_R); // L+R on the switch allow to re-attach the controller
+        m_controllerData[input_idx].m_reattach_controller = (state.buttons & HidNpadButton_L) && (state.buttons & HidNpadButton_R); // L+R on the switch allow to re-attach the controller
 
     if (m_controllerData[input_idx].m_reattach_controller)
     {
@@ -222,7 +224,7 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
 
     // We get the button inputs from the input packet and update the state of our controller
     syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Updating controller state on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
-    Result res = UpdateControllerState(buttons, analog_stick_l, analog_stick_r, input_idx);
+    Result res = UpdateControllerState(state, input_idx);
 
     s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
     syscon::logger::LogPerf("SwitchVirtualGamepadHandler[%04x-%04x] UpdateInput took: %d us for idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), execution_time_us, input_idx);
@@ -268,6 +270,15 @@ void SwitchVirtualGamepadHandler::ConvertAxisToSwitchAxis(float x, float y, int3
 
     *x_out = (((x + 1.0f) * newRange) / floatRange) + JOYSTICK_MIN;
     *y_out = -((((y + 1.0f) * newRange) / floatRange) + JOYSTICK_MIN);
+}
+
+// SDL's frame (+Y up, +Z toward the player, accel as the reaction to gravity) to Horizon's.
+void SwitchVirtualGamepadHandler::ConvertMotionToSwitchMotion(const NormalizedMotion &motion, HidVector *acceleration, HidVector *angular_velocity)
+{
+    constexpr float RadiansPerRevolution = 2.0f * 3.14159265358979f;
+
+    *acceleration = {-motion.accel[0] / StandardGravity, motion.accel[2] / StandardGravity, -motion.accel[1] / StandardGravity};
+    *angular_velocity = {motion.gyro[0] / RadiansPerRevolution, -motion.gyro[2] / RadiansPerRevolution, motion.gyro[1] / RadiansPerRevolution};
 }
 
 u8 SwitchVirtualGamepadHandler::ControllerTypeToDeviceType(ControllerType type)

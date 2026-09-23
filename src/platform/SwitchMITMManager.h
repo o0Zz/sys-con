@@ -3,6 +3,8 @@
 #include <switch.h>
 
 #include "IController.h"
+#include "SwitchMotion.h"
+#include "SwitchPadState.h"
 
 #include <vector>
 #include <memory>
@@ -64,7 +66,7 @@ public:
 
     // Stores the latest pad state; the manager thread is what writes it into every
     // client's shared memory, at a steady rate the console expects from a real pad.
-    Result Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r);
+    Result Update(const SwitchPadState &state);
 
     // Vibration flows the other way: a mitm'd hid command stores it in the manager and the
     // handler's polling thread drains it into the driver.
@@ -79,9 +81,8 @@ private:
     u32 m_buttons_color;
     u64 m_sampling_number;
 
-    u64 m_buttons;
-    HidAnalogStickState m_analog_stick_l;
-    HidAnalogStickState m_analog_stick_r;
+    SwitchPadState m_state;
+    SwitchMotion m_motion;
 
     void Initialize(HidNpadInternalState *internal_state);
 };

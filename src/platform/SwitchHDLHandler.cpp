@@ -1,5 +1,6 @@
 #include "SwitchHDLHandler.h"
 #include "SwitchLogger.h"
+#include <algorithm>
 #include <cmath>
 #include <chrono>
 
@@ -88,16 +89,41 @@ Result SwitchHDLHandler::DetachController(uint16_t input_idx)
     return 0;
 }
 
-// Sets the state of the class's HDL controller to the state stored in class's hdl.state
-Result SwitchHDLHandler::UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx)
+/*
+    hiddbg takes acceleration and an angle, not angular velocity, so the angle is integrated
+    here. The step is capped so a report gap does not integrate the new rate over the whole gap.
+*/
+static constexpr float MaxMotionStepS = 0.05f;
+
+static void UpdateHdlsMotion(SwitchHDLHandlerData *data, const SwitchPadState &state)
+{
+    HiddbgHdlsState *hdlState = &data->m_hdlState;
+
+    if (!state.has_motion)
+    {
+        hdlState->attribute = 0;
+        return;
+    }
+
+    const u64 now = armGetSystemTick();
+    const float dt_s = data->m_lastMotionTick == 0 ? 0.0f : std::min(armTicksToNs(now - data->m_lastMotionTick) / 1e9f, MaxMotionStepS);
+    data->m_lastMotionTick = now;
+
+    data->m_motion.Step(state.angular_velocity, dt_s);
+
+    hdlState->six_axis_sensor_acceleration = state.acceleration;
+    hdlState->six_axis_sensor_angle = data->m_motion.GetAngle();
+    hdlState->attribute = HiddbgHdlsAttribute_HasVirtualSixAxisSensorAcceleration | HiddbgHdlsAttribute_HasVirtualSixAxisSensorAngle;
+}
+
+Result SwitchHDLHandler::UpdateControllerState(const SwitchPadState &state, uint16_t input_idx)
 {
     HiddbgHdlsState *hdlState = &m_hdlsData[input_idx].m_hdlState;
 
-    hdlState->buttons = buttons;
-    hdlState->analog_stick_l.x = analog_stick_l.x;
-    hdlState->analog_stick_l.y = analog_stick_l.y;
-    hdlState->analog_stick_r.x = analog_stick_r.x;
-    hdlState->analog_stick_r.y = analog_stick_r.y;
+    hdlState->buttons = state.buttons;
+    hdlState->analog_stick_l = state.analog_stick_l;
+    hdlState->analog_stick_r = state.analog_stick_r;
+    UpdateHdlsMotion(&m_hdlsData[input_idx], state);
 
     if (IsControllerAttached(input_idx))
     {

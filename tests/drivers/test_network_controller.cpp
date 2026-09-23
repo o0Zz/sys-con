@@ -26,11 +26,33 @@ namespace
     }
 } // namespace
 
-TEST(Controller, test_network_report_is_20_bytes)
+TEST(Controller, test_network_report_is_44_bytes)
 {
-    // The wire format is shared with tools/networkpad.py, which packs it as '<IBBBBIhhhh'.
+    // The wire format is shared with tools/networkpad.py, which packs it as '<IBBBBIhhhh6f'.
     // If this changes, that script changes with it.
-    EXPECT_EQ(sizeof(NetworkPadReport), 20u);
+    EXPECT_EQ(sizeof(NetworkPadReport), 44u);
+}
+
+TEST(Controller, test_network_controller_passes_motion_through)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+    uint8_t buffer[sizeof(NetworkPadReport)];
+
+    NetworkController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
+
+    NetworkPadReport report = MakeReport();
+    report.accel[1] = StandardGravity;
+    report.gyro[2] = -1.5f;
+    Serialize(report, buffer);
+
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::Success);
+
+    EXPECT_TRUE(controller.Support(SUPPORTS_MOTION));
+    EXPECT_FLOAT_EQ(rawData.motion.accel[0], 0.0f);
+    EXPECT_FLOAT_EQ(rawData.motion.accel[1], StandardGravity);
+    EXPECT_FLOAT_EQ(rawData.motion.gyro[2], -1.5f);
 }
 
 TEST(Controller, test_network_controller_buttons_map_to_identical_pins)
@@ -191,8 +213,9 @@ TEST(Controller, test_network_controller_reports_no_rumble)
 TEST(Controller, test_network_controller_decodes_a_packet_from_networkpad_py)
 {
     /*
-        The exact 20 bytes tools/networkpad.py emits for "A held, left stick pushed fully up",
-        captured from its struct.pack('<IBBBBIhhhh', ...). The script and NetworkPadReport have
+        The exact 44 bytes tools/networkpad.py emits for "A held, left stick pushed fully up,
+        lying flat (1 m/s^2 up) and spinning at 2 rad/s about Z",
+        captured from its struct.pack('<IBBBBIhhhh6f', ...). The script and NetworkPadReport have
         to agree on every offset, and nothing else in the build would notice if they stopped:
         the sender lives outside the C++ world entirely.
     */
@@ -207,6 +230,12 @@ TEST(Controller, test_network_controller_decodes_a_packet_from_networkpad_py)
         0xFF, 0x7F,             // stick_left_y = 32767
         0x00, 0x00,             // stick_right_x = 0
         0x00, 0x00,             // stick_right_y = 0
+        0x00, 0x00, 0x00, 0x00, // accel[0] = 0.0f
+        0x00, 0x00, 0x80, 0x3F, // accel[1] = 1.0f
+        0x00, 0x00, 0x00, 0x00, // accel[2] = 0.0f
+        0x00, 0x00, 0x00, 0x00, // gyro[0] = 0.0f
+        0x00, 0x00, 0x00, 0x00, // gyro[1] = 0.0f
+        0x00, 0x00, 0x00, 0x40, // gyro[2] = 2.0f
     };
     ASSERT_EQ(sizeof(packet), sizeof(NetworkPadReport));
 
@@ -226,4 +255,6 @@ TEST(Controller, test_network_controller_decodes_a_packet_from_networkpad_py)
     EXPECT_FALSE(rawData.buttons[static_cast<uint8_t>(GamepadButton::B)]);
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], 0.0f);
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], 1.0f);
+    EXPECT_FLOAT_EQ(rawData.motion.accel[1], 1.0f);
+    EXPECT_FLOAT_EQ(rawData.motion.gyro[2], 2.0f);
 }

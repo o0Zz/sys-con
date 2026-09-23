@@ -83,6 +83,16 @@ namespace controllerlib
             m_rawInput.buttons[DPAD_DOWN_BUTTON_ID] = controllerData->buttons.dpad_down;
             m_rawInput.buttons[DPAD_LEFT_BUTTON_ID] = controllerData->buttons.dpad_left;
 
+            // +/-2 g and +/-2000 dps full scale, the ranges SDL's steam_triton driver assumes.
+            constexpr float AccelScale = 2.0f * StandardGravity / 32768.0f;
+            constexpr float GyroScale = 2000.0f * RadiansPerDegree / 32768.0f;
+            m_rawInput.motion.accel[0] = controllerData->imu.sAccelX * AccelScale;
+            m_rawInput.motion.accel[1] = controllerData->imu.sAccelZ * AccelScale;
+            m_rawInput.motion.accel[2] = -controllerData->imu.sAccelY * AccelScale;
+            m_rawInput.motion.gyro[0] = controllerData->imu.sGyroX * GyroScale;
+            m_rawInput.motion.gyro[1] = controllerData->imu.sGyroZ * GyroScale;
+            m_rawInput.motion.gyro[2] = -controllerData->imu.sGyroY * GyroScale;
+
             *rawData = m_rawInput;
             if (!m_controllerInfo[*input_idx].m_is_connected)
                 OnControllerConnect(*input_idx);

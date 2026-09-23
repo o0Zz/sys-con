@@ -53,6 +53,7 @@ int main()
     HidVibrationDeviceHandle vibrationDeviceHandle;
     HidVibrationValue vibrationValue;
     HidVibrationValue vibrationValueRead;
+    HidSixAxisSensorHandle sixAxisHandle;
     PadState pad;
 
     PrintConsole *console = consoleInit(NULL);
@@ -65,6 +66,9 @@ int main()
 
     if (R_FAILED(hidInitializeVibrationDevices(&vibrationDeviceHandle, 1, HidNpadIdType_No1, HidNpadStyleTag_NpadFullKey)))
         printf("ERR: hidInitializeVibrationDevices failed !\n");
+
+    if (R_FAILED(hidGetSixAxisSensorHandles(&sixAxisHandle, 1, HidNpadIdType_No1, HidNpadStyleTag_NpadFullKey)) || R_FAILED(hidStartSixAxisSensor(sixAxisHandle)))
+        printf("ERR: six-axis sensor unavailable !\n");
 
     float current_vibration = 0.0;
 
@@ -101,9 +105,17 @@ int main()
                  (uint8_t)(vibrationValueRead.amp_low * 100),
                  isVibrationPermitted ? "Permitted" : "Not Permitted");
 
-        outputBuffer[console->consoleWidth - 1] = '\r';
         outputBuffer[console->consoleWidth] = '\0';
-        printf(outputBuffer);
+        printf("\x1b[7;1H%s", outputBuffer);
+
+        HidSixAxisSensorState sixAxis{};
+        hidGetSixAxisSensorStates(sixAxisHandle, &sixAxis, 1);
+        snprintf(outputBuffer, sizeof(outputBuffer), "Acc [%+.2f %+.2f %+.2f] Gyro [%+.2f %+.2f %+.2f] Angle [%+.2f %+.2f %+.2f]                              ",
+                 sixAxis.acceleration.x, sixAxis.acceleration.y, sixAxis.acceleration.z,
+                 sixAxis.angular_velocity.x, sixAxis.angular_velocity.y, sixAxis.angular_velocity.z,
+                 sixAxis.angle.x, sixAxis.angle.y, sixAxis.angle.z);
+        outputBuffer[console->consoleWidth] = '\0';
+        printf("\x1b[8;1H%s", outputBuffer);
 
         // Update vibrations
         if (buttonDown & HidNpadButton_Plus)
@@ -124,6 +136,7 @@ int main()
         std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Avoid 100% CPU usage
     }
 
+    hidStopSixAxisSensor(sixAxisHandle);
     consoleExit(console);
     return 0;
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include <switch.h>
 #include "IController.h"
+#include "SwitchPadState.h"
 
 class SwitchVirtualGamepadHandlerData
 {
@@ -34,7 +35,7 @@ protected:
 
     // Fills out the HDL state with the specified button data and passes it to HID
     virtual bool IsControllerAttached(uint16_t input_idx) = 0;
-    virtual Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) = 0;
+    virtual Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) = 0;
     virtual Result AttachController(uint16_t input_idx) = 0;
     virtual Result DetachController(uint16_t input_idx) = 0;
 
@@ -61,6 +62,7 @@ public:
     virtual Result UpdateOutput();
 
     static void ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out);
+    static void ConvertMotionToSwitchMotion(const controllerlib::NormalizedMotion &motion, HidVector *acceleration, HidVector *angular_velocity);
     static u8 ControllerTypeToDeviceType(controllerlib::ControllerType type);
 
     // Get the raw controller pointer

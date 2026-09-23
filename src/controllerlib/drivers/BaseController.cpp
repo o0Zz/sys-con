@@ -286,6 +286,8 @@ namespace controllerlib
 
     void BaseController::MapRawInputToNormalized(RawInputData &rawData, NormalizedButtonData *normalData)
     {
+        normalData->motion = rawData.motion;
+
         if (m_logger->IsEnabled(LogLevel::Debug))
         {
             m_logger->Log(LogLevel::Debug, "Controller[%04x-%04x] B1=%d B2=%d B3=%d B4=%d B5=%d B6=%d B7=%d B8=%d B9=%d B10=%d B11=%d B12=%d B13=%d B14=%d B15=%d B16=%d B17=%d B18=%d DPAD(UP=%d RIGHT=%d DOWN=%d LEFT=%d)",

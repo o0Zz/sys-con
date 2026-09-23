@@ -1,9 +1,11 @@
 #include "drivers/SwitchController.h"
+#include <cstring>
 
 #define SWITCH_INPUT_BUFFER_SIZE 64
 
 #define SWITCH_OUTPUT_ID_SUBCOMMAND    0x01
 #define SWITCH_OUTPUT_ID_RUMBLE        0x10
+#define SWITCH_SUBCMD_ENABLE_IMU       0x40
 #define SWITCH_SUBCMD_ENABLE_VIBRATION 0x48
 
 namespace controllerlib
@@ -58,6 +60,17 @@ namespace controllerlib
             0x00, 0x01, 0x40, 0x40,
             SWITCH_SUBCMD_ENABLE_VIBRATION, 0x01};
         (void)m_outPipe[0]->Write(enableVibration, sizeof(enableVibration));
+
+        size = sizeof(buffer);
+        (void)m_inPipe[0]->Read(buffer, &size, 500 * 1000 /*timeout_us*/);
+
+        // 0x30 reports carry zeroed IMU samples until this subcommand turns the sensor on.
+        uint8_t enableIMU[]{
+            SWITCH_OUTPUT_ID_SUBCOMMAND, (uint8_t)(m_packet_counter++ & 0x0F),
+            0x00, 0x01, 0x40, 0x40,
+            0x00, 0x01, 0x40, 0x40,
+            SWITCH_SUBCMD_ENABLE_IMU, 0x01};
+        (void)m_outPipe[0]->Write(enableIMU, sizeof(enableIMU));
 
         return Status::Success;
     }
@@ -125,7 +138,7 @@ namespace controllerlib
         (void)input_idx;
         SwitchButtonData *buttonData = reinterpret_cast<SwitchButtonData *>(buffer);
 
-        if (size < sizeof(SwitchButtonData))
+        if (size < SWITCH_IMU_OFFSET + SWITCH_IMU_SAMPLE_COUNT * sizeof(SwitchIMUSample))
             return Status::UnexpectedData;
 
         if (buttonData->report_id != 0x30)
@@ -179,6 +192,20 @@ namespace controllerlib
         rawData->buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;
         rawData->buttons[DPAD_DOWN_BUTTON_ID] = buttonData->dpad_down;
         rawData->buttons[DPAD_LEFT_BUTTON_ID] = buttonData->dpad_left;
+
+        SwitchIMUSample newest;
+        memcpy(&newest, buffer + SWITCH_IMU_OFFSET, sizeof(newest));
+
+        // Nominal LSB sizes (SDL's SWITCH_ACCEL_SCALE / SWITCH_GYRO_SCALE); the axes are
+        // reordered to SDL's frame the way SDL does for the Pro Controller.
+        constexpr float AccelScale = StandardGravity / 4096.0f;
+        constexpr float GyroScale = RadiansPerDegree / 14.2842f;
+        rawData->motion.accel[0] = -newest.accel_y * AccelScale;
+        rawData->motion.accel[1] = newest.accel_z * AccelScale;
+        rawData->motion.accel[2] = -newest.accel_x * AccelScale;
+        rawData->motion.gyro[0] = -newest.gyro_y * GyroScale;
+        rawData->motion.gyro[1] = newest.gyro_z * GyroScale;
+        rawData->motion.gyro[2] = -newest.gyro_x * GyroScale;
 
         return Status::Success;
     }

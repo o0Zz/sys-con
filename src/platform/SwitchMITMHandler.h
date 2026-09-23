@@ -24,7 +24,7 @@ protected:
     bool IsControllerAttached(uint16_t input_idx) override;
     Result DetachController(uint16_t input_idx) override;
     Result AttachController(uint16_t input_idx) override;
-    Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) override;
+    Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) override;
 
 public:
     // Initialize the class with specified controller

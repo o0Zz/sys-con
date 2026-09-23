@@ -100,7 +100,8 @@ One pass of this runs per controller, per poll, on that controller's own thread:
  BaseController::MapRawInputToNormalized()
      │                                   deadzone → factor → pin-to-button mapping →
      │                                   analog-as-digital → combo simulation
-     ▼  NormalizedButtonData   buttons indexed by ControllerButton, sticks as floats
+     ▼  NormalizedButtonData   buttons indexed by ControllerButton, sticks as floats,
+     │                         motion in SDL's frame (see NormalizedMotion)
  SwitchVirtualGamepadHandler::UpdateInput()
      │
      ▼

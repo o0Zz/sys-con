@@ -3,6 +3,7 @@
 #include <switch.h>
 #include "IController.h"
 #include "SwitchVirtualGamepadHandler.h"
+#include "SwitchMotion.h"
 
 // HDLS stands for "HID (Human Interface Devices) Device List Setting".
 // It's a part of the Nintendo Switch's HID (Human Interface Devices) system module, which is responsible for handling input from controllers and
@@ -18,11 +19,15 @@ public:
         m_hdlHandle.handle = 0;
         memset(&m_deviceInfo, 0, sizeof(m_deviceInfo));
         memset(&m_hdlState, 0, sizeof(m_hdlState));
+        m_motion = SwitchMotion{};
+        m_lastMotionTick = 0;
     }
 
     HiddbgHdlsHandle m_hdlHandle;
     HiddbgHdlsDeviceInfo m_deviceInfo;
     HiddbgHdlsState m_hdlState;
+    SwitchMotion m_motion;
+    u64 m_lastMotionTick;
 };
 
 class SwitchHDLHandler : public SwitchVirtualGamepadHandler
@@ -34,7 +39,7 @@ protected:
     bool IsControllerAttached(uint16_t input_idx) override;
     Result DetachController(uint16_t input_idx) override;
     Result AttachController(uint16_t input_idx) override;
-    Result UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx) override;
+    Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) override;
 
 public:
     // Initialize the class with specified controller

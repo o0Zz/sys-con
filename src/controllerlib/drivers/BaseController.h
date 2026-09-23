@@ -11,6 +11,7 @@ namespace controllerlib
         // Indexed by PinId (physical pin), not by GamepadButton.
         RawButtonStates buttons{};
         AnalogValues analog{};
+        NormalizedMotion motion{};
     };
 
     class BaseController : public IController

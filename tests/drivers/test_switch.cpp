@@ -25,7 +25,7 @@ namespace
         EXPECT_CALL(*mockUSBEndpointIn, Open).WillOnce(testing::Return(Status::Success));
         EXPECT_CALL(*mockUSBEndpointOut, Open).WillOnce(testing::Return(Status::Success));
         EXPECT_CALL(*mockUSBEndpointIn, Read(testing::_, testing::_, testing::_)).WillRepeatedly(testing::Return(Status::Timeout));
-        EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, testing::_)).Times(3).WillRepeatedly(testing::Return(Status::Success));
+        EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, testing::_)).Times(4).WillRepeatedly(testing::Return(Status::Success));
 
         auto controller = std::make_unique<SwitchController>(std::make_unique<MockDevice>(0x057e, 0x2009, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
         EXPECT_EQ(controller->Initialize(), Status::Success);
@@ -58,6 +58,41 @@ TEST(Controller, test_switch_lstick_left)
     EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::Success);
 
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], -1.0f);
+}
+
+TEST(Controller, test_switch_imu_newest_sample_in_sdl_frame)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+    SwitchController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
+
+    uint8_t buffer[64] = {0x30};
+    // Newest sample: flat on the table (+1 g on the sensor Z) and yawing at 1000 LSB.
+    SwitchIMUSample newest{0, 0, 4096, 0, 0, 1000};
+    SwitchIMUSample older{100, 100, 100, 100, 100, 100};
+    memcpy(buffer + SWITCH_IMU_OFFSET, &newest, sizeof(newest));
+    memcpy(buffer + SWITCH_IMU_OFFSET + sizeof(newest), &older, sizeof(older));
+
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::Success);
+
+    EXPECT_TRUE(controller.Support(SUPPORTS_MOTION));
+    EXPECT_FLOAT_EQ(rawData.motion.accel[0], 0.0f);
+    EXPECT_FLOAT_EQ(rawData.motion.accel[1], StandardGravity);
+    EXPECT_FLOAT_EQ(rawData.motion.accel[2], 0.0f);
+    EXPECT_FLOAT_EQ(rawData.motion.gyro[1], 1000.0f * RadiansPerDegree / 14.2842f);
+    EXPECT_FLOAT_EQ(rawData.motion.gyro[0], 0.0f);
+}
+
+TEST(Controller, test_switch_rejects_report_without_imu)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+    SwitchController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
+
+    uint8_t buffer[48] = {0x30};
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::UnexpectedData);
 }
 
 TEST(Controller, test_switch_init_handshake_writes_before_reading)
@@ -99,6 +134,17 @@ TEST(Controller, test_switch_init_handshake_writes_before_reading)
             EXPECT_EQ(inBuffer[11], 0x01);
             return Status::Success;
         }));
+    EXPECT_CALL(*mockUSBEndpointIn, Read(testing::_, testing::_, testing::_))
+        .InSequence(seq)
+        .WillOnce(testing::Return(Status::Timeout));
+    EXPECT_CALL(*mockUSBEndpointOut, Write(testing::_, 12))
+        .InSequence(seq)
+        .WillOnce(testing::Invoke([](const uint8_t *inBuffer, size_t) {
+            EXPECT_EQ(inBuffer[0], 0x01);
+            EXPECT_EQ(inBuffer[10], 0x40);
+            EXPECT_EQ(inBuffer[11], 0x01);
+            return Status::Success;
+        }));
 
     SwitchController controller(std::make_unique<MockDevice>(0x057e, 0x2009, std::make_unique<MockUSBInterface>(std::move(mockUSBEndpointIn), std::move(mockUSBEndpointOut))), config, std::make_unique<MockLogger>());
     EXPECT_EQ(controller.Initialize(), Status::Success);
@@ -114,7 +160,7 @@ TEST(Controller, test_switch_rumble_full_scale)
 
     // Report 0x10, packet counter, then the encoded pair per side. Full scale on the low
     // frequency band is the documented 00 C9 40 72, idle is 00 01 40 40.
-    uint8_t expected[]{0x10, 0x01, 0x00, 0xC9, 0x40, 0x72, 0x00, 0x01, 0x40, 0x40};
+    uint8_t expected[]{0x10, 0x02, 0x00, 0xC9, 0x40, 0x72, 0x00, 0x01, 0x40, 0x40};
 
     EXPECT_CALL(*outEndpoint, Write(BufferMatches(expected, sizeof(expected)), sizeof(expected)))
         .Times(1)
@@ -133,7 +179,7 @@ TEST(Controller, test_switch_rumble_follows_the_amplitude_table)
         Half amplitude is 501 thousandths, which is step 68 of the pad's own amplitude table -
         not step 50. A linear step would encode 0x65/0x40/0x59 and feel far weaker than asked.
     */
-    uint8_t expected[]{0x10, 0x01, 0x00, 0x89, 0x40, 0x62, 0x00, 0x01, 0x40, 0x40};
+    uint8_t expected[]{0x10, 0x02, 0x00, 0x89, 0x40, 0x62, 0x00, 0x01, 0x40, 0x40};
 
     EXPECT_CALL(*outEndpoint, Write(BufferMatches(expected, sizeof(expected)), sizeof(expected)))
         .Times(1)

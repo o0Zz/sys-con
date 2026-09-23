@@ -1,4 +1,5 @@
 #include "drivers/SInputController.h"
+#include <cstring>
 
 namespace controllerlib
 {
@@ -11,14 +12,68 @@ namespace controllerlib
     {
     }
 
+    /*
+        The IMU full-scale ranges are only known from the features reply, so motion stays off
+        until it arrives. The reply is queued behind whatever input reports the pad already
+        streams, which is why it is drained through ParseData like any other report.
+    */
+    Status SInputController::Initialize()
+    {
+        Status result = BaseController::Initialize();
+        if (result != Status::Success)
+            return result;
+
+        if (m_outPipe.empty() || m_inPipe.empty())
+            return Status::InvalidEndpoint;
+
+        uint8_t featuresCommand[SINPUT_COMMAND_BUFFER_SIZE]{SINPUT_REPORT_ID_COMMAND, SINPUT_COMMAND_FEATURES};
+        (void)m_outPipe[0]->Write(featuresCommand, sizeof(featuresCommand));
+
+        for (int read = 0; read < 100 && !m_features_received; read++)
+        {
+            uint8_t buffer[SINPUT_INPUT_BUFFER_SIZE];
+            size_t size = sizeof(buffer);
+            RawInputData rawData;
+            uint16_t input_idx = 0;
+            if (m_inPipe[0]->Read(buffer, &size, 10 * 1000) == Status::Success)
+                (void)ParseData(buffer, size, &rawData, &input_idx);
+        }
+
+        if (!m_features_received)
+            m_logger->Log(LogLevel::Error, "SInputController[%04x-%04x] No features reply, motion disabled", m_device->GetVendor(), m_device->GetProduct());
+
+        return Status::Success;
+    }
+
+    Status SInputController::ParseFeatures(const uint8_t *buffer, size_t size)
+    {
+        if (size < 2 + sizeof(SInputFeatures))
+            return Status::UnexpectedData;
+
+        SInputFeatures features;
+        memcpy(&features, buffer + 2, sizeof(features));
+
+        m_features_received = true;
+        m_motion_supported = (features.feature_flags_0 & (SINPUT_FEATURE_ACCELEROMETER | SINPUT_FEATURE_GYROSCOPE)) != 0;
+        m_accel_scale = StandardGravity * features.accel_range_g / 32768.0f;
+        m_gyro_scale = RadiansPerDegree * features.gyro_range_dps / 32768.0f;
+
+        m_logger->Log(LogLevel::Info, "SInputController[%04x-%04x] Features: motion %s (accel +/-%dg, gyro +/-%d dps)",
+                      m_device->GetVendor(), m_device->GetProduct(), m_motion_supported ? "on" : "off", features.accel_range_g, features.gyro_range_dps);
+
+        return Status::NothingTodo;
+    }
+
     Status SInputController::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
     {
         (void)input_idx;
 
-        if (size < 1)
+        if (size < 2)
             return Status::UnexpectedData;
 
-        // 0x02 carries replies to the command report, which this driver never sends.
+        if (buffer[0] == SINPUT_REPORT_ID_REPLY && buffer[1] == SINPUT_COMMAND_FEATURES)
+            return ParseFeatures(buffer, size);
+
         if (buffer[0] != SINPUT_REPORT_ID_INPUT)
             return Status::NothingTodo;
 
@@ -78,6 +133,16 @@ namespace controllerlib
         rawData->buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;
         rawData->buttons[DPAD_DOWN_BUTTON_ID] = buttonData->dpad_down;
         rawData->buttons[DPAD_LEFT_BUTTON_ID] = buttonData->dpad_left;
+
+        if (m_motion_supported)
+        {
+            rawData->motion.accel[0] = -buttonData->accel_x * m_accel_scale;
+            rawData->motion.accel[1] = buttonData->accel_z * m_accel_scale;
+            rawData->motion.accel[2] = -buttonData->accel_y * m_accel_scale;
+            rawData->motion.gyro[0] = -buttonData->gyro_x * m_gyro_scale;
+            rawData->motion.gyro[1] = buttonData->gyro_z * m_gyro_scale;
+            rawData->motion.gyro[2] = -buttonData->gyro_y * m_gyro_scale;
+        }
 
         return Status::Success;
     }

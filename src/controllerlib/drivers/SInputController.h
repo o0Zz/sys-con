@@ -16,7 +16,11 @@ namespace controllerlib
 #define SINPUT_REPORT_ID_COMMAND 0x03
 
 #define SINPUT_COMMAND_HAPTIC     0x01
+#define SINPUT_COMMAND_FEATURES   0x02
 #define SINPUT_HAPTIC_TYPE_RUMBLE 0x02
+
+#define SINPUT_FEATURE_ACCELEROMETER 0x04
+#define SINPUT_FEATURE_GYROSCOPE     0x08
 
     _PACKED(struct SInputButtonData {
         uint8_t report_id;
@@ -86,18 +90,43 @@ namespace controllerlib
 
     static_assert(sizeof(SInputButtonData) == 47, "SInput input report layout must stay on the wire offsets SDL uses");
 
+    // Reply to SINPUT_COMMAND_FEATURES, as it follows the report id and command id bytes.
+    _PACKED(struct SInputFeatures {
+        uint16_t protocol_version;
+        uint8_t feature_flags_0;
+        uint8_t feature_flags_1;
+        uint8_t gamepad_type;
+        uint8_t face_style;
+        uint16_t polling_rate_us;
+        uint16_t accel_range_g;
+        uint16_t gyro_range_dps;
+    });
+
     class SInputController : public BaseController
     {
     public:
         SInputController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
         virtual ~SInputController() override;
 
+        Status Initialize() override;
+
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
-        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
+        bool Support(ControllerFeature feature) const override
+        {
+            return feature == SUPPORTS_RUMBLE || (feature == SUPPORTS_MOTION && m_motion_supported);
+        }
 
         virtual Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
 
         virtual size_t GetMaxInputBufferSize() override;
+
+    private:
+        Status ParseFeatures(const uint8_t *buffer, size_t size);
+
+        bool m_features_received = false;
+        bool m_motion_supported = false;
+        float m_accel_scale = 0.0f;
+        float m_gyro_scale = 0.0f;
     };
 } // namespace controllerlib

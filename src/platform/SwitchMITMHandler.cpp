@@ -202,12 +202,12 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
     return 0;
 }
 
-Result SwitchMITMHandler::UpdateControllerState(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r, uint16_t input_idx)
+Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uint16_t input_idx)
 {
     if (!IsControllerAttached(input_idx))
         return 0;
 
-    return m_controllerList[input_idx]->Update(buttons, analog_stick_l, analog_stick_r);
+    return m_controllerList[input_idx]->Update(state);
 }
 
 static bool IsRumbling(const SwitchMITMHandler::RumbleState &rumble)

@@ -31,6 +31,30 @@ TEST(Controller, test_steam2026_input_report)
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], BaseController::Normalize(-static_cast<int16_t>(0xFED2), -32768, 32767));
 }
 
+TEST(Controller, test_steam2026_imu_in_sdl_frame)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+
+    SteamController2026 controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
+
+    uint8_t buffer[sizeof(Steam2026InputReport)]{};
+    Steam2026InputReport *report = reinterpret_cast<Steam2026InputReport *>(buffer);
+    report->report_id = REPORT_INPUT;
+    report->imu.sAccelZ = 16384; // 1 g at +/-2 g full scale
+    report->imu.sAccelY = 16384;
+    report->imu.sGyroX = 16384; // 1000 dps at +/-2000 dps full scale
+
+    EXPECT_EQ(controller.ParseData(buffer, sizeof(buffer), &rawData, &input_idx), Status::Success);
+
+    EXPECT_TRUE(controller.Support(SUPPORTS_MOTION));
+    EXPECT_FLOAT_EQ(rawData.motion.accel[1], StandardGravity);
+    EXPECT_FLOAT_EQ(rawData.motion.accel[2], -StandardGravity);
+    EXPECT_FLOAT_EQ(rawData.motion.gyro[0], 1000.0f * RadiansPerDegree);
+    EXPECT_FLOAT_EQ(rawData.motion.gyro[1], 0.0f);
+}
+
 TEST(Controller, test_steam2026_misc_report_ignored)
 {
     ControllerConfig config;

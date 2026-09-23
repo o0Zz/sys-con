@@ -180,7 +180,7 @@ namespace controllerlib
 
         virtual bool IsControllerConnected(uint16_t input_idx) override;
 
-        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE || feature == SUPPORTS_MOTION; }
 
         Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
     };

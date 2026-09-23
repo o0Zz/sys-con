@@ -46,6 +46,19 @@ namespace controllerlib
         uint8_t stick_right[3];
     };
 
+    _PACKED(struct SwitchIMUSample {
+        int16_t accel_x;
+        int16_t accel_y;
+        int16_t accel_z;
+        int16_t gyro_x;
+        int16_t gyro_y;
+        int16_t gyro_z;
+    });
+
+    // A 0x30 report carries three IMU samples 5 ms apart after the vibration byte, newest first.
+    inline constexpr size_t SWITCH_IMU_OFFSET = 13;
+    inline constexpr size_t SWITCH_IMU_SAMPLE_COUNT = 3;
+
     struct SwitchCalibration
     {
         uint16_t min;
@@ -73,7 +86,7 @@ namespace controllerlib
 
         size_t GetMaxInputBufferSize() override;
 
-        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
+        bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE || feature == SUPPORTS_MOTION; }
 
         Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
     };

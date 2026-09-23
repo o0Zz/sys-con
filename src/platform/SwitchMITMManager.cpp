@@ -585,9 +585,7 @@ HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u32 bod
       m_body_color(body_color),
       m_buttons_color(buttons_color),
       m_sampling_number(0),
-      m_buttons(0),
-      m_analog_stick_l{},
-      m_analog_stick_r{}
+      m_state{}
 {
 }
 
@@ -609,6 +607,7 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 
     internal_state->full_key_lifo.header.buffer_count = 17;
     internal_state->system_ext_lifo.header.buffer_count = 17;
+    internal_state->full_key_six_axis_sensor_lifo.header.buffer_count = 17;
 
     internal_state->device_type = HidDeviceTypeBits_FullKey;
     internal_state->system_properties.is_abxy_button_oriented = 1;
@@ -623,7 +622,8 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 
 /* ---------------------------------------- */
 
-static void AppendNpadState(HidNpadCommonLifo *lifo, const HidNpadCommonState &state)
+template <typename Lifo, typename State>
+static void AppendState(Lifo *lifo, const State &state)
 {
     u64 current_tail = lifo->header.tail + 1;
     if (current_tail >= lifo->header.buffer_count)
@@ -652,13 +652,31 @@ void HidSharedMemoryController::Publish()
 
     HidNpadCommonState state{};
     state.sampling_number = m_sampling_number;
-    state.buttons = m_buttons;
-    state.analog_stick_l = m_analog_stick_l;
-    state.analog_stick_r = m_analog_stick_r;
+    state.buttons = m_state.buttons;
+    state.analog_stick_l = m_state.analog_stick_l;
+    state.analog_stick_r = m_state.analog_stick_r;
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
 
-    AppendNpadState(&internal_state->full_key_lifo, state);
-    AppendNpadState(&internal_state->system_ext_lifo, state);
+    AppendState(&internal_state->full_key_lifo, state);
+    AppendState(&internal_state->system_ext_lifo, state);
+
+    // The npad and six-axis lifos are only ever filled together, so they share one sampling
+    // number and neither can show the gap that hangs a reader.
+    if (m_state.has_motion)
+    {
+        m_motion.Step(m_state.angular_velocity, POLLING_FREQUENCY_US / 1e6f);
+
+        HidSixAxisSensorState six_axis{};
+        six_axis.delta_time = POLLING_FREQUENCY_US * 1000ULL;
+        six_axis.sampling_number = m_sampling_number;
+        six_axis.acceleration = m_state.acceleration;
+        six_axis.angular_velocity = m_state.angular_velocity;
+        six_axis.angle = m_motion.GetAngle();
+        six_axis.direction = m_motion.GetDirection();
+        six_axis.attributes = HidSixAxisSensorAttribute_IsConnected;
+
+        AppendState(&internal_state->full_key_six_axis_sensor_lifo, six_axis);
+    }
 
     m_sampling_number++;
 }
@@ -672,13 +690,11 @@ void HidSharedMemoryController::Clear()
 
 /* ---------------------------------------- */
 
-Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState &analog_stick_l, const HidAnalogStickState &analog_stick_r)
+Result HidSharedMemoryController::Update(const SwitchPadState &state)
 {
     std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
 
-    m_buttons = buttons;
-    m_analog_stick_l = analog_stick_l;
-    m_analog_stick_r = analog_stick_r;
+    m_state = state;
 
     return 0;
 }

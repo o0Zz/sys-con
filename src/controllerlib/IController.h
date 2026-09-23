@@ -13,11 +13,24 @@ namespace controllerlib
         float axis_y{0.0f};
     };
 
+    // SDL's sensor convention, so scale constants carry over from SDL's hidapi drivers
+    // unchanged: +X right, +Y up, +Z toward the player; accel in m/s^2 (the reaction to
+    // gravity, so a pad lying flat reads +9.8 on Y), gyro in rad/s, counter-clockwise positive.
+    struct NormalizedMotion
+    {
+        float accel[3]{};
+        float gyro[3]{};
+    };
+
+    inline constexpr float StandardGravity = 9.80665f;
+    inline constexpr float RadiansPerDegree = 3.14159265358979f / 180.0f;
+
     struct NormalizedButtonData
     {
         // Indexed by GamepadButton, not by pin (RawInputData::buttons is the pin-indexed one).
         GamepadButtonStates buttons{};
         NormalizedStick sticks[2]{};
+        NormalizedMotion motion{};
     };
 
     class IController

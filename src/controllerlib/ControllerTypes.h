@@ -13,5 +13,6 @@ namespace controllerlib
     enum ControllerFeature : uint8_t
     {
         SUPPORTS_RUMBLE,
+        SUPPORTS_MOTION,
     };
 } // namespace controllerlib
