@@ -40,8 +40,7 @@ namespace controllerlib
 
         bool Support(ControllerFeature feature) const override
         {
-            (void)feature;
-            return false;
+            return feature == SUPPORTS_RUMBLE && m_config.rumble.IsValid() && !m_outPipe.empty();
         }
 
         virtual uint16_t GetInputCount() override;

@@ -4,6 +4,8 @@
 #include "ini.h"
 
 #include <array>
+#include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -392,6 +394,12 @@ namespace syscon::config
                 ini_data->controller_config->analogFactorPercent[AnalogAxis::Slider] = atoi(value);
             else if (nameStr == "factor_dial")
                 ini_data->controller_config->analogFactorPercent[AnalogAxis::Dial] = atoi(value);
+            else if (nameStr == "vibration")
+            {
+                // Not the previous layer's template: a broken key means this controller has none.
+                if (!ParseRumbleTemplate(value, &ini_data->controller_config->rumble))
+                    ini_data->controller_config->rumble = ControllerRumbleConfig{};
+            }
             else if (nameStr == "color_body")
                 ini_data->controller_config->bodyColor = hexStringColorToRGBA(value);
             else if (nameStr == "color_buttons")
@@ -424,6 +432,139 @@ namespace syscon::config
         }
 
     } // namespace
+
+    /*
+        The vibration= grammar, documented for users in config.ini:
+
+            template := (byte | repeat | placeholder | ' ')*
+            byte     := hexdigit hexdigit
+            repeat   := byte '*' decimal        the byte appears <decimal> times in total
+            placeholder := 'LL' | 'LLLL' | 'RR' | 'RRRR'   L low frequency motor, R high
+                                                           lowercase means little endian
+    */
+    bool ParseRumbleTemplate(const char *value, ControllerRumbleConfig *rumble)
+    {
+        ControllerRumbleConfig parsed;
+        uint32_t nibble = 0;
+        uint32_t hexByteEnd = UINT32_MAX;
+
+        for (const char *cursor = value; *cursor != '\0'; cursor++)
+        {
+            if (*cursor == ' ')
+                continue;
+
+            if (nibble / 2 >= MAX_RUMBLE_PACKET_SIZE)
+            {
+                syscon::logger::LogError("Invalid vibration template: %s (longer than %d bytes)", value, MAX_RUMBLE_PACKET_SIZE);
+                return false;
+            }
+
+            if (isxdigit(static_cast<unsigned char>(*cursor)))
+            {
+                const char upper = static_cast<char>(toupper(static_cast<unsigned char>(*cursor)));
+                const uint8_t digit = static_cast<uint8_t>((upper <= '9') ? (upper - '0') : (upper - 'A' + 10));
+
+                if ((nibble % 2) == 0)
+                    parsed.packet[nibble / 2] = static_cast<uint8_t>(digit << 4);
+                else
+                    parsed.packet[nibble / 2] |= digit;
+
+                nibble++;
+
+                if ((nibble % 2) == 0)
+                    hexByteEnd = nibble;
+
+                continue;
+            }
+
+            if (*cursor == '*')
+            {
+                char *end = nullptr;
+                const long repeat = strtol(cursor + 1, &end, 10);
+
+                /* repeat is bounded before it is added to anything: on the console long is
+                   64 bit, so the length check below would be done in signed long and a count
+                   near LONG_MAX (what strtol saturates to) would overflow it. */
+                if (hexByteEnd != nibble || !isdigit(static_cast<unsigned char>(*(cursor + 1))) || repeat < 1 || repeat > MAX_RUMBLE_PACKET_SIZE)
+                {
+                    syscon::logger::LogError("Invalid vibration template: %s ('*' repeats the hex byte before it, 1 to %d times)", value, MAX_RUMBLE_PACKET_SIZE);
+                    return false;
+                }
+
+                const uint8_t repeated = parsed.packet[(nibble / 2) - 1];
+
+                if (((nibble / 2) + repeat - 1) > MAX_RUMBLE_PACKET_SIZE)
+                {
+                    syscon::logger::LogError("Invalid vibration template: %s (longer than %d bytes)", value, MAX_RUMBLE_PACKET_SIZE);
+                    return false;
+                }
+
+                for (long i = 1; i < repeat; i++)
+                {
+                    parsed.packet[nibble / 2] = repeated;
+                    nibble += 2;
+                }
+
+                cursor = end - 1; // The for loop steps over the character that ended the count.
+                continue;
+            }
+
+            const char letter = static_cast<char>(toupper(static_cast<unsigned char>(*cursor)));
+            if (letter != 'L' && letter != 'R')
+            {
+                syscon::logger::LogError("Invalid vibration template: %s (unexpected character '%c')", value, *cursor);
+                return false;
+            }
+
+            const char *runStart = cursor;
+            while (*cursor == *runStart)
+                cursor++;
+
+            const size_t runLength = cursor - runStart;
+            cursor--; // The for loop steps over the character that ended the run.
+
+            if ((runLength != 2 && runLength != 4) || (nibble % 2) != 0)
+            {
+                syscon::logger::LogError("Invalid vibration template: %s (a motor takes 2 or 4 letters of one case, on a byte boundary)", value);
+                return false;
+            }
+
+            if (((nibble + runLength) / 2) > MAX_RUMBLE_PACKET_SIZE)
+            {
+                syscon::logger::LogError("Invalid vibration template: %s (longer than %d bytes)", value, MAX_RUMBLE_PACKET_SIZE);
+                return false;
+            }
+
+            ControllerRumbleField &field = (letter == 'L') ? parsed.low : parsed.high;
+            if (field.size != 0)
+            {
+                syscon::logger::LogError("Invalid vibration template: %s ('%c' appears twice)", value, *runStart);
+                return false;
+            }
+
+            field.offset = static_cast<uint8_t>(nibble / 2);
+            field.size = static_cast<uint8_t>(runLength / 2);
+            field.littleEndian = islower(static_cast<unsigned char>(*runStart)) != 0;
+            nibble += runLength;
+        }
+
+        if ((nibble % 2) != 0)
+        {
+            syscon::logger::LogError("Invalid vibration template: %s (odd number of hex digits)", value);
+            return false;
+        }
+
+        if (parsed.low.size == 0 && parsed.high.size == 0)
+        {
+            syscon::logger::LogError("Invalid vibration template: %s (no L or R placeholder)", value);
+            return false;
+        }
+
+        parsed.packetSize = static_cast<uint8_t>(nibble / 2);
+        *rumble = parsed;
+
+        return true;
+    }
 
     void Initialize(IFileManager &fileManager)
     {

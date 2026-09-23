@@ -104,3 +104,108 @@ TEST(Configuration, test_load_config_with_profile_sinput)
     EXPECT_EQ(config.buttonsPin[GamepadButton::ZR][0], 10);
     EXPECT_EQ(config.buttonsAnalog[GamepadButton::ZR].bind, AnalogAxis::Ry);
 }
+TEST(Configuration, test_load_config_vibration_template_dualshock4)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+
+    // DualShock 4 v2. These assertions track the shipped config.ini and have to be updated
+    // with it; the parser itself is covered in tests/core/test_rumble_template.cpp.
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x09cc, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.profile, "dualshock4");
+    EXPECT_TRUE(config.rumble.IsValid());
+    EXPECT_EQ(config.rumble.packetSize, 32);
+    EXPECT_EQ(config.rumble.packet[0], 0x05);
+    EXPECT_EQ(config.rumble.packet[0], 0x05);
+    EXPECT_EQ(config.rumble.packet[1], 0x01);
+    EXPECT_EQ(config.rumble.high.offset, 4);
+    EXPECT_EQ(config.rumble.high.size, 1);
+    EXPECT_EQ(config.rumble.low.offset, 5);
+    EXPECT_EQ(config.rumble.low.size, 1);
+}
+
+TEST(Configuration, test_load_config_vibration_template_stadia)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+
+    // Google Stadia, whose template sits in its own VID/PID section.
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x18d1, 0x9400, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_TRUE(config.rumble.IsValid());
+    EXPECT_EQ(config.rumble.packetSize, 5);
+    EXPECT_EQ(config.rumble.packet[0], 0x05);
+    EXPECT_EQ(config.rumble.low.offset, 1);
+    EXPECT_EQ(config.rumble.low.size, 2);
+    EXPECT_TRUE(config.rumble.low.littleEndian);
+}
+
+TEST(Configuration, test_load_config_vibration_template_dualsense)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x054c, 0x0ce6, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.profile, "dualsense5");
+    EXPECT_EQ(config.rumble.packetSize, 63);
+    EXPECT_EQ(config.rumble.packet[0], 0x02);
+    EXPECT_EQ(config.rumble.packet[1], 0x03);
+    EXPECT_EQ(config.rumble.high.offset, 3);
+    EXPECT_EQ(config.rumble.low.offset, 4);
+}
+
+TEST(Configuration, test_load_config_vibration_template_gamecube_adapter)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0079, 0x1846, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.rumble.packetSize, 2);
+    EXPECT_EQ(config.rumble.high.offset, 0);
+    EXPECT_EQ(config.rumble.low.offset, 1);
+}
+
+TEST(Configuration, test_load_config_motorless_stick_on_the_dualshock4_profile)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+
+    // Qanba Obsidian: an arcade stick that shares the dualshock4 profile, so the profile must
+    // not be the thing that carries the rumble report.
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x2c22, 0x2300, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_EQ(config.profile, "dualshock4");
+    EXPECT_FALSE(config.rumble.IsValid());
+}
+
+TEST(Configuration, test_load_config_without_vibration_template)
+{
+    ControllerConfig config;
+
+    syscon::StdFileManager fileManager;
+    ::syscon::config::Initialize(fileManager);
+
+    // A pad with no motors must not claim rumble support.
+    int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x0583, 0x2060, false, "");
+    EXPECT_EQ(rc, 0);
+
+    EXPECT_FALSE(config.rumble.IsValid());
+}

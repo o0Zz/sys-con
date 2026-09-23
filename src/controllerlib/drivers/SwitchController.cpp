@@ -48,6 +48,9 @@ namespace controllerlib
         uint8_t initPacket2_ForceToUSB[SWITCH_INPUT_BUFFER_SIZE]{0x80, 0x04};
         (void)m_outPipe[0]->Write(initPacket2_ForceToUSB, sizeof(initPacket2_ForceToUSB));
 
+        size = sizeof(buffer);
+        (void)m_inPipe[0]->Read(buffer, &size, 500 * 1000 /*timeout_us*/);
+
         // The motors ignore every rumble report until this subcommand turns them on.
         uint8_t enableVibration[]{
             SWITCH_OUTPUT_ID_SUBCOMMAND, (uint8_t)(m_packet_counter++ & 0x0F),
@@ -60,14 +63,40 @@ namespace controllerlib
     }
 
     /*
+        The amplitude the pad encodes is not linear in the step, so a requested amplitude has
+        to be looked up rather than scaled. This is the amp column of joycon_rumble_amplitudes[]
+        in https://github.com/torvalds/linux/blob/master/drivers/hid/hid-nintendo.c, in its own
+        units, where full scale is 1003.
+    */
+    static constexpr uint16_t RUMBLE_AMPLITUDE_STEPS[]{
+        0, 10, 12, 14, 17, 20, 24, 28, 33, 40,
+        47, 56, 67, 80, 95, 112, 117, 123, 128, 134,
+        140, 146, 152, 159, 166, 173, 181, 189, 198, 206,
+        215, 225, 230, 235, 240, 245, 251, 256, 262, 268,
+        273, 279, 286, 292, 298, 305, 311, 318, 325, 332,
+        340, 347, 355, 362, 370, 378, 387, 395, 404, 413,
+        422, 431, 440, 450, 460, 470, 480, 491, 501, 512,
+        524, 535, 547, 559, 571, 584, 596, 609, 623, 636,
+        650, 665, 679, 694, 709, 725, 741, 757, 773, 790,
+        808, 825, 843, 862, 881, 900, 920, 940, 960, 981,
+        1003};
+
+    static constexpr uint16_t RUMBLE_AMPLITUDE_MAX = RUMBLE_AMPLITUDE_STEPS[(sizeof(RUMBLE_AMPLITUDE_STEPS) / sizeof(RUMBLE_AMPLITUDE_STEPS[0])) - 1];
+    static constexpr uint32_t RUMBLE_AMPLITUDE_LAST_STEP = (sizeof(RUMBLE_AMPLITUDE_STEPS) / sizeof(RUMBLE_AMPLITUDE_STEPS[0])) - 1;
+
+    /*
         An actuator takes an encoded frequency/amplitude pair. The frequencies stay at the
-        defaults (160 Hz low, 320 Hz high), which is what makes the idle pair 00 01 40 40; only
-        the amplitude moves, over the 101 steps the pad encodes. Ref:
-        https://github.com/torvalds/linux/blob/master/drivers/hid/hid-nintendo.c (joycon_encode_rumble)
+        defaults (160 Hz low, 320 Hz high), which is what makes the idle pair 00 01 40 40 and
+        full scale 00 C9 40 72; only the amplitude moves. Ref: joycon_encode_rumble, same file.
     */
     void SwitchController::EncodeRumble(uint8_t *data, float amplitude)
     {
-        const uint32_t step = ScaleAmplitude(amplitude, 100);
+        const uint32_t wanted = ScaleAmplitude(amplitude, RUMBLE_AMPLITUDE_MAX);
+
+        uint32_t step = 0;
+        while (step < RUMBLE_AMPLITUDE_LAST_STEP && RUMBLE_AMPLITUDE_STEPS[step] < wanted)
+            step++;
+
         const uint16_t amp_low = (uint16_t)(0x0040 + (step / 2) + ((step % 2) ? 0x8000 : 0x0000));
 
         data[0] = 0x00;

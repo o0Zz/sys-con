@@ -4,6 +4,8 @@
 
 namespace controllerlib
 {
+    static_assert(sizeof(HapticRumbleOutputReport) == HID_RUMBLE_OUTPUT_REPORT_BYTES);
+
     SteamController2026::SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
         : BaseController(std::move(device), config, std::move(logger))
     {
@@ -125,6 +127,10 @@ namespace controllerlib
     {
         m_logger->Log(LogLevel::Info, "SteamController2026 controller disconnected (Idx: %d) ...", input_idx);
         m_controllerInfo[input_idx].m_is_connected = false;
+
+        // Otherwise the resend would hand the effect back to whoever connects into this slot.
+        m_rumble[input_idx] = SteamControllerRumble{};
+
         return Status::Success;
     }
 
@@ -152,26 +158,58 @@ namespace controllerlib
 
     Status SteamController2026::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
-        if (input_idx >= STEAMCONTROLLER_MAX_INPUTS || input_idx >= m_interfaces.size())
+        if (input_idx >= STEAMCONTROLLER_MAX_INPUTS)
+            return Status::InvalidIndex;
+
+        m_rumble[input_idx].speed_low = static_cast<uint16_t>(ScaleAmplitude(amp_low, 65535));
+        m_rumble[input_idx].speed_high = static_cast<uint16_t>(ScaleAmplitude(amp_high, 65535));
+
+        return SendRumble(input_idx);
+    }
+
+    /*
+        The motors stop by themselves shortly after the last haptic report, and the handler only
+        calls SetRumble when the amplitude changes, so an effect a game holds steady has to be
+        pushed again from the polling loop. Ref: SDL_hidapi_steam_triton.c.
+    */
+    Status SteamController2026::ReadInput(NormalizedButtonData *normalData, uint16_t *input_idx, uint32_t timeout_us)
+    {
+        const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+        for (uint16_t idx = 0; idx < STEAMCONTROLLER_MAX_INPUTS; idx++)
+        {
+            if (m_rumble[idx].speed_low == 0 && m_rumble[idx].speed_high == 0)
+                continue;
+
+            if ((now - m_rumble[idx].sent_at) < std::chrono::milliseconds(STEAMCONTROLLER_RUMBLE_RESEND_MS))
+                continue;
+
+            (void)SendRumble(idx);
+        }
+
+        return BaseController::ReadInput(normalData, input_idx, timeout_us);
+    }
+
+    Status SteamController2026::SendRumble(uint16_t input_idx)
+    {
+        if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
 
         if (!m_controllerInfo[input_idx].m_is_connected)
+        {
+            // Dropped rather than kept, so it cannot fire at whoever connects into this slot.
+            m_rumble[input_idx] = SteamControllerRumble{};
             return Status::NothingTodo;
+        }
 
-        uint8_t buffer[HID_FEATURE_REPORT_BYTES] = {1};
+        HapticRumbleOutputReport report{};
+        report.report_id = ID_OUT_REPORT_HAPTIC_RUMBLE;
+        report.hapticRumble.left.speed = m_rumble[input_idx].speed_low;
+        report.hapticRumble.right.speed = m_rumble[input_idx].speed_high;
 
-        SimpleRumbleFeatureReportMsg *msg = reinterpret_cast<SimpleRumbleFeatureReportMsg *>(buffer + 1);
+        m_rumble[input_idx].sent_at = std::chrono::steady_clock::now();
 
-        // header.length stays 0, as SDL's Steam Deck driver sends it: the command is fixed size.
-        msg->header.type = ID_TRIGGER_RUMBLE_CMD;
-        msg->simpleRumble.rumbleType = RUMBLE_TYPE_DEFAULT;
-        msg->simpleRumble.intensity = HAPTIC_INTENSITY_SYSTEM;
-        msg->simpleRumble.leftMotorSpeed = (uint16_t)ScaleAmplitude(amp_low, 65535);
-        msg->simpleRumble.rightMotorSpeed = (uint16_t)ScaleAmplitude(amp_high, 65535);
-        msg->simpleRumble.leftGain = 2;
-        msg->simpleRumble.rightGain = 0;
-
-        return SendFeatureReport(input_idx, buffer, sizeof(buffer));
+        return m_outPipe[input_idx]->Write(reinterpret_cast<const uint8_t *>(&report), sizeof(report));
     }
 
     Status SteamController2026::SendFeatureReport(uint16_t input_idx, const uint8_t *buffer, uint16_t size)

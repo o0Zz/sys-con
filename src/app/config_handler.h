@@ -89,6 +89,9 @@ namespace syscon::config
 
     void Initialize(IFileManager &fileManager);
 
+    // Parses a vibration= value; the format is documented in config.ini.
+    bool ParseRumbleTemplate(const char *value, controllerlib::ControllerRumbleConfig *rumble);
+
     int LoadGlobalConfig(const std::string &configFullPath, GlobalConfig *config);
 
     int LoadControllerConfig(const std::string &configFullPath, controllerlib::ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile);

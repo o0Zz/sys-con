@@ -33,6 +33,9 @@ namespace controllerlib
 #define GIP_MOTOR_LT  (1 << 3)
 #define GIP_MOTOR_ALL (GIP_MOTOR_R | GIP_MOTOR_L | GIP_MOTOR_RT | GIP_MOTOR_LT)
 
+// A vibration level is a percentage, not a byte: anything above 100 is out of protocol.
+#define GIP_MOTOR_LEVEL_MAX 100
+
     /*
     How to find correct init sequence ?
         1. Use wireshark to capture the USB traffic
@@ -272,14 +275,17 @@ namespace controllerlib
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
 
+        if (++m_rumble_sequence == GIP_SEQ0)
+            m_rumble_sequence++;
+
         /* The last byte is the repeat count: with 0 the effect plays the on-period once and
            dies, and nothing resends it while the game holds the same amplitude. */
         const uint8_t rumble_data[]{
-            GIP_CMD_RUMBLE, 0x00, m_rumble_sequence++, GIP_PL_LEN(9),
+            GIP_CMD_RUMBLE, 0x00, m_rumble_sequence, GIP_PL_LEN(9),
             0x00, GIP_MOTOR_ALL,
             0x00, 0x00,
-            (uint8_t)ScaleAmplitude(amp_low, 255),
-            (uint8_t)ScaleAmplitude(amp_high, 255),
+            (uint8_t)ScaleAmplitude(amp_low, GIP_MOTOR_LEVEL_MAX),
+            (uint8_t)ScaleAmplitude(amp_high, GIP_MOTOR_LEVEL_MAX),
             0xff, 0x00, 0xff};
 
         return m_outPipe[input_idx]->Write(rumble_data, sizeof(rumble_data));

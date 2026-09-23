@@ -251,6 +251,37 @@ simulate_rstick_click=ZL
 ```
 This configuration allows you to trigger specific buttons using combinations of other buttons, offering more flexibility in custom mappings.
 
+### Rumble on a controller without a dedicated driver
+
+Controllers sys-con has a driver for (`xbox`, `xbox360`, `xbox360w`, `xboxone`, `dualshock3`,
+`switch`, `wii` — the Wii U GameCube adapter —, `sinput` and `steam2026`) rumble on their own.
+Any other pad is handled as a generic HID device, and for those you can describe the rumble
+report yourself with `vibration=`:
+
+```
+[054c-09cc] ;DualShock 4 v2
+vibration=05 01 00 00 RR LL 00*26
+```
+
+The value is the output report written out in hex, with the amplitudes left as placeholders:
+
+| Placeholder     | Meaning                                                  |
+|-----------------|----------------------------------------------------------|
+| `LL`            | low frequency (heavy) motor, one byte                     |
+| `RR`            | high frequency (light) motor, one byte                    |
+| `LLLL` / `RRRR` | two bytes, most significant first                         |
+| `llll` / `rrrr` | two bytes, least significant first                        |
+| `00*26`         | repeats the byte before it, 26 bytes in total             |
+
+Spaces are ignored, everything else is sent as written, and the report goes to the
+controller's output endpoint. A report cannot be longer than 64 bytes, and anything that is
+not a hex pair, a placeholder or a repeat is refused with an error in the log.
+Capture a rumble report from the PC driver with Wireshark
+(see [doc/WiresharkCapture.md](doc/WiresharkCapture.md)) to find the bytes for a pad that is
+not in `config.ini` yet.
+
+Rumble is only delivered to the pad in `mode=mitm`.
+
 ## Network controller (for testing)
 sys-con can present a controller that is driven from a PC over the network instead of by
 hardware, so input can be scripted without anything plugged in. It is **disabled by default**.

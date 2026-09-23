@@ -12,6 +12,8 @@
 
 #define MAX_CONTROLLER_COMBO 16
 
+#define MAX_RUMBLE_PACKET_SIZE 64
+
 namespace controllerlib
 {
     union RGBAColor
@@ -49,6 +51,25 @@ namespace controllerlib
         AnalogAxis bind{AnalogAxis::Unknown};
     };
 
+    // One motor's slot inside ControllerRumbleConfig::packet. size 0 means the report has no
+    // field for that motor.
+    struct ControllerRumbleField
+    {
+        uint8_t offset{0};
+        uint8_t size{0};
+        bool littleEndian{false};
+    };
+
+    struct ControllerRumbleConfig
+    {
+        std::array<uint8_t, MAX_RUMBLE_PACKET_SIZE> packet{};
+        uint8_t packetSize{0};
+        ControllerRumbleField low;
+        ControllerRumbleField high;
+
+        bool IsValid() const { return packetSize > 0; }
+    };
+
     struct ControllerComboConfig
     {
         GamepadButton buttonSimulated{GamepadButton::NONE};
@@ -77,6 +98,9 @@ namespace controllerlib
         EnumArray<GamepadButton, ControllerAnalogConfig, GamepadButtonCount> buttonsAnalog{};
 
         ControllerComboConfig simulateCombos[MAX_CONTROLLER_COMBO];
+
+        // Only used by drivers that have no rumble of their own, GenericHIDController above all.
+        ControllerRumbleConfig rumble;
 
         RGBAColor bodyColor{0, 0, 0, 255};
         RGBAColor buttonsColor{0, 0, 0, 255};

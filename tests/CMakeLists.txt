@@ -20,6 +20,7 @@ set(TEST_FILES
     core/test_input_binding.cpp
     core/test_normalize.cpp
     core/test_read_next_buffer.cpp
+    core/test_rumble_template.cpp
     core/test_status.cpp
     drivers/test_dualshock3.cpp
     drivers/test_network_controller.cpp

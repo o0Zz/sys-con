@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BaseController.h"
+#include <chrono>
 
 namespace controllerlib
 {
@@ -20,9 +21,12 @@ namespace controllerlib
 #define LIZARD_MODE_OFF               0x00
 #define SETTING_STEAM_WATCHDOG_ENABLE 0x47
 #define WATCHDOG_DISABLE              0x00
-#define ID_TRIGGER_RUMBLE_CMD         0xEB
-#define RUMBLE_TYPE_DEFAULT           0x00
-#define HAPTIC_INTENSITY_SYSTEM       0x00
+#define ID_OUT_REPORT_HAPTIC_RUMBLE   0x80
+#define HID_RUMBLE_OUTPUT_REPORT_BYTES 10
+
+/* The pad stops the motors around 50 ms after the last haptic report it got, and the resend
+   can only happen on a poll turn, so this has to leave room for a whole polling period. */
+#define STEAMCONTROLLER_RUMBLE_RESEND_MS 25
 
     _PACKED(struct FeatureReportHeader {
         unsigned char type;
@@ -43,18 +47,21 @@ namespace controllerlib
         MsgSetSettingsValues setSettingsValues;
     });
 
-    _PACKED(struct MsgSimpleRumbleCmd {
-        uint8_t rumbleType;
-        uint16_t intensity;
-        uint16_t leftMotorSpeed;
-        uint16_t rightMotorSpeed;
-        int8_t leftGain;
-        int8_t rightGain;
+    _PACKED(struct MsgHapticRumbleSide {
+        uint16_t speed;
+        int8_t gain;
     });
 
-    _PACKED(struct SimpleRumbleFeatureReportMsg {
-        FeatureReportHeader header;
-        MsgSimpleRumbleCmd simpleRumble;
+    _PACKED(struct MsgHapticRumble {
+        uint8_t type;
+        uint16_t intensity;
+        MsgHapticRumbleSide left;
+        MsgHapticRumbleSide right;
+    });
+
+    _PACKED(struct HapticRumbleOutputReport {
+        uint8_t report_id;
+        MsgHapticRumble hapticRumble;
     });
 
     _PACKED(struct TritonWirelessStatus {
@@ -139,17 +146,26 @@ namespace controllerlib
         bool m_is_connected;
     };
 
+    struct SteamControllerRumble
+    {
+        uint16_t speed_low;
+        uint16_t speed_high;
+        std::chrono::steady_clock::time_point sent_at;
+    };
+
     class SteamController2026 : public BaseController
     {
     private:
         RawInputData m_rawInput;
         SteamControllerInfo m_controllerInfo[STEAMCONTROLLER_MAX_INPUTS];
+        SteamControllerRumble m_rumble[STEAMCONTROLLER_MAX_INPUTS]{};
         uint8_t m_controller_count;
 
         Status OnControllerConnect(uint16_t input_idx);
         Status OnControllerDisconnect(uint16_t input_idx);
         Status UpdateLizard(uint16_t input_idx);
         Status SendFeatureReport(uint16_t input_idx, const uint8_t *buffer, uint16_t size);
+        Status SendRumble(uint16_t input_idx);
 
     public:
         SteamController2026(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
@@ -159,6 +175,8 @@ namespace controllerlib
         virtual uint16_t GetInputCount() override;
 
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
+
+        Status ReadInput(NormalizedButtonData *normalData, uint16_t *input_idx, uint32_t timeout_us) override;
 
         virtual bool IsControllerConnected(uint16_t input_idx) override;
 

@@ -128,13 +128,37 @@ namespace controllerlib
         m_interfaces.clear();
     }
 
+    static void StoreAmplitude(uint8_t *packet, const ControllerRumbleField &field, float amplitude)
+    {
+        if (field.size == 0)
+            return;
+
+        const uint32_t value = BaseController::ScaleAmplitude(amplitude, (field.size == 1) ? 0xFF : 0xFFFF);
+
+        for (uint8_t i = 0; i < field.size; i++)
+        {
+            const uint8_t shift = field.littleEndian ? (i * 8) : ((field.size - 1 - i) * 8);
+            packet[field.offset + i] = (uint8_t)(value >> shift);
+        }
+    }
+
     Status BaseController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
     {
-        (void)input_idx;
-        (void)amp_high;
-        (void)amp_low;
-        // Not implemented yet
-        return Status::NotImplemented;
+        const ControllerRumbleConfig &rumble = GetConfig().rumble;
+
+        if (!rumble.IsValid())
+            return Status::NotImplemented;
+
+        if (m_outPipe.size() <= input_idx)
+            return Status::InvalidIndex;
+
+        uint8_t packet[MAX_RUMBLE_PACKET_SIZE];
+        memcpy(packet, rumble.packet.data(), rumble.packetSize);
+
+        StoreAmplitude(packet, rumble.low, amp_low);
+        StoreAmplitude(packet, rumble.high, amp_high);
+
+        return m_outPipe[input_idx]->Write(packet, rumble.packetSize);
     }
 
     Status BaseController::ReadEndpointLatest(uint16_t endpoint_idx, uint8_t *buffer, size_t *size, uint32_t timeout_us)

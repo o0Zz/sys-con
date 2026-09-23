@@ -100,7 +100,8 @@ namespace controllerlib
 
         uint8_t status = buffer[0];
 
-        m_rumble_supported[*input_idx] = ((status & STATE_EXTRA_POWER) != 0); // Rumble can be supported if Extra Power bit is set
+        // Rumble needs the adapter's extra power lead, and a WaveBird has no motor at all.
+        m_rumble_supported[*input_idx] = ((status & STATE_EXTRA_POWER) != 0) && ((status & STATE_WAVEBIRD) == 0);
         m_is_connected[*input_idx] = (status & (STATE_NORMAL | STATE_WAVEBIRD)) != 0;
 
         if (!m_is_connected[*input_idx])
