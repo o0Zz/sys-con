@@ -597,7 +597,14 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 
     memset(internal_state, 0, sizeof(HidNpadInternalState));
 
-    internal_state->style_set = HidNpadStyleTag_NpadSystemExt | HidNpadStyleTag_NpadFullKey;
+    /*
+        FullKey only. SystemExt is a system-privileged style, and the real hid masks each
+        client's style_set by the set that client declared through SetSupportedNpadStyleSet.
+        One fake shared memory is shared by every mitm'd process here, so announcing
+        SystemExt hands an application a style it never asked for - which is an abort inside
+        nn::hid for titles that validate it, SSBU among them.
+    */
+    internal_state->style_set = HidNpadStyleTag_NpadFullKey;
     internal_state->joy_assignment_mode = 0;
     // The same colours the pad was created with, so a mitm'd applet draws it the way the
     // Controllers menu - which reads the real hid - already does.
@@ -606,7 +613,6 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
     internal_state->full_key_color.full_key.sub = m_buttons_color;
 
     internal_state->full_key_lifo.header.buffer_count = 17;
-    internal_state->system_ext_lifo.header.buffer_count = 17;
     internal_state->full_key_six_axis_sensor_lifo.header.buffer_count = 17;
 
     internal_state->device_type = HidDeviceTypeBits_FullKey;
@@ -658,7 +664,6 @@ void HidSharedMemoryController::Publish()
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
 
     AppendState(&internal_state->full_key_lifo, state);
-    AppendState(&internal_state->system_ext_lifo, state);
 
     // The npad and six-axis lifos are only ever filled together, so they share one sampling
     // number and neither can show the gap that hangs a reader.
