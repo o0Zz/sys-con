@@ -10,6 +10,7 @@
 #include "version.h"
 #include "SwitchHDLHandler.h"
 #include "HidMitm.h"
+#include "IdleSys.h"
 
 namespace syscon
 {
@@ -53,10 +54,15 @@ namespace syscon
         // is not intercepted). It is what lets a handler read back which npad the console
         // gave a pad it just created - see SwitchMITMHandler::AttachController.
         AbortStep(hidInitialize(), 6);
+        // idle:sys is what real hid pokes on every input to keep the console out of
+        // dimming / auto-sleep. Since we replace hid, the console never sees the inputs
+        // via the normal path, so we report the activity ourselves from the mitm loop.
+        AbortStep(idlesysInitialize(), 7);
     }
 
     void FinalizeModules()
     {
+        idlesysExit();
         hidExit();
         pscmExit();
         usbHsExit();

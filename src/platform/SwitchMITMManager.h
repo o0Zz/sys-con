@@ -42,6 +42,10 @@ private:
     u64 m_program_id;
     ::Result m_status = 0;
 
+    // Which of the two global fake shared memories this client is bound to (app vs applet).
+    // Chosen from m_program_id in the constructor; never rebound.
+    struct FakeShmem *m_fake = nullptr;
+
     // Zero-initialized on purpose: the constructor gives up at the first failing step, and
     // the destructor still runs. Tearing down an indeterminate Service/SharedMemory closes
     // whatever handle number happened to be on the stack - which on a sysmodule means fs,
@@ -70,8 +74,17 @@ public:
     // handler's polling thread drains it into the driver.
     void GetRumble(float *amp_high, float *amp_low) const;
 
-    void Publish();
-    void Clear();
+    void Publish(::HidSharedMemory *fake, u32 style_set);
+    void Clear(::HidSharedMemory *fake);
+
+    // Reset the slot in every mapped fake shared memory. Called by the manager under
+    // both m_mutex_controller and m_mutex_sharedmemory when a controller is (de)attached
+    // and when a new client is added.
+    void ClearAllFakes();
+
+    // Publish to every mapped fake shared memory with its per-fake style_set.
+    // Called by the manager tick under both locks.
+    void PublishAllFakes();
 
 private:
     uint8_t m_player_idx;
@@ -82,6 +95,12 @@ private:
     u64 m_buttons;
     HidAnalogStickState m_analog_stick_l;
     HidAnalogStickState m_analog_stick_r;
+
+    // Previous sample, kept so Update() can tell whether the state changed and flip the
+    // manager's activity flag without adding an atomic write on every no-op poll.
+    u64 m_prev_buttons = 0;
+    HidAnalogStickState m_prev_analog_stick_l{};
+    HidAnalogStickState m_prev_analog_stick_r{};
 
     void Initialize(HidNpadInternalState *internal_state);
 };
@@ -130,7 +149,7 @@ private:
     void OnRun();
 
     // real -> fake, for everything but the npad slots sys-con owns.
-    void Mirror(HidSharedMemoryEntry &entry);
+    void Mirror(::HidSharedMemory *real, ::HidSharedMemory *fake);
 
     void RunGarbageCollector();
     void DumpProcessesAndMemoryAddr();
@@ -158,6 +177,12 @@ protected:
 
     std::array<std::atomic<bool>, 8> m_player_owned;
     std::array<VibrationSlot, 8 * HidSharedMemoryController::VibrationDeviceCount> m_vibration;
+
+    // Set by Update() when the pad state changes; drained every ~5s by OnRun() which
+    // calls idlesysReportUserIsActive so the OS stops dimming / auto-sleeping the
+    // console. Atomic because Update() runs on each controller's polling thread while
+    // OnRun() runs on the manager thread.
+    std::atomic<bool> m_input_active{false};
 
     std::recursive_mutex m_mutex_sharedmemory;
     std::vector<std::shared_ptr<HidSharedMemoryEntry>> m_sharedmemory_entry_list;

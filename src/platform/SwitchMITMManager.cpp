@@ -1,5 +1,6 @@
 #include "SwitchMITMManager.h"
 #include "SwitchLogger.h"
+#include "IdleSys.h"
 #include <string.h> // memcpy
 #include <algorithm>
 #include <cinttypes>
@@ -22,6 +23,17 @@ namespace
     // Everything past console_six_axis_sensor is unused padding, so it is never mirrored.
     constexpr size_t AfterNpadSize = offsetof(HidSharedMemory, unk_x3C220) - AfterNpadOffset;
 
+    // Program IDs at or above this point are user applications; below are sysmodules
+    // and applets (qlaunch, overlayDisp, profile-select, ...). Applets need NpadSystemExt
+    // in style_set to accept input; applications abort in GetVibrationDeviceHandles if
+    // that bit is present (SSBU, at least).
+    constexpr u64 AppProgramIdMin = 0x0100000000010000ull;
+
+    bool IsAppProgramId(u64 program_id)
+    {
+        return program_id >= AppProgramIdMin;
+    }
+
     u8 *ByteAddr(HidSharedMemory *shmem, size_t offset)
     {
         return reinterpret_cast<u8 *>(shmem) + offset;
@@ -29,60 +41,92 @@ namespace
 } // namespace
 
 /*
-    One fake shared memory for every mitm'd client, rather than one each.
+    Two fake shared memories, one per client kind, rather than one each per client.
     svcCreateSharedMemory charges 256 KiB against the shared system resource limit - sys-con
     has no reservation of its own (pool_partition 2, system_resource_size 0) - so a
     per-client allocation starts failing with 0x00010801 (LimitReached) as soon as the pool
     is tight, which leaves the client with no HID shared memory and takes the console down.
-    Every client can share one: the contents reflect the same physical controllers plus the
-    pads sys-con injects. Allocating it once at Start() also claims the memory while the
-    pool is still free, instead of mid-session when it is not.
-*/
-static ::SharedMemory g_fake_shared_memory{};
-static bool g_fake_shared_memory_seeded = false;
 
-static Result CreateFakeSharedMemory()
+    Splitting apps from applets is what lets an applet keep NpadSystemExt in its style_set
+    while a game runs: nn::hid::GetVibrationDeviceHandles asserts popcount == 1 on
+    (current_style & requested_tags), so any game that requests FullKey aborts if SystemExt
+    is present too (SSBU is the known offender). One fake per kind gives each side the style
+    it needs without a per-client 256 KiB allocation.
+
+    Allocating both at Start() also claims the memory while the pool is still free.
+*/
+struct FakeShmem
 {
-    if (g_fake_shared_memory.handle != INVALID_HANDLE)
+    ::SharedMemory shmem{};
+    bool seeded = false;
+    u32 style_set = 0;
+    const char *label = "";
+};
+
+static FakeShmem g_fake_app{{}, false, HidNpadStyleTag_NpadFullKey, "app"};
+static FakeShmem g_fake_applet{{}, false, HidNpadStyleTag_NpadFullKey | HidNpadStyleTag_NpadSystemExt, "applet"};
+
+static FakeShmem *const g_all_fakes[] = {&g_fake_app, &g_fake_applet};
+
+static FakeShmem *FakeFor(u64 program_id)
+{
+    return IsAppProgramId(program_id) ? &g_fake_app : &g_fake_applet;
+}
+
+static Result CreateFakeShmem(FakeShmem *fake)
+{
+    if (fake->shmem.handle != INVALID_HANDLE)
         return 0;
 
-    Result rc = shmemCreate(&g_fake_shared_memory, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R);
+    Result rc = shmemCreate(&fake->shmem, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R);
     if (R_FAILED(rc))
     {
-        ::syscon::logger::LogError("HidSharedMemory failed to create the shared fake memory: 0x%08X (Mod:%d - Desc:%d)", rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        g_fake_shared_memory = ::SharedMemory{};
+        ::syscon::logger::LogError("HidSharedMemory failed to create the %s fake memory: 0x%08X (Mod:%d - Desc:%d)", fake->label, rc, R_MODULE(rc), R_DESCRIPTION(rc));
+        fake->shmem = ::SharedMemory{};
         return rc;
     }
 
-    rc = shmemMap(&g_fake_shared_memory);
+    rc = shmemMap(&fake->shmem);
     if (R_FAILED(rc))
     {
-        ::syscon::logger::LogError("HidSharedMemory failed to map the shared fake memory: 0x%08X (Mod:%d - Desc:%d)", rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        shmemClose(&g_fake_shared_memory);
-        g_fake_shared_memory = ::SharedMemory{};
+        ::syscon::logger::LogError("HidSharedMemory failed to map the %s fake memory: 0x%08X (Mod:%d - Desc:%d)", fake->label, rc, R_MODULE(rc), R_DESCRIPTION(rc));
+        shmemClose(&fake->shmem);
+        fake->shmem = ::SharedMemory{};
         return rc;
     }
 
-    ::syscon::logger::LogInfo("HidSharedMemory shared fake memory ready (FakeAddr: %p)", shmemGetAddr(&g_fake_shared_memory));
+    ::syscon::logger::LogInfo("HidSharedMemory %s fake memory ready (FakeAddr: %p)", fake->label, shmemGetAddr(&fake->shmem));
     return 0;
 }
 
-static void DestroyFakeSharedMemory()
+static void DestroyFakeShmem(FakeShmem *fake)
 {
-    if (g_fake_shared_memory.map_addr != nullptr)
-        shmemUnmap(&g_fake_shared_memory);
-    if (g_fake_shared_memory.handle != INVALID_HANDLE)
-        shmemClose(&g_fake_shared_memory);
+    if (fake->shmem.map_addr != nullptr)
+        shmemUnmap(&fake->shmem);
+    if (fake->shmem.handle != INVALID_HANDLE)
+        shmemClose(&fake->shmem);
 
-    g_fake_shared_memory = ::SharedMemory{};
-    g_fake_shared_memory_seeded = false;
+    fake->shmem = ::SharedMemory{};
+    fake->seeded = false;
 }
 
-// The npad table of the one shared fake; null until CreateFakeSharedMemory() succeeds.
-static HidNpadSharedMemoryEntry *FakeNpadEntries()
+static Result CreateFakeSharedMemories()
 {
-    HidSharedMemory *fake = static_cast<HidSharedMemory *>(shmemGetAddr(&g_fake_shared_memory));
-    return fake != nullptr ? fake->npad.entries : nullptr;
+    Result rc = CreateFakeShmem(&g_fake_app);
+    if (R_FAILED(rc))
+        return rc;
+    return CreateFakeShmem(&g_fake_applet);
+}
+
+static void DestroyFakeSharedMemories()
+{
+    DestroyFakeShmem(&g_fake_app);
+    DestroyFakeShmem(&g_fake_applet);
+}
+
+static ::HidSharedMemory *FakeAddr(FakeShmem *fake)
+{
+    return static_cast<HidSharedMemory *>(shmemGetAddr(&fake->shmem));
 }
 
 static void memcpy_64(void *dest, const void *src, size_t n)
@@ -130,6 +174,8 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId
 {
     Handle sharedMemHandle;
 
+    m_fake = FakeFor(m_program_id);
+
     m_status = _HidCreateAppletResource(hid_service, &m_appletresource); // Executes the original ipc
     if (R_FAILED(m_status))
     {
@@ -153,22 +199,11 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId
     }
 
     // Normally already created by Start(); this only has to do anything if that failed.
-    m_status = CreateFakeSharedMemory();
+    m_status = CreateFakeShmem(m_fake);
     if (R_FAILED(m_status))
         return;
 
-    ::syscon::logger::LogInfo("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", RealAddr: %p, FakeAddr: %p)", m_process_id, GetRealAddr(), GetFakeAddr());
-
-    /*
-        Seed from the first client only. The shared fake is already live for everyone else,
-        and the mirror thread keeps it current - copying over it again here would wipe the
-        npad slots sys-con has injected for the clients that are already running.
-    */
-    if (!g_fake_shared_memory_seeded)
-    {
-        memcpy_64(GetFakeAddr(), GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-        g_fake_shared_memory_seeded = true;
-    }
+    ::syscon::logger::LogInfo("HidSharedMemoryEntry created successfully (%s, Process id: 0x%016" PRIx64 ", RealAddr: %p, FakeAddr: %p)", m_fake->label, m_process_id, GetRealAddr(), GetFakeAddr());
 }
 
 static void CloseSharedMemory(::SharedMemory *shared_memory)
@@ -192,7 +227,7 @@ HidSharedMemoryEntry::~HidSharedMemoryEntry()
 
 const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
 {
-    return g_fake_shared_memory;
+    return m_fake->shmem;
 }
 
 ::HidSharedMemory *HidSharedMemoryEntry::GetRealAddr()
@@ -202,7 +237,7 @@ const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
 
 ::HidSharedMemory *HidSharedMemoryEntry::GetFakeAddr()
 {
-    return (HidSharedMemory *)shmemGetAddr(&g_fake_shared_memory);
+    return FakeAddr(m_fake);
 }
 
 u64 HidSharedMemoryEntry::GetProcessId() const
@@ -314,7 +349,7 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
     m_player_owned[player_idx].store(true, std::memory_order_relaxed);
 
     std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-    m_controller_list[player_idx]->Clear();
+    m_controller_list[player_idx]->ClearAllFakes();
 
     ::syscon::logger::LogInfo("HidSharedMemoryManager attached a controller on player %d", player_idx + 1);
     return m_controller_list[player_idx];
@@ -333,7 +368,7 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
         ClearVibration(i);
 
         std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-        controller->Clear();
+        controller->ClearAllFakes();
 
         ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", (int)i + 1);
         m_controller_list[i] = nullptr;
@@ -374,21 +409,33 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
     }
 
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
 
     /*
-        The entry starts life as a byte copy of the real shared memory, so the slots
-        sys-con drives still hold whatever the console had there. Clearing them is what
-        makes Publish() see style_set == 0 and lay the virtual npad out from scratch.
+        Seed this entry's fake from its real shared memory the first time we see a client
+        of this kind - otherwise the fake starts zero-filled and the client reads a blank
+        HID snapshot until the mirror thread's next tick. Done under the shmem lock so no
+        mirror pass can interleave; skipped after the first because the mirror thread keeps
+        the fake current and copying over it would wipe the npad slots sys-con injects.
+    */
+    if (!entry->m_fake->seeded)
+    {
+        memcpy_64(entry->GetFakeAddr(), entry->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+        entry->m_fake->seeded = true;
+    }
+
+    /*
+        The seed above (or any previous mirror tick) may leave sys-con's slots holding the
+        console's data, so clear them - the next Publish() then lays the virtual npad out
+        from scratch (Initialize() runs when full_key_lifo.buffer_count is still 0).
     */
     for (const auto &controller : m_controller_list)
     {
         if (controller != nullptr)
-            controller->Clear();
+            controller->ClearAllFakes();
     }
 
-    m_mutex_sharedmemory.lock();
     m_sharedmemory_entry_list.push_back(entry);
-    m_mutex_sharedmemory.unlock();
 
     DumpProcessesAndMemoryAddr();
 
@@ -489,7 +536,7 @@ int HidSharedMemoryManager::Start()
         a client arrives means asking once an applet has already taken the slack, which is
         when svcCreateSharedMemory starts returning 0x00010801 (LimitReached).
     */
-    CreateFakeSharedMemory();
+    CreateFakeSharedMemories();
 
     m_running = true;
 
@@ -517,13 +564,13 @@ void HidSharedMemoryManager::Stop()
     threadWaitForExit(&m_thread);
     threadClose(&m_thread);
 
-    DestroyFakeSharedMemory();
+    DestroyFakeSharedMemories();
 }
 
-void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
+void HidSharedMemoryManager::Mirror(::HidSharedMemory *real, ::HidSharedMemory *fake)
 {
-    HidSharedMemory *real = entry.GetRealAddr();
-    HidSharedMemory *fake = entry.GetFakeAddr();
+    if (real == nullptr || fake == nullptr)
+        return;
 
     memcpy_64(fake, real, NpadOffset);
     memcpy_64(ByteAddr(fake, AfterNpadOffset), ByteAddr(real, AfterNpadOffset), AfterNpadSize);
@@ -556,23 +603,51 @@ void HidSharedMemoryManager::OnRun()
             std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
 
             /*
-                One fake serves every client, so mirror once from any client's real view -
-                they all reflect the same physical controllers - and publish the virtual
-                pads once, rather than repeating both for each client.
+                One mirror pass per fake shmem, sourced from the first client of that
+                kind - all clients of the same kind reflect the same physical controllers.
+                Then publish the virtual pads into every mapped fake with its per-fake
+                style_set (FullKey for apps, FullKey|SystemExt for applets).
             */
-            if (!m_sharedmemory_entry_list.empty())
+            HidSharedMemoryEntry *app_src = nullptr;
+            HidSharedMemoryEntry *applet_src = nullptr;
+            for (const auto &entry : m_sharedmemory_entry_list)
             {
-                Mirror(*m_sharedmemory_entry_list.front());
+                if (entry->m_fake == &g_fake_app && app_src == nullptr)
+                    app_src = entry.get();
+                else if (entry->m_fake == &g_fake_applet && applet_src == nullptr)
+                    applet_src = entry.get();
+                if (app_src != nullptr && applet_src != nullptr)
+                    break;
+            }
 
+            if (app_src != nullptr)
+                Mirror(app_src->GetRealAddr(), FakeAddr(&g_fake_app));
+            if (applet_src != nullptr)
+                Mirror(applet_src->GetRealAddr(), FakeAddr(&g_fake_applet));
+
+            if (app_src != nullptr || applet_src != nullptr)
+            {
                 for (const auto &controller : m_controller_list)
                 {
                     if (controller != nullptr)
-                        controller->Publish();
+                        controller->PublishAllFakes();
                 }
             }
         }
 
-        s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
+        // Every second, if any pad reported activity since the last report, tell idle:sys
+        // so the OS stops dimming / auto-sleeping the console. Rate-limited because
+        // idle:sys IPC is not free and a game hammers Update() at the pad's report rate.
+        static auto last_idle_report = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_idle_report >= std::chrono::seconds(1))
+        {
+            if (m_input_active.exchange(false, std::memory_order_relaxed))
+                idlesysReportUserIsActive();
+            last_idle_report = now;
+        }
+
+        s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(now - startTimer).count();
         if (execution_time_us < POLLING_FREQUENCY_US)
             svcSleepThread((POLLING_FREQUENCY_US - execution_time_us) * 1000); // Convert to nanoseconds
     }
@@ -599,7 +674,8 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 
     memset(internal_state, 0, sizeof(HidNpadInternalState));
 
-    internal_state->style_set = HidNpadStyleTag_NpadSystemExt | HidNpadStyleTag_NpadFullKey;
+    // style_set is written every publish tick so applets and games can see a different
+    // style on the same shared fake; do not bake it in here.
     internal_state->joy_assignment_mode = 0;
     // The same colours the pad was created with, so a mitm'd applet draws it the way the
     // Controllers menu - which reads the real hid - already does.
@@ -639,16 +715,23 @@ static void AppendNpadState(HidNpadCommonLifo *lifo, const HidNpadCommonState &s
 }
 
 /*
-    Called from the manager thread, once per tick per client, whether or not the pad
+    Called from the manager thread, once per tick per fake, whether or not the pad
     reported anything new: a real controller keeps sampling at a fixed rate and the
-    console treats a lifo that stops advancing as a pad that went away.
+    console treats a lifo that stops advancing as a pad that went away. The manager
+    advances m_sampling_number after every fake, so the two fakes stay in step and
+    the same sampling number never reappears on the same slot.
 */
-void HidSharedMemoryController::Publish()
+void HidSharedMemoryController::Publish(::HidSharedMemory *fake, u32 style_set)
 {
-    HidNpadInternalState *internal_state = &FakeNpadEntries()[m_player_idx].internal_state;
+    if (fake == nullptr)
+        return;
 
-    if (internal_state->style_set == 0)
+    HidNpadInternalState *internal_state = &fake->npad.entries[m_player_idx].internal_state;
+
+    if (internal_state->full_key_lifo.header.buffer_count == 0)
         Initialize(internal_state);
+
+    internal_state->style_set = style_set;
 
     HidNpadCommonState state{};
     state.sampling_number = m_sampling_number;
@@ -658,16 +741,38 @@ void HidSharedMemoryController::Publish()
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
 
     AppendNpadState(&internal_state->full_key_lifo, state);
-    AppendNpadState(&internal_state->system_ext_lifo, state);
+    if (style_set & HidNpadStyleTag_NpadSystemExt)
+        AppendNpadState(&internal_state->system_ext_lifo, state);
+}
 
+void HidSharedMemoryController::PublishAllFakes()
+{
+    for (FakeShmem *fake : g_all_fakes)
+    {
+        if (fake->shmem.map_addr == nullptr)
+            continue;
+        Publish(FakeAddr(fake), fake->style_set);
+    }
     m_sampling_number++;
 }
 
 /* ---------------------------------------- */
 
-void HidSharedMemoryController::Clear()
+void HidSharedMemoryController::Clear(::HidSharedMemory *fake)
 {
-    memset(&FakeNpadEntries()[m_player_idx].internal_state, 0, sizeof(HidNpadInternalState));
+    if (fake == nullptr)
+        return;
+    memset(&fake->npad.entries[m_player_idx].internal_state, 0, sizeof(HidNpadInternalState));
+}
+
+void HidSharedMemoryController::ClearAllFakes()
+{
+    for (FakeShmem *fake : g_all_fakes)
+    {
+        if (fake->shmem.map_addr == nullptr)
+            continue;
+        Clear(FakeAddr(fake));
+    }
 }
 
 /* ---------------------------------------- */
@@ -676,9 +781,23 @@ Result HidSharedMemoryController::Update(u64 buttons, const HidAnalogStickState 
 {
     std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
 
+    const bool changed = buttons != m_prev_buttons
+                      || analog_stick_l.x != m_prev_analog_stick_l.x
+                      || analog_stick_l.y != m_prev_analog_stick_l.y
+                      || analog_stick_r.x != m_prev_analog_stick_r.x
+                      || analog_stick_r.y != m_prev_analog_stick_r.y;
+
     m_buttons = buttons;
     m_analog_stick_l = analog_stick_l;
     m_analog_stick_r = analog_stick_r;
+
+    if (changed)
+    {
+        m_prev_buttons = buttons;
+        m_prev_analog_stick_l = analog_stick_l;
+        m_prev_analog_stick_r = analog_stick_r;
+        g_HidSharedMemoryManager.m_input_active.store(true, std::memory_order_relaxed);
+    }
 
     return 0;
 }
