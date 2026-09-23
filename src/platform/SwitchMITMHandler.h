@@ -16,9 +16,11 @@ private:
     std::array<std::shared_ptr<HidSharedMemoryController>, CONTROLLER_MAX_INPUTS> m_controllerList;
     std::array<RumbleState, CONTROLLER_MAX_INPUTS> m_lastRumble{};
 
-    // The hiddbg device behind each input. It exists so the console announces the pad; its
-    // state is never driven, because the fake shared memory overrides the npad it created.
+    // The hiddbg device behind each input. It exists so the console announces the pad, and it
+    // carries Home and Capture, which the console reads from hid itself and never from the
+    // npad the fake shared memory overrides.
     std::array<HiddbgHdlsHandle, CONTROLLER_MAX_INPUTS> m_hdlsHandle{};
+    std::array<u64, CONTROLLER_MAX_INPUTS> m_hdlsButtons{};
 
 protected:
     bool IsControllerAttached(uint16_t input_idx) override;

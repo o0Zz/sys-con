@@ -137,6 +137,7 @@ void SwitchMITMHandler::ReleaseController(uint16_t input_idx)
     }
 
     m_lastRumble[input_idx] = RumbleState{};
+    m_hdlsButtons[input_idx] = 0;
 
     if (m_hdlsHandle[input_idx].handle != 0)
     {
@@ -207,7 +208,31 @@ Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uin
     if (!IsControllerAttached(input_idx))
         return 0;
 
-    return m_controllerList[input_idx]->Update(state);
+    /*
+        Home and Capture only exist as hiddbg HDLS bits; in npad shared memory the same bits
+        are the StickLRight/StickLDown pseudo-buttons. They go to the hiddbg device instead,
+        so hid raises them through hidsys to am, which the MITM never sees.
+    */
+    constexpr u64 SystemButtons = HiddbgNpadButton_Home | HiddbgNpadButton_Capture;
+
+    const u64 hdls_buttons = state.buttons & SystemButtons;
+    if (hdls_buttons != m_hdlsButtons[input_idx])
+    {
+        HiddbgHdlsState hdls_state{};
+        hdls_state.battery_level = 4;
+        hdls_state.buttons = hdls_buttons;
+
+        Result rc = hiddbgSetHdlsState(m_hdlsHandle[input_idx], &hdls_state);
+        if (R_FAILED(rc))
+            return rc;
+
+        m_hdlsButtons[input_idx] = hdls_buttons;
+    }
+
+    SwitchPadState npad_state = state;
+    npad_state.buttons &= ~SystemButtons;
+
+    return m_controllerList[input_idx]->Update(npad_state);
 }
 
 static bool IsRumbling(const SwitchMITMHandler::RumbleState &rumble)

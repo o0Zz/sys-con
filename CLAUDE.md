@@ -92,6 +92,11 @@
   owns and slots empty on both sides; `Update` only stores the latest pad state and the
   manager publishes it every tick, so the pad keeps sampling like real hardware. Slot
   allocation avoids npads the real hid is using.
+- **Home and Capture go through hiddbg, not the fake shared memory.** `HiddbgNpadButton_Home`/
+  `_Capture` (bits 18/19) are `HidNpadButton_StickLRight`/`StickLDown` in npad memory, and `am`
+  reads Home/Capture via hidsys from the real hid it opened before sys-con. So
+  `SwitchMITMHandler::UpdateControllerState` strips them from the npad state and sends them,
+  on change only, as the state of the pad's own hiddbg device.
 
 ## Hardware test rig
 
