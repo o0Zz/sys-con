@@ -313,32 +313,51 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
     ClearVibration(player_idx);
     m_player_owned[player_idx].store(true, std::memory_order_relaxed);
 
-    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-    m_controller_list[player_idx]->Clear();
+    {
+        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+        m_controller_list[player_idx]->Clear();
+    }
 
     ::syscon::logger::LogInfo("HidSharedMemoryManager attached a controller on player %d", player_idx + 1);
     return m_controller_list[player_idx];
 }
 
+/*
+    Every line logged here is an SD write of several milliseconds, and both of these mutexes
+    are wanted by the mirror thread every 5 ms and by the MITM server thread on any client
+    request - which is every hid client on the console. So the locks cover the state change
+    and nothing else, exactly as the garbage collector does.
+*/
 void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryController> controller)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+    ::syscon::logger::LogInfo("HidSharedMemoryManager detaching a controller ...");
 
-    for (size_t i = 0; i < m_controller_list.size(); i++)
+    int player_idx = -1;
+
     {
-        if (m_controller_list[i] != controller)
-            continue;
+        std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
-        m_player_owned[i].store(false, std::memory_order_relaxed);
-        ClearVibration(i);
+        for (size_t i = 0; i < m_controller_list.size(); i++)
+        {
+            if (m_controller_list[i] != controller)
+                continue;
 
-        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-        controller->Clear();
+            m_player_owned[i].store(false, std::memory_order_relaxed);
+            ClearVibration(i);
 
-        ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", (int)i + 1);
-        m_controller_list[i] = nullptr;
-        return;
+            {
+                std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+                controller->Clear();
+            }
+
+            m_controller_list[i] = nullptr;
+            player_idx = (int)i;
+            break;
+        }
     }
+
+    if (player_idx >= 0)
+        ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", player_idx + 1);
 }
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
@@ -373,22 +392,23 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
         return entry->m_status;
     }
 
-    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
-
-    /*
-        The entry starts life as a byte copy of the real shared memory, so the slots
-        sys-con drives still hold whatever the console had there. Clearing them is what
-        makes Publish() see style_set == 0 and lay the virtual npad out from scratch.
-    */
-    for (const auto &controller : m_controller_list)
     {
-        if (controller != nullptr)
-            controller->Clear();
-    }
+        std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
-    m_mutex_sharedmemory.lock();
-    m_sharedmemory_entry_list.push_back(entry);
-    m_mutex_sharedmemory.unlock();
+        /*
+            The entry starts life as a byte copy of the real shared memory, so the slots
+            sys-con drives still hold whatever the console had there. Clearing them is what
+            makes Publish() see style_set == 0 and lay the virtual npad out from scratch.
+        */
+        for (const auto &controller : m_controller_list)
+        {
+            if (controller != nullptr)
+                controller->Clear();
+        }
+
+        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+        m_sharedmemory_entry_list.push_back(entry);
+    }
 
     DumpProcessesAndMemoryAddr();
 

@@ -174,7 +174,9 @@ void SwitchMITMHandler::ReleaseController(uint16_t input_idx)
 
     if (m_hdlsHandle[input_idx].handle != 0)
     {
-        hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
+        syscon::logger::LogInfo("SwitchMITMHandler releasing the hiddbg device of input: %d ...", input_idx);
+        Result rc = hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
+        syscon::logger::LogInfo("SwitchMITMHandler released the hiddbg device of input: %d (Error: 0x%08X)", input_idx, rc);
         m_hdlsHandle[input_idx].handle = 0;
     }
 }
