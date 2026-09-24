@@ -597,14 +597,6 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
 
     memset(internal_state, 0, sizeof(HidNpadInternalState));
 
-    /*
-        FullKey only. SystemExt is a system-privileged style, and the real hid masks each
-        client's style_set by the set that client declared through SetSupportedNpadStyleSet.
-        One fake shared memory is shared by every mitm'd process here, so announcing
-        SystemExt hands an application a style it never asked for - which is an abort inside
-        nn::hid for titles that validate it, SSBU among them.
-    */
-    internal_state->style_set = HidNpadStyleTag_NpadFullKey;
     internal_state->joy_assignment_mode = 0;
     // The same colours the pad was created with, so a mitm'd applet draws it the way the
     // Controllers menu - which reads the real hid - already does.
@@ -613,6 +605,7 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
     internal_state->full_key_color.full_key.sub = m_buttons_color;
 
     internal_state->full_key_lifo.header.buffer_count = 17;
+    internal_state->system_ext_lifo.header.buffer_count = 17;
     internal_state->full_key_six_axis_sensor_lifo.header.buffer_count = 17;
 
     internal_state->device_type = HidDeviceTypeBits_FullKey;
@@ -624,9 +617,30 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
     internal_state->battery_level[1] = 4; // Set battery charge to full.
     internal_state->battery_level[2] = 4; // Set battery charge to full.
     internal_state->applet_footer_ui_type = HidAppletFooterUiType_SwitchProController;
+
+    /*
+        Last, and on its own: style_set is what tells a reader the slot holds a pad, and
+        everything it will then walk - the lifo buffer counts above most of all - has to be in
+        place before it does.
+
+        FullKey alone. SystemExt is a system style, and the real hid only ever reports a
+        style the client itself declared through SetSupportedNpadStyleSet; one fake shared
+        memory serves every mitm'd process here, so a bit set for the system applets is a bit
+        an application reads too, and nn::hid aborts in a title that never asked for it
+        (SSBU). The system applets are served by system_ext_lifo being filled below, which
+        costs them nothing.
+    */
+    __atomic_store_n(&internal_state->style_set, static_cast<u32>(HidNpadStyleTag_NpadFullKey), __ATOMIC_RELEASE);
 }
 
 /* ---------------------------------------- */
+
+template <typename Lifo>
+static void EmptyLifo(Lifo *lifo)
+{
+    __atomic_store_n(&lifo->header.count, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&lifo->header.tail, 0u, __ATOMIC_RELEASE);
+}
 
 template <typename Lifo, typename State>
 static void AppendState(Lifo *lifo, const State &state)
@@ -665,6 +679,10 @@ void HidSharedMemoryController::Publish()
 
     AppendState(&internal_state->full_key_lifo, state);
 
+    // Filled for a style that is deliberately not announced: qlaunch, the Controllers applet
+    // and profile select read this lifo and nothing else.
+    AppendState(&internal_state->system_ext_lifo, state);
+
     // The npad and six-axis lifos are only ever filled together, so they share one sampling
     // number and neither can show the gap that hangs a reader.
     if (m_state.has_motion)
@@ -688,9 +706,24 @@ void HidSharedMemoryController::Publish()
 
 /* ---------------------------------------- */
 
+/*
+    Retires the pad in the order a reader walks it: style_set first, so the clients that come
+    after stop at the slot, then the lifos through their count. buffer_count is never unset -
+    a reader already inside the lifo divides by it, and nn::hid restarts its read from the top
+    whenever the sampling numbers it collected are not consecutive, so a header wiped
+    underneath it is a read that need not terminate.
+*/
 void HidSharedMemoryController::Clear()
 {
-    memset(&FakeNpadEntries()[m_player_idx].internal_state, 0, sizeof(HidNpadInternalState));
+    HidNpadInternalState *internal_state = &FakeNpadEntries()[m_player_idx].internal_state;
+
+    __atomic_store_n(&internal_state->style_set, 0u, __ATOMIC_RELEASE);
+
+    EmptyLifo(&internal_state->full_key_lifo);
+    EmptyLifo(&internal_state->system_ext_lifo);
+    EmptyLifo(&internal_state->full_key_six_axis_sensor_lifo);
+
+    m_sampling_number = 0;
 }
 
 /* ---------------------------------------- */
