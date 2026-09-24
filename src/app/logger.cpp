@@ -6,7 +6,6 @@
 #include <thread>
 #include <fstream>
 #include <filesystem>
-#include <iostream>
 #include <inttypes.h>
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)

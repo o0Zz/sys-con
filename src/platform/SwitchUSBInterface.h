@@ -31,7 +31,5 @@ public:
 
     // Get the unique session ID for this interface
     inline s32 GetID() { return m_session.ID; }
-    // Get the raw interface
-    inline UsbHsInterface &GetInterface() { return m_interface; }
     virtual controllerlib::IUSBInterface::InterfaceDescriptor *GetDescriptor() override { return reinterpret_cast<controllerlib::IUSBInterface::InterfaceDescriptor *>(&m_interface.inf.interface_desc); }
 };
