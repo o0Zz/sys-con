@@ -20,7 +20,7 @@ namespace ams::syscon::hid::mitm
     {
         ::syscon::logger::LogDebug("HidMitmService::CreateAppletResource...");
 
-        std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(this->m_forward_service.get(), applet_resource_user_id.GetValue().value, m_client_info.program_id.value);
+        std::shared_ptr<HidSharedMemoryEntry> entry = HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(this->m_forward_service.get(), applet_resource_user_id.GetValue().value, m_client_info.process_id.value, m_client_info.program_id.value);
 
         /*
          * No entry means the fake shared memory could not be created - typically

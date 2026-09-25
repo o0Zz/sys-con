@@ -29,7 +29,7 @@ class HidSharedMemoryEntry
     friend class HidSharedMemoryManager;
 
 public:
-    HidSharedMemoryEntry(::Service *hid_service, u64 processId, u64 programId);
+    HidSharedMemoryEntry(::Service *hid_service, u64 aruid, u64 processId, u64 programId);
     ~HidSharedMemoryEntry();
 
     const ::SharedMemory &GetSharedMemoryHandle() const;
@@ -133,7 +133,7 @@ public:
     void GetRumble(uint8_t player_idx, float *amp_high, float *amp_low) const;
     void ClearVibration(uint8_t player_idx);
 
-    std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId);
+    std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 aruid, u64 processId, u64 programId);
 
     Result Add(const std::shared_ptr<HidSharedMemoryEntry> &entry);
 

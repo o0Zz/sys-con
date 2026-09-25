@@ -541,12 +541,13 @@ namespace syscon::hid::mitm
             // and invalidate any reference into it.
             Service forward = m_sessions[idx - 2].forward;
             const u64 program_id = m_sessions[idx - 2].info.program_id;
+            const u64 process_id = m_sessions[idx - 2].info.process_id;
             const bool domain = m_sessions[idx - 2].is_domain;
 
             ::syscon::logger::LogInfo("HidMitm: CreateAppletResource from program 0x%016lX (aruid=0x%lX) ...", program_id, aruid);
 
             std::shared_ptr<HidSharedMemoryEntry> entry =
-                HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(&forward, aruid, program_id);
+                HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(&forward, aruid, process_id, program_id);
             if (!entry)
             {
                 ::syscon::logger::LogError("HidMitm: CreateIfNotExists failed (aruid=0x%lX)", aruid);

@@ -145,14 +145,29 @@ static void memcpy_64(void *dest, const void *src, size_t n)
               HidSharedMemoryEntry
 ************************************************************/
 
-static Result _HidCreateAppletResource(Service *srv, Service *out_iappletresource)
+/*
+    The real IAppletResource has to be the client's, not ours: hid keeps one shared memory per
+    aruid and writes into it only the npad styles that aruid declared. Created with sys-con's
+    own aruid and pid, every client was mirrored from the view of a process that never called
+    SetSupportedNpadStyleSet - SystemExt on every npad - and SSBU asserted in
+    GetVibrationDeviceHandles. libnx can only send our own pid, so the request is built by hand
+    with the client's pid carrying the mitm tag, exactly as a forwarded request does.
+*/
+static Result _HidCreateAppletResource(Service *srv, u64 aruid, u64 client_pid, Service *out_iappletresource)
 {
-    u64 AppletResourceUserId = appletGetAppletResourceUserId();
+    constexpr u64 MitmProcessIdTag = 0xFFFE000000000000ul;
 
-    return serviceDispatchIn(srv, 0, AppletResourceUserId,
-                             .in_send_pid = true,
-                             .out_num_objects = 1,
-                             .out_objects = out_iappletresource, );
+    Service s = *srv;
+    void *in = serviceMakeRequest(&s, 0, 0, sizeof(u64), true, SfBufferAttrs{}, nullptr, 0, nullptr, 0, nullptr);
+    *static_cast<u64 *>(in) = aruid;
+    *reinterpret_cast<u64 *>(static_cast<u8 *>(armGetTls()) + sizeof(HipcHeader) + sizeof(HipcSpecialHeader)) = MitmProcessIdTag | client_pid;
+
+    Result rc = svcSendSyncRequest(s.session);
+    if (R_FAILED(rc))
+        return rc;
+
+    void *out = nullptr;
+    return serviceParseResponse(&s, 0, &out, 1, out_iappletresource, SfOutHandleAttrs{}, nullptr);
 }
 
 static Result _HidGetSharedMemoryHandle(Service *srv, Handle *handle_out)
@@ -162,12 +177,12 @@ static Result _HidGetSharedMemoryHandle(Service *srv, Handle *handle_out)
                            .out_handles = handle_out, );
 }
 
-HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId, u64 programId)
+HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 aruid, u64 processId, u64 programId)
     : m_process_id(processId), m_program_id(programId), m_view(ViewForProgram(programId))
 {
     Handle sharedMemHandle;
 
-    m_status = _HidCreateAppletResource(hid_service, &m_appletresource); // Executes the original ipc
+    m_status = _HidCreateAppletResource(hid_service, aruid, processId, &m_appletresource);
     if (R_FAILED(m_status))
     {
         ::syscon::logger::LogError("HidSharedMemoryEntry failed to create applet resource (Process id: 0x%016" PRIx64 ")", m_process_id);
@@ -386,7 +401,7 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
         ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", player_idx + 1);
 }
 
-std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 processId, u64 programId)
+std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 aruid, u64 processId, u64 programId)
 {
     /*
         Reclaim before allocating, not after. Every mitm'd process costs a 256 KiB fake
@@ -398,7 +413,7 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(
     */
     RunGarbageCollector();
 
-    std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(hid_service, processId, programId);
+    std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(hid_service, aruid, processId, programId);
 
     // A half-built entry must never reach the client: its fake shared memory handle is
     // invalid, and handing that out as a copy handle is worse than failing the command.
