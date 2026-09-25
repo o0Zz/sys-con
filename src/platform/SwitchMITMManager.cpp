@@ -342,29 +342,29 @@ HidVibrationValue HidSharedMemoryManager::GetVibration(uint8_t player_idx, uint8
     };
 }
 
-/*
-    A Switch pad has one actuator per grip and each carries a low and a high band, while a
-    driver takes a single pair of amplitudes. The loudest band of either actuator is what the
-    player feels, so that is what is handed down.
-*/
-void HidSharedMemoryManager::GetRumble(uint8_t player_idx, float *amp_high, float *amp_low) const
+static controllerlib::RumbleActuator ToRumbleActuator(const HidVibrationValue &value)
 {
-    *amp_high = 0.0f;
-    *amp_low = 0.0f;
+    return controllerlib::RumbleActuator{
+        .amp_low = value.amp_low,
+        .freq_low = value.freq_low,
+        .amp_high = value.amp_high,
+        .freq_high = value.freq_high,
+    };
+}
 
-    for (uint8_t device_idx = 0; device_idx < HidSharedMemoryController::VibrationDeviceCount; device_idx++)
-    {
-        const VibrationSlot &slot = m_vibration[(player_idx * HidSharedMemoryController::VibrationDeviceCount) + device_idx];
-
-        *amp_high = std::max(*amp_high, slot.amp_high.load(std::memory_order_relaxed));
-        *amp_low = std::max(*amp_low, slot.amp_low.load(std::memory_order_relaxed));
-    }
+controllerlib::RumbleValue HidSharedMemoryManager::GetRumble(uint8_t player_idx) const
+{
+    return controllerlib::RumbleValue{
+        .left = ToRumbleActuator(GetVibration(player_idx, 0)),
+        .right = ToRumbleActuator(GetVibration(player_idx, 1)),
+    };
 }
 
 void HidSharedMemoryManager::ClearVibration(uint8_t player_idx)
 {
+    const controllerlib::RumbleActuator idle{};
     for (uint8_t device_idx = 0; device_idx < HidSharedMemoryController::VibrationDeviceCount; device_idx++)
-        SetVibration(player_idx, device_idx, HidVibrationValue{});
+        SetVibration(player_idx, device_idx, HidVibrationValue{.amp_low = 0.0f, .freq_low = idle.freq_low, .amp_high = 0.0f, .freq_high = idle.freq_high});
 }
 
 void HidSharedMemoryManager::OnSupportedNpadStyleSet(u64 program_id, u32 style_set)
@@ -976,7 +976,7 @@ Result HidSharedMemoryController::Update(const SwitchPadState &state)
 
 /* ---------------------------------------- */
 
-void HidSharedMemoryController::GetRumble(float *amp_high, float *amp_low) const
+controllerlib::RumbleValue HidSharedMemoryController::GetRumble() const
 {
-    g_HidSharedMemoryManager.GetRumble(m_player_idx, amp_high, amp_low);
+    return g_HidSharedMemoryManager.GetRumble(m_player_idx);
 }

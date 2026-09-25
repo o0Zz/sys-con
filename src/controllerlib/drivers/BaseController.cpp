@@ -142,23 +142,23 @@ namespace controllerlib
         }
     }
 
-    Status BaseController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status BaseController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
-        const ControllerRumbleConfig &rumble = GetConfig().rumble;
+        const ControllerRumbleConfig &config = GetConfig().rumble;
 
-        if (!rumble.IsValid())
+        if (!config.IsValid())
             return Status::NotImplemented;
 
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
 
         uint8_t packet[MAX_RUMBLE_PACKET_SIZE];
-        memcpy(packet, rumble.packet.data(), rumble.packetSize);
+        memcpy(packet, config.packet.data(), config.packetSize);
 
-        StoreAmplitude(packet, rumble.low, amp_low);
-        StoreAmplitude(packet, rumble.high, amp_high);
+        StoreAmplitude(packet, config.low, rumble.LowAmplitude());
+        StoreAmplitude(packet, config.high, rumble.HighAmplitude());
 
-        return m_outPipe[input_idx]->Write(packet, rumble.packetSize);
+        return m_outPipe[input_idx]->Write(packet, config.packetSize);
     }
 
     Status BaseController::ReadEndpointLatest(uint16_t endpoint_idx, uint8_t *buffer, size_t *size, uint32_t timeout_us)

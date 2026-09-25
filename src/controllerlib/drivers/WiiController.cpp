@@ -133,7 +133,7 @@ namespace controllerlib
         return m_is_connected[input_idx];
     }
 
-    Status WiiController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status WiiController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (input_idx >= WII_MAX_INPUTS)
             return Status::InvalidIndex;
@@ -145,7 +145,7 @@ namespace controllerlib
         if (!m_rumble_supported[input_idx])
             return Status::NotImplemented;
 
-        rumbleData[1 + input_idx] = (amp_high > 0.0f || amp_low > 0.0f) ? 1 : 0;
+        rumbleData[1 + input_idx] = rumble.IsActive() ? 1 : 0;
 
         return m_outPipe[0]->Write(rumbleData, sizeof(rumbleData));
     }

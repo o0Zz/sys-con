@@ -1,4 +1,6 @@
 #include "drivers/SwitchController.h"
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #define SWITCH_INPUT_BUFFER_SIZE 64
@@ -97,12 +99,7 @@ namespace controllerlib
     static constexpr uint16_t RUMBLE_AMPLITUDE_MAX = RUMBLE_AMPLITUDE_STEPS[(sizeof(RUMBLE_AMPLITUDE_STEPS) / sizeof(RUMBLE_AMPLITUDE_STEPS[0])) - 1];
     static constexpr uint32_t RUMBLE_AMPLITUDE_LAST_STEP = (sizeof(RUMBLE_AMPLITUDE_STEPS) / sizeof(RUMBLE_AMPLITUDE_STEPS[0])) - 1;
 
-    /*
-        An actuator takes an encoded frequency/amplitude pair. The frequencies stay at the
-        defaults (160 Hz low, 320 Hz high), which is what makes the idle pair 00 01 40 40 and
-        full scale 00 C9 40 72; only the amplitude moves. Ref: joycon_encode_rumble, same file.
-    */
-    void SwitchController::EncodeRumble(uint8_t *data, float amplitude)
+    uint32_t SwitchController::AmplitudeStep(float amplitude)
     {
         const uint32_t wanted = ScaleAmplitude(amplitude, RUMBLE_AMPLITUDE_MAX);
 
@@ -110,15 +107,42 @@ namespace controllerlib
         while (step < RUMBLE_AMPLITUDE_LAST_STEP && RUMBLE_AMPLITUDE_STEPS[step] < wanted)
             step++;
 
-        const uint16_t amp_low = (uint16_t)(0x0040 + (step / 2) + ((step % 2) ? 0x8000 : 0x0000));
-
-        data[0] = 0x00;
-        data[1] = (uint8_t)(0x01 + (step * 2));
-        data[2] = (uint8_t)(0x40 + (amp_low >> 8));
-        data[3] = (uint8_t)(amp_low & 0xFF);
+        return step;
     }
 
-    Status SwitchController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    /*
+        A frequency is coded as round(32 * log2(f / 10)). The high band keeps codes 0x60-0xDF
+        (80-1252 Hz), the low band 0x40-0xBF (40-626 Hz); anything outside is clamped to the
+        band's edge. Ref: dekuNukem/Nintendo_Switch_Reverse_Engineering, rumble_data_table.md.
+    */
+    static uint32_t FrequencyCode(float frequency, uint32_t min_code)
+    {
+        const float code = std::round(32.0f * std::log2(std::max(frequency, 1.0f) / 10.0f));
+        return std::clamp<uint32_t>((uint32_t)std::max(code, 0.0f), min_code, min_code + 0x7F);
+    }
+
+    /*
+        One actuator is four bytes: the high band's frequency and amplitude, then the low
+        band's. At the defaults (320 Hz / 160 Hz) idle is 00 01 40 40 and full scale 00 C9 40 72.
+        Ref: joycon_encode_rumble in drivers/hid/hid-nintendo.c.
+    */
+    void SwitchController::EncodeRumble(uint8_t *data, const RumbleActuator &actuator)
+    {
+        const uint16_t hf_freq = (uint16_t)((FrequencyCode(actuator.freq_high, 0x60) - 0x60) * 4);
+        const uint8_t lf_freq = (uint8_t)(FrequencyCode(actuator.freq_low, 0x40) - 0x40);
+
+        const uint32_t hf_step = AmplitudeStep(actuator.amp_high);
+        const uint32_t lf_step = AmplitudeStep(actuator.amp_low);
+        const uint8_t hf_amp = (uint8_t)(hf_step * 2);
+        const uint16_t lf_amp = (uint16_t)(0x0040 + (lf_step / 2) + ((lf_step % 2) ? 0x8000 : 0x0000));
+
+        data[0] = (uint8_t)(hf_freq & 0xFF);
+        data[1] = (uint8_t)(hf_amp + (hf_freq >> 8));
+        data[2] = (uint8_t)(lf_freq + (lf_amp >> 8));
+        data[3] = (uint8_t)(lf_amp & 0xFF);
+    }
+
+    Status SwitchController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (input_idx != 0)
             return Status::InvalidIndex;
@@ -127,8 +151,8 @@ namespace controllerlib
             return Status::InvalidEndpoint;
 
         uint8_t rumblePacket[10]{SWITCH_OUTPUT_ID_RUMBLE, (uint8_t)(m_packet_counter++ & 0x0F)};
-        EncodeRumble(&rumblePacket[2], amp_low);
-        EncodeRumble(&rumblePacket[6], amp_high);
+        EncodeRumble(&rumblePacket[2], rumble.left);
+        EncodeRumble(&rumblePacket[6], rumble.right);
 
         return m_outPipe[0]->Write(rumblePacket, sizeof(rumblePacket));
     }

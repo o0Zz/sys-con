@@ -269,12 +269,12 @@ TEST(Controller, test_sinput_rumble)
     EXPECT_EQ(controller.Initialize(), Status::Success);
     EXPECT_TRUE(controller.Support(SUPPORTS_RUMBLE));
     EXPECT_TRUE(controller.Support(SUPPORTS_MOTION));
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 0.5f), Status::Success);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 0.5f, .amp_high = 1.0f}}), Status::Success);
 }
 
 TEST(Controller, test_sinput_rumble_without_output_endpoint)
 {
     SInputController controller = MakeController();
 
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::InvalidIndex);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::InvalidIndex);
 }

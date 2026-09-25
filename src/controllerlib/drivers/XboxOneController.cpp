@@ -270,7 +270,7 @@ namespace controllerlib
         return m_outPipe[input_idx]->Write(report, sizeof(report));
     }
 
-    Status XboxOneController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status XboxOneController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
@@ -284,8 +284,8 @@ namespace controllerlib
             GIP_CMD_RUMBLE, 0x00, m_rumble_sequence, GIP_PL_LEN(9),
             0x00, GIP_MOTOR_ALL,
             0x00, 0x00,
-            (uint8_t)ScaleAmplitude(amp_low, GIP_MOTOR_LEVEL_MAX),
-            (uint8_t)ScaleAmplitude(amp_high, GIP_MOTOR_LEVEL_MAX),
+            (uint8_t)ScaleAmplitude(rumble.LowAmplitude(), GIP_MOTOR_LEVEL_MAX),
+            (uint8_t)ScaleAmplitude(rumble.HighAmplitude(), GIP_MOTOR_LEVEL_MAX),
             0xff, 0x00, 0xff};
 
         return m_outPipe[input_idx]->Write(rumble_data, sizeof(rumble_data));

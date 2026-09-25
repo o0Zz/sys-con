@@ -114,6 +114,6 @@ namespace controllerlib
 
         bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE; }
 
-        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
+        Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) override;
     };
 } // namespace controllerlib

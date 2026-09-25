@@ -5,16 +5,9 @@
 
 class SwitchMITMHandler : public SwitchVirtualGamepadHandler
 {
-public:
-    struct RumbleState
-    {
-        float amp_high;
-        float amp_low;
-    };
-
 private:
     std::array<std::shared_ptr<HidSharedMemoryController>, CONTROLLER_MAX_INPUTS> m_controllerList;
-    std::array<RumbleState, CONTROLLER_MAX_INPUTS> m_lastRumble{};
+    std::array<controllerlib::RumbleValue, CONTROLLER_MAX_INPUTS> m_lastRumble{};
 
     // The hiddbg device behind each input. It exists so the console announces the pad, and it
     // carries Home and Capture, which the console reads from hid itself and never from the

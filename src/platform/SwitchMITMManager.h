@@ -85,7 +85,7 @@ public:
 
     // Vibration flows the other way: a mitm'd hid command stores it in the manager and the
     // handler's polling thread drains it into the driver.
-    void GetRumble(float *amp_high, float *amp_low) const;
+    controllerlib::RumbleValue GetRumble() const;
 
     void Publish();
     void Clear();
@@ -160,7 +160,7 @@ public:
 
     void SetVibration(uint8_t player_idx, uint8_t device_idx, const HidVibrationValue &value);
     HidVibrationValue GetVibration(uint8_t player_idx, uint8_t device_idx) const;
-    void GetRumble(uint8_t player_idx, float *amp_high, float *amp_low) const;
+    controllerlib::RumbleValue GetRumble(uint8_t player_idx) const;
     void ClearVibration(uint8_t player_idx);
 
     std::shared_ptr<HidSharedMemoryEntry> CreateIfNotExists(::Service *hid_service, u64 aruid, u64 processId, u64 programId);
@@ -198,10 +198,10 @@ protected:
     // be read while another is being written, which for a motor amplitude is harmless.
     struct VibrationSlot
     {
-        std::atomic<float> amp_low;
-        std::atomic<float> amp_high;
-        std::atomic<float> freq_low;
-        std::atomic<float> freq_high;
+        std::atomic<float> amp_low{0.0f};
+        std::atomic<float> amp_high{0.0f};
+        std::atomic<float> freq_low{controllerlib::RumbleActuator{}.freq_low};
+        std::atomic<float> freq_high{controllerlib::RumbleActuator{}.freq_high};
     };
 
     std::array<std::atomic<bool>, 8> m_player_owned;

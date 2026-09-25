@@ -158,15 +158,15 @@ TEST(Controller, test_switch_rumble_full_scale)
 
     EXPECT_TRUE(controller->Support(SUPPORTS_RUMBLE));
 
-    // Report 0x10, packet counter, then the encoded pair per side. Full scale on the low
-    // frequency band is the documented 00 C9 40 72, idle is 00 01 40 40.
+    // Report 0x10, packet counter, then four bytes per actuator, left first. Both bands at full
+    // scale on the default frequencies is the documented 00 C9 40 72, idle is 00 01 40 40.
     uint8_t expected[]{0x10, 0x02, 0x00, 0xC9, 0x40, 0x72, 0x00, 0x01, 0x40, 0x40};
 
     EXPECT_CALL(*outEndpoint, Write(BufferMatches(expected, sizeof(expected)), sizeof(expected)))
         .Times(1)
         .WillOnce(testing::Return(Status::Success));
 
-    EXPECT_EQ(controller->SetRumble(0, 0.0f, 1.0f), Status::Success);
+    EXPECT_EQ(controller->SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::Success);
 }
 
 TEST(Controller, test_switch_rumble_follows_the_amplitude_table)
@@ -185,7 +185,43 @@ TEST(Controller, test_switch_rumble_follows_the_amplitude_table)
         .Times(1)
         .WillOnce(testing::Return(Status::Success));
 
-    EXPECT_EQ(controller->SetRumble(0, 0.0f, 0.5f), Status::Success);
+    EXPECT_EQ(controller->SetRumble(0, RumbleValue{.left = {.amp_low = 0.5f, .amp_high = 0.5f}}), Status::Success);
+}
+
+TEST(Controller, test_switch_rumble_keeps_bands_frequencies_and_sides_apart)
+{
+    ControllerConfig config;
+    MockUSBEndpoint *outEndpoint = nullptr;
+    auto controller = MakeInitializedController(config, &outEndpoint);
+
+    /*
+        Left: silent high band, half amplitude low band at 80 Hz (code 0x60, so 0x20 in the low
+        byte). Right: full high band at 640 Hz (code 0xC0, so 0x180 split over two bytes).
+    */
+    uint8_t expected[]{0x10, 0x02, 0x00, 0x01, 0x20, 0x62, 0x80, 0xC9, 0x40, 0x40};
+
+    EXPECT_CALL(*outEndpoint, Write(BufferMatches(expected, sizeof(expected)), sizeof(expected)))
+        .Times(1)
+        .WillOnce(testing::Return(Status::Success));
+
+    EXPECT_EQ(controller->SetRumble(0, RumbleValue{.left = {.amp_low = 0.5f, .freq_low = 80.0f},
+                                                   .right = {.amp_high = 1.0f, .freq_high = 640.0f}}),
+              Status::Success);
+}
+
+TEST(Controller, test_switch_rumble_clamps_frequencies_to_the_band)
+{
+    ControllerConfig config;
+    MockUSBEndpoint *outEndpoint = nullptr;
+    auto controller = MakeInitializedController(config, &outEndpoint);
+
+    uint8_t expected[]{0x10, 0x02, 0xFC, 0x01, 0x00, 0x40, 0x00, 0x01, 0x40, 0x40};
+
+    EXPECT_CALL(*outEndpoint, Write(BufferMatches(expected, sizeof(expected)), sizeof(expected)))
+        .Times(1)
+        .WillOnce(testing::Return(Status::Success));
+
+    EXPECT_EQ(controller->SetRumble(0, RumbleValue{.left = {.freq_low = 0.0f, .freq_high = 2000.0f}}), Status::Success);
 }
 
 TEST(Controller, test_switch_rumble_without_output_endpoint)
@@ -193,6 +229,6 @@ TEST(Controller, test_switch_rumble_without_output_endpoint)
     ControllerConfig config;
     SwitchController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
 
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::InvalidEndpoint);
-    EXPECT_EQ(controller.SetRumble(1, 1.0f, 1.0f), Status::InvalidIndex);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::InvalidEndpoint);
+    EXPECT_EQ(controller.SetRumble(1, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::InvalidIndex);
 }

@@ -166,13 +166,13 @@ namespace controllerlib
         return SendFeatureReport(input_idx, buffer, sizeof(buffer));
     }
 
-    Status SteamController2026::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status SteamController2026::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (input_idx >= STEAMCONTROLLER_MAX_INPUTS)
             return Status::InvalidIndex;
 
-        m_rumble[input_idx].speed_low = static_cast<uint16_t>(ScaleAmplitude(amp_low, 65535));
-        m_rumble[input_idx].speed_high = static_cast<uint16_t>(ScaleAmplitude(amp_high, 65535));
+        m_rumble[input_idx].speed_low = static_cast<uint16_t>(ScaleAmplitude(rumble.LowAmplitude(), 65535));
+        m_rumble[input_idx].speed_high = static_cast<uint16_t>(ScaleAmplitude(rumble.HighAmplitude(), 65535));
 
         return SendRumble(input_idx);
     }

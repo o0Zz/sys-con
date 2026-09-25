@@ -207,7 +207,7 @@ TEST(Controller, test_network_controller_reports_no_rumble)
     NetworkController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
 
     EXPECT_FALSE(controller.Support(SUPPORTS_RUMBLE));
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::NotImplemented);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::NotImplemented);
 }
 
 TEST(Controller, test_network_controller_decodes_a_packet_from_networkpad_py)

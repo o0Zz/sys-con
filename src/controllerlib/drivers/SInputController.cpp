@@ -147,7 +147,7 @@ namespace controllerlib
         return Status::Success;
     }
 
-    Status SInputController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status SInputController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
@@ -158,9 +158,9 @@ namespace controllerlib
             SINPUT_REPORT_ID_COMMAND,
             SINPUT_COMMAND_HAPTIC,
             SINPUT_HAPTIC_TYPE_RUMBLE,
-            static_cast<uint8_t>(ScaleAmplitude(amp_low, 255)),
+            static_cast<uint8_t>(ScaleAmplitude(rumble.LowAmplitude(), 255)),
             0x00,
-            static_cast<uint8_t>(ScaleAmplitude(amp_high, 255)),
+            static_cast<uint8_t>(ScaleAmplitude(rumble.HighAmplitude(), 255)),
             0x00};
 
         return m_outPipe[input_idx]->Write(rumbleData, sizeof(rumbleData));

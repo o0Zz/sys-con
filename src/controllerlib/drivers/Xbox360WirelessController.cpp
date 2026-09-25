@@ -101,15 +101,15 @@ namespace controllerlib
         return XBOX360_MAX_INPUTS;
     }
 
-    Status Xbox360WirelessController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status Xbox360WirelessController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
 
         // The endpoint already selects the receiver slot, so byte 1 is the constant 0x01.
         const uint8_t rumbleData[]{0x00, 0x01, 0x0F, 0xC0, 0x00,
-                                   (uint8_t)ScaleAmplitude(amp_low, 255),
-                                   (uint8_t)ScaleAmplitude(amp_high, 255),
+                                   (uint8_t)ScaleAmplitude(rumble.LowAmplitude(), 255),
+                                   (uint8_t)ScaleAmplitude(rumble.HighAmplitude(), 255),
                                    0x00, 0x00, 0x00, 0x00, 0x00};
 
         return m_outPipe[input_idx]->Write(rumbleData, sizeof(rumbleData));

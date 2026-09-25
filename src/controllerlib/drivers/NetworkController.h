@@ -53,7 +53,7 @@ namespace controllerlib
         virtual Status ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx) override;
 
         bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_MOTION; }
-        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
+        Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) override;
 
         /*
             False until the first valid report arrives, then whatever that report said.

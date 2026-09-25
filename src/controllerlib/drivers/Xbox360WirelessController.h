@@ -34,7 +34,7 @@ namespace controllerlib
 
         uint16_t GetInputCount() override;
 
-        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
+        Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) override;
 
         bool IsControllerConnected(uint16_t input_idx) override;
     };

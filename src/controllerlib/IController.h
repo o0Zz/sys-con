@@ -56,7 +56,7 @@ namespace controllerlib
 
         virtual bool Support(ControllerFeature feature) const = 0;
 
-        virtual Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) = 0;
+        virtual Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) = 0;
 
         virtual bool IsControllerConnected(uint16_t input_idx)
         {

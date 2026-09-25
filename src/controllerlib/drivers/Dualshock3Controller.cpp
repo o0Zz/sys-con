@@ -105,7 +105,7 @@ namespace controllerlib
         return SendCommand(Ds3FeatureUnknown1, outputPacket, sizeof(outputPacket));
     }
 
-    Status Dualshock3Controller::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status Dualshock3Controller::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (input_idx != 0)
             return Status::InvalidIndex;
@@ -113,8 +113,8 @@ namespace controllerlib
         if (m_interfaces.empty())
             return Status::InvalidEndpoint;
 
-        m_rumble_left_force = static_cast<uint8_t>(ScaleAmplitude(amp_low, 255));
-        m_rumble_right_on = amp_high > 0.0f;
+        m_rumble_left_force = static_cast<uint8_t>(ScaleAmplitude(rumble.LowAmplitude(), 255));
+        m_rumble_right_on = rumble.HighAmplitude() > 0.0f;
 
         return SendOutputReport(DS3LED_1);
     }

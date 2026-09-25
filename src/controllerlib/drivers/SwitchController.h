@@ -74,7 +74,8 @@ namespace controllerlib
         SwitchCalibration cal_right_y;
         uint8_t m_packet_counter = 0;
 
-        static void EncodeRumble(uint8_t *data, float amplitude);
+        static uint32_t AmplitudeStep(float amplitude);
+        static void EncodeRumble(uint8_t *data, const RumbleActuator &actuator);
 
     public:
         SwitchController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
@@ -88,6 +89,6 @@ namespace controllerlib
 
         bool Support(ControllerFeature feature) const override { return feature == SUPPORTS_RUMBLE || feature == SUPPORTS_MOTION; }
 
-        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
+        Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) override;
     };
 } // namespace controllerlib

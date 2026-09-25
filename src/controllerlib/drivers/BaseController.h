@@ -48,7 +48,7 @@ namespace controllerlib
 
         Status ReadInput(NormalizedButtonData *normalData, uint16_t *input_idx, uint32_t timeout_us) override;
 
-        Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
+        Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) override;
 
         virtual size_t GetMaxInputBufferSize();
 

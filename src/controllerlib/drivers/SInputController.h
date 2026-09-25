@@ -117,7 +117,7 @@ namespace controllerlib
             return feature == SUPPORTS_RUMBLE || (feature == SUPPORTS_MOTION && m_motion_supported);
         }
 
-        virtual Status SetRumble(uint16_t input_idx, float amp_high, float amp_low) override;
+        virtual Status SetRumble(uint16_t input_idx, const RumbleValue &rumble) override;
 
         virtual size_t GetMaxInputBufferSize() override;
 

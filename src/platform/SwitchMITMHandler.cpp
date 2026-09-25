@@ -171,7 +171,7 @@ void SwitchMITMHandler::ReleaseController(uint16_t input_idx)
         m_controllerList[input_idx] = nullptr;
     }
 
-    m_lastRumble[input_idx] = RumbleState{};
+    m_lastRumble[input_idx] = controllerlib::RumbleValue{};
     m_hdlsButtons[input_idx] = 0;
 
     if (m_hdlsHandle[input_idx].handle != 0)
@@ -287,11 +287,6 @@ Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uin
     return m_controllerList[input_idx]->Update(npad_state);
 }
 
-static bool IsRumbling(const SwitchMITMHandler::RumbleState &rumble)
-{
-    return rumble.amp_high > 0.0f || rumble.amp_low > 0.0f;
-}
-
 /*
     Only on change: a USB write costs a transfer on the same thread that reads the pad, and a
     game keeps resending the same value every frame for as long as the effect lasts.
@@ -310,24 +305,23 @@ Result SwitchMITMHandler::UpdateOutput()
         if (!IsControllerAttached(input_idx))
             continue;
 
-        RumbleState rumble{};
-        m_controllerList[input_idx]->GetRumble(&rumble.amp_high, &rumble.amp_low);
+        const controllerlib::RumbleValue rumble = m_controllerList[input_idx]->GetRumble();
 
-        if (rumble.amp_high == m_lastRumble[input_idx].amp_high && rumble.amp_low == m_lastRumble[input_idx].amp_low)
+        if (rumble == m_lastRumble[input_idx])
             continue;
 
-        const bool was_rumbling = IsRumbling(m_lastRumble[input_idx]);
+        const bool was_rumbling = m_lastRumble[input_idx].IsActive();
         m_lastRumble[input_idx] = rumble;
 
-        controllerlib::Status rc = m_controller->SetRumble(input_idx, rumble.amp_high, rumble.amp_low);
+        controllerlib::Status rc = m_controller->SetRumble(input_idx, rumble);
 
         // Only the edges: an SD write costs several milliseconds on the very thread that
         // polls the pad, and a game changes the amplitude every frame while it rumbles.
-        if (was_rumbling != IsRumbling(rumble))
+        if (was_rumbling != rumble.IsActive())
             syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] rumble %s on idx %d (high: %d%%, low: %d%%, rc: %d)",
                                     m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(),
-                                    IsRumbling(rumble) ? "started" : "stopped", input_idx,
-                                    (int)(rumble.amp_high * 100), (int)(rumble.amp_low * 100), rc);
+                                    rumble.IsActive() ? "started" : "stopped", input_idx,
+                                    (int)(rumble.HighAmplitude() * 100), (int)(rumble.LowAmplitude() * 100), rc);
     }
 
     return 0;

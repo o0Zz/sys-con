@@ -46,15 +46,15 @@ namespace controllerlib
         return Status::Success;
     }
 
-    Status XboxController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status XboxController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         if (m_outPipe.size() <= input_idx)
             return Status::InvalidIndex;
 
         // Both motors are 16 bit little endian, so the amplitude goes in the high byte.
         const uint8_t rumbleData[]{0x00, 0x06,
-                                   0x00, (uint8_t)ScaleAmplitude(amp_low, 255),
-                                   0x00, (uint8_t)ScaleAmplitude(amp_high, 255)};
+                                   0x00, (uint8_t)ScaleAmplitude(rumble.LowAmplitude(), 255),
+                                   0x00, (uint8_t)ScaleAmplitude(rumble.HighAmplitude(), 255)};
 
         return m_outPipe[input_idx]->Write(rumbleData, sizeof(rumbleData));
     }

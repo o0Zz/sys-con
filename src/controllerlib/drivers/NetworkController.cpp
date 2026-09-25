@@ -60,11 +60,10 @@ namespace controllerlib
         return m_connected;
     }
 
-    Status NetworkController::SetRumble(uint16_t input_idx, float amp_high, float amp_low)
+    Status NetworkController::SetRumble(uint16_t input_idx, const RumbleValue &rumble)
     {
         (void)input_idx;
-        (void)amp_high;
-        (void)amp_low;
+        (void)rumble;
         // Input-only by design: there is no return path to the sender.
         return Status::NotImplemented;
     }

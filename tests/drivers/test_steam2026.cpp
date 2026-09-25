@@ -113,7 +113,7 @@ TEST(Controller, test_steam2026_rumble_is_a_triton_haptic_report)
     EXPECT_TRUE(controller.Support(SUPPORTS_RUMBLE));
 
     // Nothing is sent while the pad is not connected to the dongle.
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::NothingTodo);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::NothingTodo);
 
     uint8_t connected[2] = {REPORT_WIRELESS_STATUS, 0x02};
     EXPECT_EQ(controller.ParseData(connected, sizeof(connected), &rawData, &input_idx), Status::NothingTodo);
@@ -128,7 +128,7 @@ TEST(Controller, test_steam2026_rumble_is_a_triton_haptic_report)
         .Times(1)
         .WillOnce(testing::Return(Status::Success));
 
-    EXPECT_EQ(controller.SetRumble(0, 0.5f, 1.0f), Status::Success);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 0.5f}}), Status::Success);
 }
 
 TEST(Controller, test_steam2026_rumble_is_resent_before_the_pad_times_out)
@@ -168,7 +168,7 @@ TEST(Controller, test_steam2026_rumble_is_resent_before_the_pad_times_out)
         .Times(2)
         .WillRepeatedly(testing::Return(Status::Success));
 
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::Success);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::Success);
 
     // Polling again straight away must not re-send: the pad is still inside its timeout.
     (void)controller.ReadInput(&buttonData, &input_idx, 0);

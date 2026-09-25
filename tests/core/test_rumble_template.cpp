@@ -216,7 +216,7 @@ TEST(RumbleTemplate, test_controller_without_template_has_no_rumble)
     TemplateController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
 
     EXPECT_FALSE(controller.Support(SUPPORTS_RUMBLE));
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::NotImplemented);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::NotImplemented);
 }
 
 TEST(RumbleTemplate, test_controller_writes_the_template)
@@ -231,7 +231,7 @@ TEST(RumbleTemplate, test_controller_writes_the_template)
         .Times(1)
         .WillOnce(testing::Return(Status::Success));
 
-    EXPECT_EQ(controller->SetRumble(0, 0.5f, 1.0f), Status::Success);
+    EXPECT_EQ(controller->SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 0.5f}}), Status::Success);
 }
 
 TEST(RumbleTemplate, test_controller_writes_two_byte_fields)
@@ -245,7 +245,7 @@ TEST(RumbleTemplate, test_controller_writes_two_byte_fields)
         .Times(1)
         .WillOnce(testing::Return(Status::Success));
 
-    EXPECT_EQ(controller->SetRumble(0, 0.5f, 0.5f), Status::Success);
+    EXPECT_EQ(controller->SetRumble(0, RumbleValue{.left = {.amp_low = 0.5f, .amp_high = 0.5f}}), Status::Success);
 }
 
 TEST(RumbleTemplate, test_controller_without_output_endpoint)
@@ -255,5 +255,5 @@ TEST(RumbleTemplate, test_controller_without_output_endpoint)
 
     // A template is not a motor: without somewhere to send it, the pad has no rumble.
     EXPECT_FALSE(controller.Support(SUPPORTS_RUMBLE));
-    EXPECT_EQ(controller.SetRumble(0, 1.0f, 1.0f), Status::InvalidIndex);
+    EXPECT_EQ(controller.SetRumble(0, RumbleValue{.left = {.amp_low = 1.0f, .amp_high = 1.0f}}), Status::InvalidIndex);
 }
