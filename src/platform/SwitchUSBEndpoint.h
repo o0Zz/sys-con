@@ -17,11 +17,9 @@ private:
     controllerlib::Status PostRead();
 
 public:
-    // Pass the necessary information to be able to open the endpoint
     SwitchUSBEndpoint(UsbHsClientIfSession &if_session, usb_endpoint_descriptor &desc);
     ~SwitchUSBEndpoint();
 
-    // Open and close the endpoint
     virtual controllerlib::Status Open(int maxPacketSize = 0) override;
     virtual void Close() override;
 

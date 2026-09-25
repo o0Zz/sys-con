@@ -8,7 +8,6 @@ class SwitchUSBDevice : public controllerlib::IUSBDevice
 public:
     ~SwitchUSBDevice();
 
-    // Initialize the class with the SetInterfaces call.
     SwitchUSBDevice(UsbHsInterface interfaces[], int length);
 
     // There are no devices to open on the switch, so instead this returns success if there are any interfaces

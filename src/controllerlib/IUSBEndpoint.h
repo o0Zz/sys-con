@@ -36,9 +36,7 @@ namespace controllerlib
         // This will read from the endpoint and put the data in the outBuffer pointer for the specified size.
         virtual Status Read(uint8_t *outBuffer, size_t *bufferSizeInOut, uint64_t aTimeoutUs) = 0;
 
-        // Get endpoint's direction. (IN or OUT)
         virtual IUSBEndpoint::Direction GetDirection() = 0;
-        // Get the endpoint descriptor
         virtual EndpointDescriptor *GetDescriptor() = 0;
     };
 } // namespace controllerlib

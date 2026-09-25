@@ -27,11 +27,9 @@ namespace controllerlib
     public:
         virtual ~IUSBDevice() = default;
 
-        // Open and close the device.
         virtual Status Open() = 0;
         virtual void Close() = 0;
 
-        // Get the raw reference to interfaces vector.
         virtual std::vector<std::unique_ptr<IUSBInterface>> &GetInterfaces() { return m_interfaces; }
 
         virtual uint16_t GetVendor() { return m_vendorID; }

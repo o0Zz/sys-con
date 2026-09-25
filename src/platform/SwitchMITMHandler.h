@@ -31,11 +31,9 @@ protected:
     Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) override;
 
 public:
-    // Initialize the class with specified controller
     SwitchMITMHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
     ~SwitchMITMHandler();
 
-    // Initialize controller handler, HDL state
     virtual Result Initialize() override;
 
     // Drains the vibration the MITM stored for our npad slots into the driver.

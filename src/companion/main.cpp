@@ -86,7 +86,6 @@ int main()
     while (appletMainLoop())
     {
 
-        // Get current pad information (Button, stick, ...)
         padUpdate(&pad);
         u64 buttonPressed = padGetButtons(&pad);
         u64 buttonDown = padGetButtonsDown(&pad);
@@ -117,7 +116,6 @@ int main()
         outputBuffer[console->consoleWidth] = '\0';
         printf("\x1b[8;1H%s", outputBuffer);
 
-        // Update vibrations
         if (buttonDown & HidNpadButton_Plus)
             current_vibration = std::min(current_vibration + 0.1, 1.0);
         if (buttonDown & HidNpadButton_Minus)
@@ -130,7 +128,6 @@ int main()
         vibrationValue.amp_high = current_vibration;
         hidSendVibrationValue(vibrationDeviceHandle, &vibrationValue);
 
-        // Update console
         consoleUpdate(console);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Avoid 100% CPU usage

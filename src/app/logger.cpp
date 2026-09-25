@@ -14,7 +14,6 @@ namespace syscon::logger
 {
     namespace
     {
-        // Mutex to protect log writing
         static std::mutex sLogMutex;
 
         static std::string sLogPath;

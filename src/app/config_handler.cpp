@@ -27,7 +27,6 @@ namespace syscon::config
     {
         IFileManager *file_manager = nullptr;
 
-        // Utils function
         std::string convertToLowercase(const std::string &str)
         {
             std::string result = "";
@@ -608,7 +607,6 @@ namespace syscon::config
             return -1; // Replace with appropriate error code.
         }
 
-        // Open the file for appending.
         std::unique_ptr<IFile> configFile = file_manager->open(path, (OpenFlags)(OpenFlags_Write | OpenFlags_Append));
         if (!configFile || !configFile->is_open())
         {
@@ -673,7 +671,6 @@ namespace syscon::config
                 return rc;
         }
 
-        // Check if have a "profile"
         if (config->profile.length() > 0)
         {
             syscon::logger::LogDebug("Loading controller config: '%s' (Profile: [%s]) ... ", configFullPath.c_str(), config->profile.c_str());

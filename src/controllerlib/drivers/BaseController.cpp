@@ -452,18 +452,15 @@ namespace controllerlib
 
         for (uint32_t i = 0; i < bitLength; ++i)
         {
-            // Check if we need to move to the next byte
             if (bitIndex > 7)
             {
                 ++byteIndex;
                 bitIndex = 0;
             }
 
-            // Get the bit at the current position and add it to the result
             uint8_t bit = (buffer[byteIndex] >> bitIndex) & 0x01;
             result |= (bit << i);
 
-            // Move to the next bit
             ++bitIndex;
         }
 

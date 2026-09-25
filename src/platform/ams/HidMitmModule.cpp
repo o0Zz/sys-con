@@ -112,7 +112,6 @@ namespace ams::syscon::hid::mitm
             return;
         }
 
-        // Create and start the MITM thread
         R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), 20));
 
         ams::os::SetThreadNamePointer(&g_mitm_thread, "HidMitmThread");

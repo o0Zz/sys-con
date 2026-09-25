@@ -42,11 +42,9 @@ protected:
     Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) override;
 
 public:
-    // Initialize the class with specified controller
     SwitchHDLHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority);
     virtual ~SwitchHDLHandler();
 
-    // Initialize controller handler, HDL state
     virtual Result Initialize() override;
 
     static HiddbgHdlsSessionId &GetHdlsSessionId();
