@@ -25,12 +25,11 @@ namespace syscon
 
         This is emphatically not socketInitializeDefault(): that asks for ~2.2 MiB of transfer
         memory (sb_efficiency * page_round(tcp_tx_max + tcp_rx_max + udp_tx + udp_rx), see
-        libnx's bsd.c), which tmemCreate takes from the process heap -- and this sysmodule's
-        heap is 512 KiB in total. Zeroing the TCP buffers and dropping sb_efficiency to 1
-        brings it down to 12 KiB, which is what makes this feature possible without growing
-        the heap for everyone.
+        libnx's bsd.c), which tmemCreate takes from the process heap -- 256 KiB in the libnx
+        flavour, 512 KiB in the ams one. Minimal TCP buffers and sb_efficiency 1 bring it down
+        to 60 KiB (see g_socketInitConfig).
 
-        Safe to call more than once; reference-counted like the libnx service guards.
+        Safe to call more than once: a second call is a no-op.
         Returns a Horizon Result; never aborts, because bsd:u may simply not be up yet.
     */
     Result UdpSocketInitialize();

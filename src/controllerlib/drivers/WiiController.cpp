@@ -1,5 +1,5 @@
 #include "drivers/WiiController.h"
-#include <thread>
+#include <cstring>
 
 #define STATE_EXTRA_POWER 0x04
 #define STATE_NORMAL      0x10

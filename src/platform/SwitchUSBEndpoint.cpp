@@ -3,7 +3,6 @@
 #include "SwitchLogger.h"
 #include <algorithm>
 #include <cstring>
-#include <malloc.h>
 
 using namespace controllerlib;
 

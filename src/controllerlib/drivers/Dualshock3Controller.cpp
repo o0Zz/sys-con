@@ -31,11 +31,7 @@ namespace controllerlib
             return result;
 
         constexpr uint8_t initBytes[] = {0x42, 0x0C, 0x00, 0x00};
-        result = SendCommand(Ds3FeatureStartDevice, initBytes, sizeof(initBytes));
-        if (result != Status::Success)
-            return result;
-
-        return Status::Success;
+        return SendCommand(Ds3FeatureStartDevice, initBytes, sizeof(initBytes));
     }
 
     Status Dualshock3Controller::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)

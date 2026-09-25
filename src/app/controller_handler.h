@@ -20,5 +20,4 @@ namespace syscon::controllers
 
     void Initialize();
     void Clear();
-    void Exit();
 } // namespace syscon::controllers

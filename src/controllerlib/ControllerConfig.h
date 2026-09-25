@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstdint>
-#include <string.h>
 #include <string>
 
 #define MAX_PIN_BY_BUTTONS 2

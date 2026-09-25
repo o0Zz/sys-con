@@ -82,13 +82,43 @@ ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 # -Wundef in particular catches `#if ATMOSPHERE` in a build where ATMOSPHERE is undefined,
 # and -Wformat=2 the printf/argument mismatches in the logger call sites.
 WARNFLAGS	:=	-Wall -Wextra -Wshadow -Wundef -Wformat=2 -Wno-unused-parameter
-CFLAGS	:=	-g $(WARNFLAGS) -O2 -ffunction-sections $(ARCH) $(DEFINES)
+CFLAGS	:=	-g $(WARNFLAGS) -O2 -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fno-unwind-tables $(ARCH) $(DEFINES)
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 # gnu++23 is not an arbitrary choice: external/Atmosphere-libs/config/common.mk pins the
 # ATMOSPHERE=1 build to it, so this branch matches to keep the two flavours identical.
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++23
 ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+# Nothing unwinds under -fno-exceptions, so the libraries' .eh_frame is dead weight and the
+# exception runtime libstdc++ drags in is wrapped into aborts (LibnxRuntime.cpp), as the
+# Atmosphere flavour does.
+CXXWRAPPED	:=	__cxa_throw __cxa_rethrow __cxa_allocate_exception __cxa_free_exception \
+				__cxa_begin_catch __cxa_end_catch __cxa_call_unexpected __cxa_call_terminate \
+				__gxx_personality_v0 _Unwind_Resume \
+				_ZSt17__throw_bad_allocv _ZSt28__throw_bad_array_new_lengthv \
+				_ZSt19__throw_logic_errorPKc _ZSt20__throw_length_errorPKc \
+				_ZSt20__throw_out_of_rangePKc _ZSt24__throw_out_of_range_fmtPKcz \
+				_ZSt24__throw_invalid_argumentPKc _ZSt25__throw_bad_function_callv \
+				_ZSt20__throw_system_errori _ZNSt11logic_errorC2EPKc
+
+# The discard script only wins if it precedes switch.ld, which only a specs file listed
+# before switch.specs achieves. Both are written into $(BUILD) at link time (see below);
+# the link runs there, so the relative paths resolve.
+define DISCARD_EHFRAME_LD
+SECTIONS
+{
+	/DISCARD/ : { EXCLUDE_FILE(*crtbegin.o) *(.eh_frame_hdr .eh_frame) }
+}
+endef
+
+define DISCARD_EHFRAME_SPECS
+%rename link pre_old_link
+
+*link:
+%(pre_old_link) -T discard-ehframe.ld
+endef
+
+LDFLAGS	=	-specs=discard-ehframe.specs -specs=$(DEVKITPRO)/libnx/switch.specs \
+			-g $(ARCH) $(foreach sym,$(CXXWRAPPED),-Wl,--wrap,$(sym)) -Wl,-Map,$(notdir $*.map)
 
 endif
 
@@ -242,6 +272,16 @@ $(OUTPUT).nso	:	$(OUTPUT).elf
 endif
 
 $(OUTPUT).elf	:	$(OFILES)
+
+ifneq ($(ATMOSPHERE),1)
+$(OUTPUT).elf	:	discard-ehframe.ld discard-ehframe.specs
+
+discard-ehframe.ld: $(TOPDIR)/Makefile
+	$(file >$@,$(DISCARD_EHFRAME_LD))
+
+discard-ehframe.specs: $(TOPDIR)/Makefile
+	$(file >$@,$(DISCARD_EHFRAME_SPECS))
+endif
 
 $(OFILES_SRC)	: $(HFILES_BIN)
 

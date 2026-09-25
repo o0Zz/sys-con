@@ -23,7 +23,7 @@ namespace ams::syscon::hid::mitm
 
         Result GetSharedMemoryHandle(ams::sf::OutCopyHandle out)
         {
-            out.SetValue(m_shared_memory_entry->GetSharedMemoryHandle().handle, false /*AMS need to manage it ?*/);
+            out.SetValue(m_shared_memory_entry->GetSharedMemoryHandle().handle, false /* owned by the shared memory entry, which outlives this copy */);
             R_SUCCEED();
         }
 
@@ -84,7 +84,6 @@ namespace ams::syscon::hid::mitm
 
         static bool ShouldMitm(const sm::MitmProcessInfo &client_info);
 
-        // Service interface methods
         Result CreateAppletResource(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmAppletResourceInterface>> out, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
         Result GetVibrationDeviceInfo(sf::Out<::HidVibrationDeviceInfo> out, u32 vibration_device_handle);
         Result SendVibrationValue(u32 vibration_device_handle, ::HidVibrationValue vibration_value, ams::sf::ClientAppletResourceUserId applet_resource_user_id);

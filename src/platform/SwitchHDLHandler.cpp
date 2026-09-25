@@ -1,8 +1,6 @@
 #include "SwitchHDLHandler.h"
 #include "SwitchLogger.h"
 #include <algorithm>
-#include <cmath>
-#include <chrono>
 
 using namespace controllerlib;
 

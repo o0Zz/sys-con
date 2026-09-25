@@ -7,20 +7,9 @@ namespace controllerlib
     /*
         The result of any ControllerLib operation. This is the library's only error type.
 
-        Scoped and [[nodiscard]] on purpose. As an unscoped enum it converted silently to int,
-        and so to whatever integer error type the host happened to use -- an unrelated error
-        domain that shares nothing with this one but an underlying type. Code of the shape
-
-            HostResult rc = controller->Initialize();   // returns a Status
-            return SomeStatusValue;                     // from a function returning HostResult
-
-        compiled fine and handed the host a number it decoded as one of its own error codes.
-        Conversion is now the host's job and has to be written out, which keeps it to one
-        function at the host's own boundary instead of happening implicitly anywhere.
-
-        The numeric values are sparse (0, then 100+); collapsing the near-synonyms for "no
-        input this tick" (NothingTodo, NoDataAvailable, Timeout) is worth doing but is a
-        behavioural change for every consumer, so it is deliberately not done here.
+        Scoped and [[nodiscard]] so it never converts silently into the host's own integer
+        error type, which would decode it as an unrelated error code. The host converts it
+        explicitly, at its own boundary.
     */
     enum class [[nodiscard]] Status : uint8_t
     {

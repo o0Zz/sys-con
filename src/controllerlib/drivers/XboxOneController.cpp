@@ -142,11 +142,7 @@ namespace controllerlib
         if (result != Status::Success)
             return result;
 
-        result = SendInitBytes(0);
-        if (result != Status::Success)
-            return result;
-
-        return Status::Success;
+        return SendInitBytes(0);
     }
 
     Status XboxOneController::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
@@ -200,7 +196,7 @@ namespace controllerlib
         {
             if (size < 6)
             {
-                m_logger->Log(LogLevel::Error, "XboxOneController[%04x-%04x] Unexpected data size (%d < %d)", m_device->GetVendor(), m_device->GetProduct(), size, sizeof(XboxOneButtonData));
+                m_logger->Log(LogLevel::Error, "XboxOneController[%04x-%04x] Unexpected data size (%d < 6)", m_device->GetVendor(), m_device->GetProduct(), size);
                 return Status::UnexpectedData;
             }
 

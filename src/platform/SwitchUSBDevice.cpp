@@ -1,6 +1,4 @@
 #include "SwitchUSBDevice.h"
-#include "SwitchLogger.h"
-#include <cstring> //for memset
 
 using namespace controllerlib;
 

@@ -3,13 +3,8 @@
 #include "SwitchLogger.h"
 #include <stratosphere.hpp>
 
-// https://github.com/Slluxx/switch-sys-tweak/blob/develop/src/ns_srvget_mitm_service.hpp
-//
-
 namespace ams::syscon::hid::mitm
 {
-
-    // HidMitmService implementation
     HidMitmService::HidMitmService(std::shared_ptr<::Service> &&s, sm::MitmProcessInfo &client_info)
         : sf::MitmServiceImplBase(std::forward<std::shared_ptr<::Service>>(s), client_info)
     {
@@ -152,10 +147,7 @@ namespace ams::syscon::hid::mitm
 
     Result HidMitmActiveVibrationDeviceList::ActivateVibrationDevice(u32 vibration_device_handle)
     {
-        ::HidVibrationDeviceHandle handle;
-        handle.type_value = vibration_device_handle;
-
-        if (::syscon::hid::mitm::vibration::IsOwned(handle))
+        if (::syscon::hid::mitm::vibration::IsOwned(ToVibrationDeviceHandle(vibration_device_handle)))
             R_SUCCEED();
 
         R_RETURN(serviceDispatchIn(&m_forward, 0, vibration_device_handle));

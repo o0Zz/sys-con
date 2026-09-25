@@ -38,14 +38,11 @@ namespace controllerlib
 
         uint8_t buffer[CONTROLLER_HID_REPORT_BUFFER_SIZE];
         uint16_t size = sizeof(buffer);
-        // https://www.usb.org/sites/default/files/hid1_11.pdf
 
-        /// SET_IDLE
         result = m_interfaces[0]->ControlTransferOutput((uint8_t)IUSBEndpoint::USB_ENDPOINT_OUT | 0x20 | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_SET_IDLE, 0, m_interfaces[0]->GetDescriptor()->bInterfaceNumber, nullptr, 0);
         if (result != Status::Success)
             m_logger->Log(LogLevel::Error, "GenericHIDController[%04x-%04x] SET_IDLE failed, continue anyway ...", m_device->GetVendor(), m_device->GetProduct());
 
-        // Get HID report descriptor
         result = m_interfaces[0]->ControlTransferInput((uint8_t)IUSBEndpoint::USB_ENDPOINT_IN | (uint8_t)USB_RECIPIENT_INTERFACE, USB_REQUEST_GET_DESCRIPTOR, (USB_DT_REPORT << 8), m_interfaces[0]->GetDescriptor()->bInterfaceNumber, buffer, &size);
         if (result != Status::Success)
         {

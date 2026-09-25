@@ -52,7 +52,6 @@ namespace controllerlib
 
         virtual size_t GetMaxInputBufferSize();
 
-        // Helper functions
         static uint32_t ScaleAmplitude(float amplitude, uint32_t max);
         static float Normalize(int32_t value, int32_t min, int32_t max);
         static float Normalize(int32_t value, int32_t min, int32_t max, int32_t center);

@@ -46,7 +46,7 @@ namespace syscon::psc
                                 break;
                             case PscPmState_ReadyShutdown:
                                 ::syscon::logger::LogDebug("Power management: Shutdown");
-                                is_psc_thread_running = false; // Exit thread
+                                is_psc_thread_running = false;
                                 [[fallthrough]];
                             case PscPmState_ReadySleep:
                                 ::syscon::logger::LogDebug("Power management: Sleep");

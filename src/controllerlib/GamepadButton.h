@@ -79,8 +79,7 @@ namespace controllerlib
         GamepadButton::DPAD_LEFT,
     };
 
-    /// One flag per normalized button. 27 entries; the array this replaced was sized 36,
-    /// because it shared MAX_CONTROLLER_BUTTONS with the physical-pin array.
+    /// One flag per normalized button.
     using GamepadButtonStates = EnumArray<GamepadButton, bool, GamepadButtonCount>;
 
     static_assert(GamepadButtonCount == 27, "GamepadButton gained or lost a value; check AllDigitalButtons too");

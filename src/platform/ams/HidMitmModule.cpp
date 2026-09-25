@@ -129,7 +129,6 @@ namespace ams::syscon::hid::mitm
             return;
         }
 
-        // Wait for the thread to finish and clean up
         ams::os::WaitThread(std::addressof(g_mitm_thread));
         ams::os::DestroyThread(std::addressof(g_mitm_thread));
 
@@ -138,9 +137,7 @@ namespace ams::syscon::hid::mitm
 
 } // namespace ams::syscon::hid::mitm
 
-// Shared lifecycle facade (declared in src/platform/HidMitm.h), so both Main.cpp files
-// start/stop the MITM identically regardless of build flavour. The libnx build implements
-// this in HidMitmServer.cpp; the ams build delegates to the libstratosphere module above.
+// The facade declared in HidMitm.h; the libnx flavour implements it in HidMitmServer.cpp.
 namespace syscon::hid::mitm
 {
     Result Initialize()

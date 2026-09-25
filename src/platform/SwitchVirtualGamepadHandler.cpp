@@ -3,6 +3,7 @@
 #include "SwitchLogger.h"
 #include <chrono>
 #include <cassert>
+#include <cstring>
 
 using namespace controllerlib;
 

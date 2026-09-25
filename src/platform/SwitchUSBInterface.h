@@ -24,7 +24,7 @@ public:
     virtual controllerlib::Status ControlTransferInput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, void *buffer, u16 *wLength) override;
     virtual controllerlib::Status ControlTransferOutput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, const void *buffer, u16 wLength) override;
 
-    // There are a total of 15 endpoints on a switch interface for each direction, get them by passing the desired parameters
+    // A Switch interface has 15 endpoints per direction.
     virtual controllerlib::IUSBEndpoint *GetEndpoint(controllerlib::IUSBEndpoint::Direction direction, uint8_t index) override;
 
     inline s32 GetID() { return m_session.ID; }

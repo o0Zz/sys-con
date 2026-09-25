@@ -18,7 +18,7 @@ using namespace controllerlib;
 // or a bare compiler invocation it does not, and the file then failed to link.
 #ifdef _WIN32
     #define strtok_r                       strtok_s
-    #define localtime_r(localtime, result) localtime_s(result, localtime)
+    #define gmtime_r(time, result)         gmtime_s(result, time)
 #endif
 
 namespace syscon::config
@@ -317,28 +317,13 @@ namespace syscon::config
             return 1; // Success
         }
 
-        constexpr struct
-        {
-            std::string_view name;
-            AnalogAxis axis;
-        } AnalogAxisNames[] = {
-            {"x", AnalogAxis::X},
-            {"y", AnalogAxis::Y},
-            {"z", AnalogAxis::Z},
-            {"rz", AnalogAxis::Rz},
-            {"rx", AnalogAxis::Rx},
-            {"ry", AnalogAxis::Ry},
-            {"slider", AnalogAxis::Slider},
-            {"dial", AnalogAxis::Dial},
-        };
-
         AnalogAxis stringToAnalogAxis(std::string_view name, std::string_view prefix)
         {
             if (!name.starts_with(prefix))
                 return AnalogAxis::Unknown;
 
             const std::string_view axis = name.substr(prefix.size());
-            for (const auto &entry : AnalogAxisNames)
+            for (const auto &entry : AxisNames)
             {
                 if (axis == entry.name)
                     return entry.axis;
@@ -594,7 +579,7 @@ namespace syscon::config
         auto now = std::chrono::system_clock::now();
         auto timeT = std::chrono::system_clock::to_time_t(now);
         struct tm timeinfo;
-        localtime_r(&timeT, &timeinfo);
+        gmtime_r(&timeT, &timeinfo);
 
         if (file_manager == nullptr)
         {
@@ -606,14 +591,14 @@ namespace syscon::config
         if (file_manager->file_size(path) == 0)
         {
             syscon::logger::LogError("Error: Configuration file does not exist: %s", path.c_str());
-            return -1; // Replace with appropriate error code.
+            return -1;
         }
 
         std::unique_ptr<IFile> configFile = file_manager->open(path, (OpenFlags)(OpenFlags_Write | OpenFlags_Append));
         if (!configFile || !configFile->is_open())
         {
             syscon::logger::LogError("Error: Unable to open configuration file: %s", path.c_str());
-            return -1; // Replace with appropriate error code.
+            return -1;
         }
 
         char stamp[32];

@@ -3,7 +3,6 @@
 #include <string.h> // memcpy
 #include <algorithm>
 #include <cinttypes>
-#include <atomic>
 #include <chrono>
 
 #define HID_SHARED_MEMORY_SIZE 0x40000 // 256 KiB
@@ -122,28 +121,17 @@ static void DestroyFakeSharedMemories()
     }
 }
 
+static_assert(NpadOffset % 8 == 0 && AfterNpadOffset % 8 == 0 && AfterNpadSize % 8 == 0);
+static_assert(sizeof(HidNpadSharedMemoryEntry) % 8 == 0 && HID_SHARED_MEMORY_SIZE % 8 == 0);
+
+// Every caller copies within page-aligned shared memory, at the offsets asserted above.
 static void memcpy_64(void *dest, const void *src, size_t n)
 {
-    if (n % 8 != 0 || reinterpret_cast<uintptr_t>(dest) % 8 != 0 || reinterpret_cast<uintptr_t>(src) % 8 != 0)
-    {
-        ::syscon::logger::LogWarning("memcpy_64: n is not a multiple of 8 (%zu) or address is not 8-byte aligned (dest: %p, src: %p)", n, dest, src);
-        const uint8_t *s = static_cast<const uint8_t *>(src);
-        uint8_t *d = static_cast<uint8_t *>(dest);
-        for (size_t i = 0; i < n; i++)
-            d[i] = s[i];
-    }
-    else
-    {
-        const volatile uint64_t *s = reinterpret_cast<const volatile uint64_t *>(src);
-        volatile uint64_t *d = reinterpret_cast<volatile uint64_t *>(dest);
-        for (size_t i = 0; i < (n / 8); i++)
-            d[i] = s[i];
-    }
+    const volatile uint64_t *s = reinterpret_cast<const volatile uint64_t *>(src);
+    volatile uint64_t *d = reinterpret_cast<volatile uint64_t *>(dest);
+    for (size_t i = 0; i < (n / 8); i++)
+        d[i] = s[i];
 }
-
-/************************************************************
-              HidSharedMemoryEntry
-************************************************************/
 
 /*
     hid keeps one shared memory per aruid, holding only the npad styles that aruid declared and,
@@ -271,10 +259,6 @@ u64 HidSharedMemoryEntry::GetProgramId() const
 {
     return m_program_id;
 }
-
-/************************************************************
-              HidSharedMemoryManager
-************************************************************/
 
 void HidSharedMemoryManagerThreadFunc(void *manager)
 {
@@ -725,8 +709,6 @@ void HidSharedMemoryManager::OnRun()
     }
 }
 
-/* ---------------------------------------- */
-
 HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color)
     : m_player_idx(player_idx),
       m_device_type(device_type),
@@ -736,8 +718,6 @@ HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u8 devi
       m_state{}
 {
 }
-
-/* ---------------------------------------- */
 
 /*
     What the pad is, as the view's clients are allowed to see it. HidDeviceType_FullKey13 is
@@ -796,9 +776,9 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state,
     internal_state->system_properties.is_plus_available = 1;
     internal_state->system_properties.is_minus_available = 1;
     internal_state->system_properties.is_directional_buttons_available = 1;
-    internal_state->battery_level[0] = 4; // Set battery charge to full.
-    internal_state->battery_level[1] = 4; // Set battery charge to full.
-    internal_state->battery_level[2] = 4; // Set battery charge to full.
+    internal_state->battery_level[0] = 4; // full
+    internal_state->battery_level[1] = 4;
+    internal_state->battery_level[2] = 4;
 
     /*
         Last, and on its own: style_set is what tells a reader the slot holds a pad, and
@@ -811,8 +791,6 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state,
     */
     ApplyIdentity(internal_state, identity);
 }
-
-/* ---------------------------------------- */
 
 template <typename Lifo>
 static void EmptyLifo(Lifo *lifo)
@@ -934,8 +912,6 @@ void HidSharedMemoryController::Publish()
     m_sampling_number++;
 }
 
-/* ---------------------------------------- */
-
 /*
     Retires the pad in the order a reader walks it: style_set first, so the clients that come
     after stop at the slot, then the lifos through their count. buffer_count is never unset -
@@ -962,8 +938,6 @@ void HidSharedMemoryController::Clear()
     m_sampling_number = 0;
 }
 
-/* ---------------------------------------- */
-
 Result HidSharedMemoryController::Update(const SwitchPadState &state)
 {
     std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
@@ -972,8 +946,6 @@ Result HidSharedMemoryController::Update(const SwitchPadState &state)
 
     return 0;
 }
-
-/* ---------------------------------------- */
 
 controllerlib::RumbleValue HidSharedMemoryController::GetRumble() const
 {

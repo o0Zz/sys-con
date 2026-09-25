@@ -4,12 +4,9 @@
 #include "IController.h"
 #include "SwitchVirtualGamepadHandler.h"
 #include "SwitchMotion.h"
+#include <cstring>
 
-// HDLS stands for "HID (Human Interface Devices) Device List Setting".
-// It's a part of the Nintendo Switch's HID (Human Interface Devices) system module, which is responsible for handling input from controllers and
-// other user interface devices. The HDLS structures and functions are used to manage and manipulate a list of virtual HID devices.
-
-// Wrapper for HDL functions for switch versions [7.0.0+]
+// Virtual pads through hiddbg's HDLS (HID Device List Setting) API, firmware 7.0.0+.
 
 class SwitchHDLHandlerData
 {

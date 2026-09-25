@@ -5,8 +5,6 @@
 
 namespace controllerlib
 {
-    // https://www.usb.org/sites/default/files/documents/hid1_11.pdf  p55
-
     BaseController::BaseController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger)
         : IController(std::move(device), config, std::move(logger))
     {
@@ -23,12 +21,9 @@ namespace controllerlib
 
         Status result = OpenInterfaces();
         if (result != Status::Success)
-        {
             m_logger->Log(LogLevel::Error, "Controller[%04x-%04x] Failed to open interfaces !", m_device->GetVendor(), m_device->GetProduct());
-            return result;
-        }
 
-        return Status::Success;
+        return result;
     }
 
     void BaseController::Exit()
@@ -350,7 +345,6 @@ namespace controllerlib
             StickButton(GamepadButton::RSTICK_DOWN, &normalData->sticks[1].axis_y, -1.0f),
         };
 
-        // Analog value
         for (auto &&stick : sticks_list)
         {
             ControllerAnalogConfig analogCfg = GetConfig().buttonsAnalog[stick.button];
@@ -373,7 +367,6 @@ namespace controllerlib
                 normalData->buttons[controllerButton] |= (GetConfig().buttonsAnalog[controllerButton].sign * rawData.analog[GetConfig().buttonsAnalog[controllerButton].bind]) > 0.0f;
         }
 
-        // Simulate buttons
         for (int i = 0; i < MAX_CONTROLLER_COMBO; i++)
         {
             const ControllerComboConfig *combo = &GetConfig().simulateCombos[i];

@@ -22,16 +22,8 @@ public:
 
     virtual controllerlib::Status Open(int maxPacketSize = 0) override;
     virtual void Close() override;
-
-    // buffer should point to the data array, and only the specified size will be read.
     virtual controllerlib::Status Write(const uint8_t *inBuffer, size_t bufferSize) override;
-
-    // The data received will be put in the outBuffer array for the length of the specified size.
     virtual controllerlib::Status Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs) override;
-
-    // Gets the direction of this endpoint (IN or OUT)
     virtual controllerlib::IUSBEndpoint::Direction GetDirection() override;
-
-    // get the endpoint descriptor
     virtual controllerlib::IUSBEndpoint::EndpointDescriptor *GetDescriptor() override;
 };

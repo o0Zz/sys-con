@@ -1,8 +1,6 @@
 #pragma once
 #include "IFileManager.h"
 #include <stratosphere.hpp>
-#include <stratosphere/fs/fs_filesystem.hpp>
-#include <stratosphere/fs/fs_file.hpp>
 
 namespace syscon
 {

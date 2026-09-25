@@ -95,7 +95,6 @@ namespace ams
 
         void Startup(void)
         {
-            /* ... */
         }
 
     } // namespace init

@@ -36,7 +36,7 @@ else()
         -Wextra
         # Deliberately no -Wpedantic: the device build compiles as gnu++23 and the code
         # uses GNU extensions on purpose (anonymous structs in unions, packed structs).
-        -Wshadow            # Catches the shadowed `result` locals in OpenInterfaces().
+        -Wshadow
         -Wundef             # Catches `#if ATMOSPHERE` where ATMOSPHERE is never defined.
         -Wformat=2          # Catches the printf/arg mismatches in the ILogger call sites.
         -Wno-unused-parameter

@@ -7,8 +7,6 @@
 #include "SwitchHDLHandler.h"
 
 #include "SwitchUSBInterface.h"
-#include <algorithm>
-#include <functional>
 #include <mutex>
 
 #include "logger.h"
@@ -131,10 +129,5 @@ namespace syscon::controllers
         syscon::logger::LogDebug("Controllers clear (Release all controllers) !");
         std::lock_guard<std::mutex> scoped_lock(controllerMutex);
         controllerHandlers.clear();
-    }
-
-    void Exit()
-    {
-        Clear();
     }
 } // namespace syscon::controllers

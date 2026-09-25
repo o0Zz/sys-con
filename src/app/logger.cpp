@@ -1,7 +1,5 @@
 #include "logger.h"
-#include <string.h>
 #include <algorithm>
-#include <sys/stat.h>
 #include <mutex>
 #include <thread>
 #include <inttypes.h>

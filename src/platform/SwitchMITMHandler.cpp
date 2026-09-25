@@ -1,9 +1,7 @@
 #include "SwitchMITMHandler.h"
 #include "SwitchLogger.h"
 #include <algorithm>
-#include <cmath>
 #include <cstdlib>
-#include <chrono>
 #include <mutex>
 
 using namespace controllerlib;
@@ -97,10 +95,6 @@ namespace
         return false;
     }
 } // namespace
-
-/******************************************************************************
- * SwitchMITMHandler Implementation
- *****************************************************************************/
 
 SwitchMITMHandler::SwitchMITMHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
     : SwitchVirtualGamepadHandler(std::move(controller), polling_timeout_ms, thread_priority)
@@ -308,7 +302,7 @@ Result SwitchMITMHandler::UpdateOutput()
 
         m_lastRumble[input_idx] = rumble;
 
-        controllerlib::Status rc = m_controller->SetRumble(input_idx, rumble);
+        m_controller->SetRumble(input_idx, rumble);
     }
 
     return 0;

@@ -19,22 +19,17 @@ namespace syscon
     {
         bool g_socket_initialized = false;
         NifmRequest g_nifm_request{};
-        size_t g_socket_tmem_size = 0;
 
         /*
             UDP only, and as small as it will go.
 
             The transfer memory libnx asks bsd:u for is
                 sb_efficiency * page_round(tcp_tx_max + tcp_rx_max + udp_tx + udp_rx)
-            and tmemCreate takes it from the process heap with __libnx_aligned_alloc. This
-            sysmodule's whole heap is 512 KiB (INNER_HEAP_SIZE in LibnxRuntime.cpp,
-            g_heap_memory in AmsRuntime.cpp), so the libnx defaults -- which work out at
-            0x234000, about 2.2 MiB -- do not merely waste memory, they fail outright.
-
-            Zeroing the TCP buffers and dropping sb_efficiency from 4 to 1 gives
-            page_round(0x1000 + 0x2000) * 1 == 0x3000, i.e. 12 KiB. If bsd:u ever rejects
-            zero-sized TCP buffers, give them 0x1000 each and leave the max sizes at 0 (the
-            formula then reuses the initial sizes) for 0x5000; do not reach for the defaults.
+            (a zero max size reuses the initial one) and tmemCreate takes it from the process
+            heap with __libnx_aligned_alloc. The heap is 256 KiB (INNER_HEAP_SIZE in
+            LibnxRuntime.cpp) or 512 KiB (g_heap_memory in AmsRuntime.cpp), so the libnx
+            defaults -- 0x234000, about 2.2 MiB -- do not merely waste memory, they fail
+            outright. Do not reach for them.
         */
         constexpr SocketInitConfig g_socketInitConfig = {
             // The pad never opens a TCP socket, so TCP gets one page each; the
@@ -52,15 +47,6 @@ namespace syscon
             .num_bsd_sessions = 3,
             .bsd_service_type = BsdServiceType_User,
         };
-
-        size_t ComputeTransferMemorySize(const SocketInitConfig &cfg)
-        {
-            const uint32_t tcp_tx = cfg.tcp_tx_buf_max_size != 0 ? cfg.tcp_tx_buf_max_size : cfg.tcp_tx_buf_size;
-            const uint32_t tcp_rx = cfg.tcp_rx_buf_max_size != 0 ? cfg.tcp_rx_buf_max_size : cfg.tcp_rx_buf_size;
-            size_t sum = tcp_tx + tcp_rx + cfg.udp_tx_buf_size + cfg.udp_rx_buf_size;
-            sum = (sum + 0xFFF) & ~static_cast<size_t>(0xFFF);
-            return cfg.sb_efficiency * sum;
-        }
     } // namespace
 
     Result UdpSocketInitialize()
@@ -68,13 +54,10 @@ namespace syscon
         if (g_socket_initialized)
             return 0;
 
-        g_socket_tmem_size = ComputeTransferMemorySize(g_socketInitConfig);
-
         /*
-            bsd:u is fetched through libnx's sm, which is not open here in either flavour: the
-            libnx runtime closes it at the end of __appInit, and the Atmosphere runtime brings
-            up libstratosphere's sm rather than libnx's. Both guards are reference counted, so
-            opening and closing around this call is safe whichever build we are in.
+            bsd:u is fetched through libnx's sm. The Atmosphere runtime brings up
+            libstratosphere's sm rather than libnx's, and libnx's guard is reference counted,
+            so opening and closing around this call is safe whichever build we are in.
         */
         Result rc = smInitialize();
         if (R_FAILED(rc))
@@ -87,7 +70,7 @@ namespace syscon
         if (R_FAILED(rc))
         {
             smExit();
-            syscon::logger::LogError("NetworkPad: socketInitialize failed (0x%08X) - requested %d bytes of transfer memory", rc, static_cast<int>(g_socket_tmem_size));
+            syscon::logger::LogError("NetworkPad: socketInitialize failed (0x%08X)", rc);
             return rc;
         }
 
@@ -114,7 +97,7 @@ namespace syscon
         smExit();
 
         g_socket_initialized = true;
-        syscon::logger::LogDebug("NetworkPad: socket driver up (%d bytes of transfer memory)", static_cast<int>(g_socket_tmem_size));
+        syscon::logger::LogDebug("NetworkPad: socket driver up");
 
         return 0;
     }
@@ -127,10 +110,6 @@ namespace syscon
         socketExit();
         g_socket_initialized = false;
     }
-
-    // -----------------------------------------------------------------------------------
-    // Endpoint
-    // -----------------------------------------------------------------------------------
 
     UdpEndpoint::UdpEndpoint(uint16_t port)
         : m_port(port)
@@ -266,10 +245,6 @@ namespace syscon
         return &m_descriptor;
     }
 
-    // -----------------------------------------------------------------------------------
-    // Interface
-    // -----------------------------------------------------------------------------------
-
     UdpInterface::UdpInterface(uint16_t port)
         : m_inEndpoint(std::make_unique<UdpEndpoint>(port))
     {
@@ -332,10 +307,6 @@ namespace syscon
     {
         return &m_descriptor;
     }
-
-    // -----------------------------------------------------------------------------------
-    // Device
-    // -----------------------------------------------------------------------------------
 
     UdpDevice::UdpDevice(uint16_t port)
     {

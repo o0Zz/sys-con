@@ -23,87 +23,19 @@ namespace syscon::networkpad
         constexpr int SocketInitRetries = 10;
         constexpr s64 SocketInitRetryDelayNs = 500000000LL; // 500 ms, matching svcSleepThread's s64
 
-        /*
-            The mapping the pad falls back on when config.ini has no [network] profile.
-
-            Anyone upgrading sys-con keeps the config.ini already on their SD card, so the
-            profile this release ships cannot be assumed to exist. Without it the pad would
-            inherit [default], whose pins are all 0 (unmapped) - it would attach, and then no
-            button would ever do anything, which is a miserable thing to debug.
-
-            Pin N is GamepadButton N, matching NetworkController::ParseData and the shipped
-            [network] profile.
-        */
-        void ApplyBuiltinMapping(ControllerConfig *config)
-        {
-            config->driver = "network";
-
-            for (GamepadButton button : AllDigitalButtons)
-            {
-                config->buttonsPin[button][0] = PinId{static_cast<uint8_t>(button)};
-                config->buttonsPin[button][1] = PinId{};
-            }
-
-            struct StickBinding
-            {
-                GamepadButton button;
-                float sign;
-                AnalogAxis axis;
-            };
-
-            // Left stick on X/Y and right stick on Z/Rz, matching what [default] declares.
-            constexpr StickBinding bindings[] = {
-                {GamepadButton::LSTICK_LEFT, -1.0f, AnalogAxis::X},
-                {GamepadButton::LSTICK_RIGHT, +1.0f, AnalogAxis::X},
-                {GamepadButton::LSTICK_UP, +1.0f, AnalogAxis::Y},
-                {GamepadButton::LSTICK_DOWN, -1.0f, AnalogAxis::Y},
-                {GamepadButton::RSTICK_LEFT, -1.0f, AnalogAxis::Z},
-                {GamepadButton::RSTICK_RIGHT, +1.0f, AnalogAxis::Z},
-                {GamepadButton::RSTICK_UP, +1.0f, AnalogAxis::Rz},
-                {GamepadButton::RSTICK_DOWN, -1.0f, AnalogAxis::Rz},
-            };
-
-            for (const StickBinding &binding : bindings)
-            {
-                config->buttonsAnalog[binding.button].sign = binding.sign;
-                config->buttonsAnalog[binding.button].bind = binding.axis;
-                config->buttonsPin[binding.button][0] = PinId{};
-                config->buttonsPin[binding.button][1] = PinId{};
-            }
-
-            // The sender already says exactly where the sticks are; shaping them again would
-            // only lose precision.
-            for (AnalogAxis axis : {AnalogAxis::X, AnalogAxis::Y, AnalogAxis::Z, AnalogAxis::Rz})
-            {
-                config->analogDeadzonePercent[axis] = 0;
-                config->analogFactorPercent[axis] = 100;
-            }
-        }
-
-        ControllerConfig LoadConfig()
+        // Builds the pad and hands it to the controller handler. Shared by Initialize and OnWake.
+        bool CreatePad()
         {
             ControllerConfig config;
 
             // auto_add_controller is false on purpose: this release ships a [ffff-0001] section,
             // and appending another one to the user's file would be noise, not help.
-            const int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config,
-                                                                 UdpDevice::VendorId, UdpDevice::ProductId,
-                                                                 false, "network");
-
-            if (rc != 0 || config.driver != "network")
+            if (::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, UdpDevice::VendorId, UdpDevice::ProductId, false, "network") != 0 ||
+                config.driver != "network")
             {
-                syscon::logger::LogWarning("NetworkPad: no [network] profile in config.ini - using the built-in mapping. "
-                                           "Update config.ini to customise it.");
-                ApplyBuiltinMapping(&config);
+                syscon::logger::LogError("NetworkPad: config.ini has no [network] profile - network controller disabled");
+                return false;
             }
-
-            return config;
-        }
-
-        // Builds the pad and hands it to the controller handler. Shared by Initialize and OnWake.
-        bool CreatePad()
-        {
-            ControllerConfig config = LoadConfig();
 
             auto device = std::make_unique<UdpDevice>(g_port);
             auto controller = std::make_unique<NetworkController>(std::move(device), config,

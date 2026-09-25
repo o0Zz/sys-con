@@ -2,7 +2,6 @@
 #include "SwitchUSBEndpoint.h"
 #include "SwitchUSBLock.h"
 #include "SwitchLogger.h"
-#include <malloc.h>
 #include <cstring>
 
 using namespace controllerlib;
@@ -20,7 +19,7 @@ Status SwitchUSBInterface::Open()
 {
     SwitchUSBLock usbLock;
 
-    ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Openning ...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
+    ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] Opening ...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct);
 
     Result rc = usbHsAcquireUsbIf(&m_session, &m_interface);
     if (R_FAILED(rc))

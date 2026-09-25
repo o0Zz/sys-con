@@ -4,8 +4,8 @@
 /*
  * HID MITM lifecycle facade, used only when the config `mode` is MITM.
  *
- * Both build flavours provide an implementation behind the same signature so the two
- * Main.cpp files start/stop the MITM identically:
+ * Both build flavours implement it behind the same signature, so main.cpp starts and stops
+ * the MITM identically:
  *   - libnx (ATMOSPHERE=0): hand-written HidMitmServer (src/platform/libnx/HidMitmServer.cpp)
  *   - ams   (ATMOSPHERE=1): libstratosphere HidMitmModule (src/platform/ams/HidMitmModule.cpp)
  *

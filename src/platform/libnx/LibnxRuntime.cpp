@@ -9,6 +9,8 @@
 #include <switch.h>
 #include "main.h"
 #include "StdFileManager.h"
+#include <cstdlib>
+#include <new>
 
 // Static, so it is charged to the ~7 MB of system memory Atmosphere leaves for every homebrew
 // sysmodule on 21.0.0+. main.cpp logs what is actually used; size it from that.
@@ -57,6 +59,58 @@ extern "C"
         fsExit();
     }
 }
+
+// Targets of the --wrap list in src/app/Makefile; the two lists must match.
+extern "C"
+{
+#define WRAP_ABORT_FUNC(func) [[noreturn]] void __wrap_##func(void) { diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_ShouldNotHappen)); }
+    WRAP_ABORT_FUNC(__cxa_throw)
+    WRAP_ABORT_FUNC(__cxa_rethrow)
+    WRAP_ABORT_FUNC(__cxa_allocate_exception)
+    WRAP_ABORT_FUNC(__cxa_free_exception)
+    WRAP_ABORT_FUNC(__cxa_begin_catch)
+    WRAP_ABORT_FUNC(__cxa_end_catch)
+    WRAP_ABORT_FUNC(__cxa_call_unexpected)
+    WRAP_ABORT_FUNC(__cxa_call_terminate)
+    WRAP_ABORT_FUNC(__gxx_personality_v0)
+    WRAP_ABORT_FUNC(_Unwind_Resume)
+    WRAP_ABORT_FUNC(_ZSt17__throw_bad_allocv)
+    WRAP_ABORT_FUNC(_ZSt28__throw_bad_array_new_lengthv)
+    WRAP_ABORT_FUNC(_ZSt19__throw_logic_errorPKc)
+    WRAP_ABORT_FUNC(_ZSt20__throw_length_errorPKc)
+    WRAP_ABORT_FUNC(_ZSt20__throw_out_of_rangePKc)
+    WRAP_ABORT_FUNC(_ZSt24__throw_out_of_range_fmtPKcz)
+    WRAP_ABORT_FUNC(_ZSt24__throw_invalid_argumentPKc)
+    WRAP_ABORT_FUNC(_ZSt25__throw_bad_function_callv)
+    WRAP_ABORT_FUNC(_ZSt20__throw_system_errori)
+    WRAP_ABORT_FUNC(_ZNSt11logic_errorC2EPKc)
+#undef WRAP_ABORT_FUNC
+}
+
+namespace
+{
+    void *AllocateOrAbort(void *p)
+    {
+        if (p == nullptr) [[unlikely]]
+            diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_OutOfMemory));
+        return p;
+    }
+} // namespace
+
+void *operator new(size_t size) { return AllocateOrAbort(malloc(size)); }
+void *operator new[](size_t size) { return AllocateOrAbort(malloc(size)); }
+void *operator new(size_t size, const std::nothrow_t &) noexcept { return malloc(size); }
+void *operator new[](size_t size, const std::nothrow_t &) noexcept { return malloc(size); }
+void *operator new(size_t size, std::align_val_t align) { return AllocateOrAbort(aligned_alloc(static_cast<size_t>(align), size)); }
+void *operator new[](size_t size, std::align_val_t align) { return AllocateOrAbort(aligned_alloc(static_cast<size_t>(align), size)); }
+void operator delete(void *p) noexcept { free(p); }
+void operator delete[](void *p) noexcept { free(p); }
+void operator delete(void *p, size_t) noexcept { free(p); }
+void operator delete[](void *p, size_t) noexcept { free(p); }
+void operator delete(void *p, std::align_val_t) noexcept { free(p); }
+void operator delete[](void *p, std::align_val_t) noexcept { free(p); }
+void operator delete(void *p, size_t, std::align_val_t) noexcept { free(p); }
+void operator delete[](void *p, size_t, std::align_val_t) noexcept { free(p); }
 
 int main(int argc, char *argv[])
 {

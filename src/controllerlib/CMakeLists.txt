@@ -184,7 +184,7 @@ else()
         -Wextra
         # Deliberately no -Wpedantic: the code uses GNU extensions on purpose (anonymous
         # structs in unions, packed structs).
-        -Wshadow            # Catches the shadowed `result` locals in OpenInterfaces().
+        -Wshadow
         -Wundef
         -Wformat=2          # Catches printf/arg mismatches at the ILogger call sites.
         -Wno-unused-parameter

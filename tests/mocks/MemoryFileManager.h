@@ -53,13 +53,7 @@ private:
 class MemoryFileManager final : public syscon::IFileManager
 {
 public:
-    MemoryFileManager() = default;
-
-    // Convenience for the common single-file case.
     explicit MemoryFileManager(std::string contents) { m_files["/config.ini"] = std::move(contents); }
-
-    void SetFile(const std::string &path, std::string contents) { m_files[path] = std::move(contents); }
-    const std::string &GetFile(const std::string &path) { return m_files[path]; }
 
     std::unique_ptr<syscon::IFile> open(const std::string &path, syscon::OpenFlags flags) override
     {

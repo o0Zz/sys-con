@@ -120,7 +120,7 @@ namespace syscon
         ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
         ::syscon::networkpad::Initialize(globalConfig);
 
-        ::syscon::logger::LogDebug("Initializing power supply managment ...");
+        ::syscon::logger::LogDebug("Initializing power supply management ...");
         ::syscon::psc::Initialize();
 
         // newlib's mallinfo() reports nonsense on this toolchain; how far sbrk has moved into the
@@ -135,7 +135,6 @@ namespace syscon
         ::syscon::logger::LogDebug("Shutting down sys-con ...");
         ::syscon::psc::Exit();
         ::syscon::usb::Exit();
-        ::syscon::controllers::Exit();
         ::syscon::networkpad::Exit();
 
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)

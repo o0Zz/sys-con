@@ -1040,7 +1040,6 @@ namespace syscon::hid::mitm
                 }
             }
 
-            // Teardown.
             smMitmUninstall(hid_name);
             for (Session &s : m_sessions)
             {

@@ -1,7 +1,6 @@
 #pragma once
 #include "IUSBInterface.h"
 #include <memory>
-#include <cstdio>
 #include <vector>
 
 namespace controllerlib

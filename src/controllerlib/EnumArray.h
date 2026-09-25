@@ -6,19 +6,9 @@
 namespace controllerlib
 {
     /*
-        A fixed array that can only be subscripted with one specific enum type.
-
-        This exists because the codebase had two arrays of the same shape that meant completely
-        different things, and plain C arrays let them be indexed interchangeably:
-
-          - RawInputData::analog was *sized* by ControllerAnalogType_Count but *indexed* by
-            ControllerAnalogBinding_* in some files and ControllerAnalogType_* in others. Both
-            were unscoped enums, so both decayed to int and the mix-up compiled silently.
-          - RawInputData::buttons is indexed by physical pin, NormalizedButtonData::buttons by
-            logical button, and both used the same size constant.
-
-        Subscripting with a scoped enum makes that class of mistake a compile error instead of a
-        silent misread, at zero runtime cost.
+        A fixed array that can only be subscripted with one specific enum type, so indexing a
+        physical-pin array with a logical button (or one axis enum with another) is a compile
+        error instead of a silent misread.
     */
     template <typename Index, typename Value, std::size_t N>
     class EnumArray

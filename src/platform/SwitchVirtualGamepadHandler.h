@@ -33,7 +33,6 @@ protected:
     // description is built once here from the controller's config.
     void BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo);
 
-    // Fills out the HDL state with the specified button data and passes it to HID
     virtual bool IsControllerAttached(uint16_t input_idx) = 0;
     virtual Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) = 0;
     virtual Result AttachController(uint16_t input_idx) = 0;
@@ -46,26 +45,20 @@ public:
     SwitchVirtualGamepadHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority = 0x30);
     virtual ~SwitchVirtualGamepadHandler();
 
-    // Override this if you want a custom init procedure
     virtual Result Initialize();
-    // Override this if you want a custom exit procedure
     virtual void Exit();
 
-    // Separately init the input-reading thread
     Result InitThread();
-    // Separately close the input-reading thread
     void ExitThread();
 
-    // The function to call indefinitely by the input thread
+    // Called in a loop by the input thread.
     virtual controllerlib::Status UpdateInput(uint32_t timeout_us);
-    // The function to call indefinitely by the output thread
     virtual Result UpdateOutput();
 
     static void ConvertAxisToSwitchAxis(float x, float y, int32_t *x_out, int32_t *y_out);
     static void ConvertMotionToSwitchMotion(const controllerlib::NormalizedMotion &motion, HidVector *acceleration, HidVector *angular_velocity);
     static u8 ControllerTypeToDeviceType(controllerlib::ControllerType type);
 
-    // Get the raw controller pointer
     inline controllerlib::IController *GetController() { return m_controller.get(); }
 
     inline void SetRemovable(bool removable) { m_removable = removable; }

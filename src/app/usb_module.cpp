@@ -156,7 +156,7 @@ namespace syscon::usb
                         }
                         else
                         {
-                            /* For now if Generic controller expose more than 1 interface, we will create as many GenericHIDController as we have interfaces */
+                            // A generic HID device is driven through its first interface only.
                             syscon::logger::LogInfo("Initializing Generic controller (Interface count: %d) ...", total_entries);
                             controllers::Insert(std::make_unique<GenericHIDController>(std::make_unique<SwitchUSBDevice>(interfaces, 1), config, std::make_unique<syscon::logger::Logger>()));
                         }
