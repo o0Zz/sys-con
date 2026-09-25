@@ -73,7 +73,9 @@ class HidSharedMemoryController
 public:
     static constexpr uint8_t VibrationDeviceCount = 2;
 
-    HidSharedMemoryController(uint8_t player_idx, u32 body_color, u32 buttons_color);
+    // device_type is the HidDeviceType the pad's hiddbg device was created with; it decides
+    // what kind of controller the fake shared memory presents.
+    HidSharedMemoryController(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color);
 
     uint8_t GetPlayerIndex() const { return m_player_idx; }
 
@@ -88,8 +90,16 @@ public:
     void Publish();
     void Clear();
 
+    struct NpadIdentity
+    {
+        u32 style;
+        u32 device_type_bits;
+        u8 footer;
+    };
+
 private:
     uint8_t m_player_idx;
+    u8 m_device_type;
     u32 m_body_color;
     u32 m_buttons_color;
     u64 m_sampling_number;
@@ -97,7 +107,9 @@ private:
     SwitchPadState m_state;
     SwitchMotion m_motion;
 
-    void Initialize(HidNpadInternalState *internal_state);
+    NpadIdentity IdentityFor(HidFakeView view) const;
+    void Initialize(HidNpadInternalState *internal_state, const NpadIdentity &identity);
+    static void ApplyIdentity(HidNpadInternalState *internal_state, const NpadIdentity &identity);
 };
 
 /* ------------------------------------------------ */
@@ -116,7 +128,16 @@ public:
     // The slot is dictated by the caller, not chosen here: the pad has already been created
     // through hiddbg and the console has given it an npad, and it is that npad the fake
     // shared memory has to override.
-    std::shared_ptr<HidSharedMemoryController> AttachControllerAt(uint8_t player_idx, u32 body_color, u32 buttons_color);
+    std::shared_ptr<HidSharedMemoryController> AttachControllerAt(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color);
+
+    /*
+        hid only shows a client the npad styles it declared through SetSupportedNpadStyleSet,
+        and a game handed a style it never asked for asserts. The application's declaration is
+        kept so its view can present a GameCube or N64 pad as one exactly when the game
+        supports it; every system applet shares a view and is shown a Pro Controller.
+    */
+    void OnSupportedNpadStyleSet(u64 program_id, u32 style_set);
+    u32 GetApplicationSupportedStyles() const { return m_application_styles.load(std::memory_order_relaxed); }
     void DetachController(std::shared_ptr<HidSharedMemoryController> controller);
 
     /*
@@ -185,6 +206,7 @@ protected:
 
     std::array<std::atomic<bool>, 8> m_player_owned;
     std::array<std::atomic<bool>, 8> m_player_retired;
+    std::atomic<u32> m_application_styles{0};
     std::array<VibrationSlot, 8 * HidSharedMemoryController::VibrationDeviceCount> m_vibration;
 
     std::recursive_mutex m_mutex_sharedmemory;

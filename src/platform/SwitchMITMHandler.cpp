@@ -228,7 +228,7 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
         return MAKERESULT(Module_Libnx, LibnxError_NotFound);
     }
 
-    m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachControllerAt(player_idx, deviceInfo.singleColorBody, deviceInfo.singleColorButtons);
+    m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachControllerAt(player_idx, deviceInfo.deviceType, deviceInfo.singleColorBody, deviceInfo.singleColorButtons);
     if (m_controllerList[input_idx] == nullptr)
     {
         ReleaseController(input_idx);

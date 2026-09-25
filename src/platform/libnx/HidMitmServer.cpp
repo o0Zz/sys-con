@@ -180,12 +180,15 @@ namespace syscon::hid::mitm
 
         /* -------- hid vibration commands (https://switchbrew.org/wiki/HID_services) -------- */
 
+        constexpr u32 HidCmdSetSupportedNpadStyleSet = 100;
         constexpr u32 HidCmdDisconnectNpad = 107;
         constexpr u32 HidCmdGetVibrationDeviceInfo = 200;
         constexpr u32 HidCmdSendVibrationValue = 201;
         constexpr u32 HidCmdGetActualVibrationValue = 202;
         constexpr u32 HidCmdCreateActiveVibrationDeviceList = 203;
         constexpr u32 HidCmdSendVibrationValues = 206;
+        constexpr u32 HidCmdSendVibrationGcErmCommand = 207;
+        constexpr u32 HidCmdGetActualVibrationGcErmCommand = 208;
         constexpr u32 HidCmdIsVibrationDeviceMounted = 211;
         constexpr u32 ActiveVibrationDeviceListCmdActivate = 0;
 
@@ -205,8 +208,17 @@ namespace syscon::hid::mitm
             u64 aruid;
         };
 
+        struct VibrationGcErmIn
+        {
+            HidVibrationDeviceHandle handle;
+            u32 pad;
+            u64 aruid;
+            u64 command;
+        };
+
         static_assert(sizeof(VibrationSendValueIn) == 0x20);
         static_assert(sizeof(VibrationHandleIn) == 0x10);
+        static_assert(sizeof(VibrationGcErmIn) == 0x18);
 
         /* -------- session table -------- */
 
@@ -684,6 +696,28 @@ namespace syscon::hid::mitm
                 case HidCmdSendVibrationValues:
                     return HookSendVibrationValues(r, domain);
 
+                case HidCmdSendVibrationGcErmCommand:
+                {
+                    const VibrationGcErmIn *in = static_cast<const VibrationGcErmIn *>(data);
+                    if (!vibration::IsOwned(in->handle))
+                        return false;
+
+                    vibration::StoreGcErm(in->handle, in->command);
+                    BuildCmifDataReply(0, domain);
+                    return true;
+                }
+
+                case HidCmdGetActualVibrationGcErmCommand:
+                {
+                    const VibrationHandleIn *in = static_cast<const VibrationHandleIn *>(data);
+                    u64 command;
+                    if (!vibration::LoadGcErm(in->handle, &command))
+                        return false;
+
+                    *static_cast<u64 *>(BuildCmifDataReply(sizeof(command), domain)) = command;
+                    return true;
+                }
+
                 default:
                     return false;
             }
@@ -827,6 +861,8 @@ namespace syscon::hid::mitm
                 return true;
             if (s.kind == SessionKind::Hid && command_id == HidCmdDisconnectNpad)
                 HidSharedMemoryManager::GetHidSharedMemoryManager().RetireDisconnectedNpad(*static_cast<const u32 *>(GetInData(r, false)));
+            if (s.kind == SessionKind::Hid && command_id == HidCmdSetSupportedNpadStyleSet)
+                HidSharedMemoryManager::GetHidSharedMemoryManager().OnSupportedNpadStyleSet(s.info.program_id, *static_cast<const u32 *>(GetInData(r, false)));
             return ForwardAndReply(r, ForwardSessionFor(s), false);
         }
 
@@ -872,6 +908,8 @@ namespace syscon::hid::mitm
                         return true;
                     if (command_id == HidCmdDisconnectNpad)
                         HidSharedMemoryManager::GetHidSharedMemoryManager().RetireDisconnectedNpad(*static_cast<const u32 *>(GetInData(r, true)));
+                    if (command_id == HidCmdSetSupportedNpadStyleSet)
+                        HidSharedMemoryManager::GetHidSharedMemoryManager().OnSupportedNpadStyleSet(s.info.program_id, *static_cast<const u32 *>(GetInData(r, true)));
                 }
             }
 

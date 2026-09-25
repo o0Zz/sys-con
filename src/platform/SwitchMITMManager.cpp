@@ -367,7 +367,13 @@ void HidSharedMemoryManager::ClearVibration(uint8_t player_idx)
         SetVibration(player_idx, device_idx, HidVibrationValue{});
 }
 
-std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControllerAt(uint8_t player_idx, u32 body_color, u32 buttons_color)
+void HidSharedMemoryManager::OnSupportedNpadStyleSet(u64 program_id, u32 style_set)
+{
+    if (ViewForProgram(program_id) == HidFakeView::Application)
+        m_application_styles.store(style_set, std::memory_order_relaxed);
+}
+
+std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControllerAt(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color)
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
@@ -383,7 +389,7 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
         return nullptr;
     }
 
-    m_controller_list[player_idx] = std::make_shared<HidSharedMemoryController>(player_idx, body_color, buttons_color);
+    m_controller_list[player_idx] = std::make_shared<HidSharedMemoryController>(player_idx, device_type, body_color, buttons_color);
     ClearVibration(player_idx);
     m_player_retired[player_idx].store(false, std::memory_order_relaxed);
     m_player_owned[player_idx].store(true, std::memory_order_relaxed);
@@ -477,7 +483,13 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
             already reading it a jump in every lifo.
         */
         if (FindEntry(entry->GetView()) == nullptr)
+        {
             memcpy_64(entry->GetFakeAddr(), entry->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+
+            // A new application has declared nothing yet; the last one's styles are not its.
+            if (entry->GetView() == HidFakeView::Application)
+                m_application_styles.store(0, std::memory_order_relaxed);
+        }
 
         /*
             The seed is a byte copy of the real shared memory, so the slots sys-con drives
@@ -716,8 +728,9 @@ void HidSharedMemoryManager::OnRun()
 
 /* ---------------------------------------- */
 
-HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u32 body_color, u32 buttons_color)
+HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color)
     : m_player_idx(player_idx),
+      m_device_type(device_type),
       m_body_color(body_color),
       m_buttons_color(buttons_color),
       m_sampling_number(0),
@@ -727,7 +740,43 @@ HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u32 bod
 
 /* ---------------------------------------- */
 
-void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
+/*
+    What the pad is, as the view's clients are allowed to see it. HidDeviceType_FullKey13 is
+    GcOnGggg - the GameCube controller - and Lagon the N64 one; each is presented as such only
+    to an application that declared the style, and as a Pro Controller to everyone else, the
+    way hid itself filters them.
+*/
+HidSharedMemoryController::NpadIdentity HidSharedMemoryController::IdentityFor(HidFakeView view) const
+{
+    const u32 accepted = view == HidFakeView::Application ? g_HidSharedMemoryManager.GetApplicationSupportedStyles() : 0;
+
+    if (m_device_type == HidDeviceType_FullKey13 && (accepted & HidNpadStyleTag_NpadGc))
+        return NpadIdentity{HidNpadStyleTag_NpadGc, HidDeviceTypeBits_FullKey, HidAppletFooterUiType_SwitchProController};
+    if (m_device_type == HidDeviceType_Lagon && (accepted & HidNpadStyleTag_NpadLagon))
+        return NpadIdentity{HidNpadStyleTag_NpadLagon, HidDeviceTypeBits_Lagon, HidAppletFooterUiType_Lagon};
+    if (m_device_type == HidDeviceType_Lucia && (accepted & HidNpadStyleTag_NpadLucia))
+        return NpadIdentity{HidNpadStyleTag_NpadLucia, HidDeviceTypeBits_Lucia, HidAppletFooterUiType_Lucia};
+    if (m_device_type == HidDeviceType_Lager && (accepted & HidNpadStyleTag_NpadLager))
+        return NpadIdentity{HidNpadStyleTag_NpadLager, HidDeviceTypeBits_Lager, HidAppletFooterUiType_SwitchProController};
+
+    return NpadIdentity{HidNpadStyleTag_NpadFullKey, HidDeviceTypeBits_FullKey, HidAppletFooterUiType_SwitchProController};
+}
+
+/*
+    Only the fields that say what the pad is, style_set last: this also runs on a slot clients
+    are already reading, when an application declares its styles after the pad was published,
+    and a lifo must never be touched underneath a reader.
+*/
+void HidSharedMemoryController::ApplyIdentity(HidNpadInternalState *internal_state, const NpadIdentity &identity)
+{
+    internal_state->gc_trigger_lifo.header.buffer_count = 17;
+    internal_state->device_type = identity.device_type_bits;
+    internal_state->applet_footer_ui_type = identity.footer;
+
+    __atomic_store_n(&internal_state->style_set, identity.style, __ATOMIC_RELEASE);
+}
+
+void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state, const NpadIdentity &identity)
 {
     ::syscon::logger::LogDebug("HidSharedMemoryController::Initialize initializing player %d ...", m_player_idx + 1);
 
@@ -744,7 +793,6 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
     internal_state->system_ext_lifo.header.buffer_count = 17;
     internal_state->full_key_six_axis_sensor_lifo.header.buffer_count = 17;
 
-    internal_state->device_type = HidDeviceTypeBits_FullKey;
     internal_state->system_properties.is_abxy_button_oriented = 1;
     internal_state->system_properties.is_plus_available = 1;
     internal_state->system_properties.is_minus_available = 1;
@@ -752,21 +800,17 @@ void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state)
     internal_state->battery_level[0] = 4; // Set battery charge to full.
     internal_state->battery_level[1] = 4; // Set battery charge to full.
     internal_state->battery_level[2] = 4; // Set battery charge to full.
-    internal_state->applet_footer_ui_type = HidAppletFooterUiType_SwitchProController;
 
     /*
         Last, and on its own: style_set is what tells a reader the slot holds a pad, and
         everything it will then walk - the lifo buffer counts above most of all - has to be in
         place before it does.
 
-        FullKey alone. SystemExt is a system style, and the real hid only ever reports a
-        style the client itself declared through SetSupportedNpadStyleSet; one fake shared
-        memory serves every mitm'd process here, so a bit set for the system applets is a bit
-        an application reads too, and nn::hid aborts in a title that never asked for it
-        (SSBU). The system applets are served by system_ext_lifo being filled below, which
-        costs them nothing.
+        Never SystemExt, even for the applets: the real hid only reports a style the client
+        declared, and nn::hid aborts in a title handed one it never asked for (SSBU). The
+        system applets are served by system_ext_lifo being filled regardless.
     */
-    __atomic_store_n(&internal_state->style_set, static_cast<u32>(HidNpadStyleTag_NpadFullKey), __ATOMIC_RELEASE);
+    ApplyIdentity(internal_state, identity);
 }
 
 /* ---------------------------------------- */
@@ -838,6 +882,12 @@ void HidSharedMemoryController::Publish()
     state.analog_stick_r = m_state.analog_stick_r;
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
 
+    // The GameCube triggers are analog on real hardware; the pad state only carries ZL/ZR.
+    HidNpadGcTriggerState trigger{};
+    trigger.sampling_number = m_sampling_number;
+    trigger.trigger_l = (m_state.buttons & HidNpadButton_ZL) ? JOYSTICK_MAX : 0;
+    trigger.trigger_r = (m_state.buttons & HidNpadButton_ZR) ? JOYSTICK_MAX : 0;
+
     HidSixAxisSensorState six_axis{};
     if (m_state.has_motion)
     {
@@ -860,10 +910,17 @@ void HidSharedMemoryController::Publish()
         if (internal_state == nullptr)
             continue;
 
+        const NpadIdentity identity = IdentityFor(static_cast<HidFakeView>(view));
         if (internal_state->style_set == 0)
-            Initialize(internal_state);
+            Initialize(internal_state, identity);
+        else if (internal_state->style_set != identity.style)
+            ApplyIdentity(internal_state, identity);
 
+        // Every style sys-con presents - FullKey, Gc, Lagon, Lucia, Lager - is read from here.
         AppendState(&internal_state->full_key_lifo, state);
+
+        if (identity.style == HidNpadStyleTag_NpadGc)
+            AppendState(&internal_state->gc_trigger_lifo, trigger);
 
         // Filled for a style that is deliberately not announced: qlaunch, the Controllers
         // applet and profile select read this lifo and nothing else.
@@ -900,6 +957,7 @@ void HidSharedMemoryController::Clear()
         EmptyLifo(&internal_state->full_key_lifo);
         EmptyLifo(&internal_state->system_ext_lifo);
         EmptyLifo(&internal_state->full_key_six_axis_sensor_lifo);
+        EmptyLifo(&internal_state->gc_trigger_lifo);
     }
 
     m_sampling_number = 0;

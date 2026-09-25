@@ -20,4 +20,12 @@ namespace syscon::hid::mitm::vibration
     bool Load(HidVibrationDeviceHandle handle, HidVibrationValue *out);
 
     HidVibrationDeviceInfo GetDeviceInfo(HidVibrationDeviceHandle handle);
+
+    /*
+        A GameCube controller's motor only knows on and off, driven by HidVibrationGcErmCommand
+        rather than by amplitudes. It is stored as the equivalent value so the driver side stays
+        one path: Start is full strength on both bands, either Stop is silence.
+    */
+    void StoreGcErm(HidVibrationDeviceHandle handle, u64 command);
+    bool LoadGcErm(HidVibrationDeviceHandle handle, u64 *command);
 } // namespace syscon::hid::mitm::vibration
