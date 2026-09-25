@@ -293,8 +293,10 @@ namespace syscon::config
                     ini_data->global_config->mode = VirtualPadMode::MITM;
                 else if (modeStr == "hiddbg")
                     ini_data->global_config->mode = VirtualPadMode::HIDDBG;
+                else if (modeStr == "disabled")
+                    ini_data->global_config->mode = VirtualPadMode::DISABLED;
                 else
-                    syscon::logger::LogError("Unknown mode: %s (expected 'mitm' or 'hiddbg') - Ignoring it !", value);
+                    syscon::logger::LogError("Unknown mode: %s (expected 'mitm', 'hiddbg' or 'disabled') - Ignoring it !", value);
             }
             else if (nameStr == "discovery_vidpid")
             {

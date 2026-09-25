@@ -84,6 +84,13 @@ namespace syscon
 
         ::syscon::logger::SetLogLevel(globalConfig.log_level);
 
+        if (globalConfig.mode == ::syscon::config::VirtualPadMode::DISABLED)
+        {
+            ::syscon::logger::LogInfo("sys-con is disabled (mode=disabled) - exiting");
+            ::syscon::logger::Exit();
+            return;
+        }
+
         ::syscon::logger::LogDebug("Initializing controllers ...");
         ::syscon::controllers::Initialize();
 

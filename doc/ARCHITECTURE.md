@@ -202,7 +202,7 @@ bring-up and the ams heap/allocator are written per flavour.
 
 Both virtual-pad handlers — `SwitchHDLHandler` (hiddbg HDLS) and `SwitchMITMHandler` (fake
 HID shared memory) — plus the shared `SwitchMITMManager` data plane compile into **both**
-flavours; the config `mode` (`hiddbg` or `mitm`, default `hiddbg`) picks one at runtime via
+flavours; the config `mode` (`hiddbg`, `mitm` or `disabled`, default `hiddbg`) picks one at runtime via
 `controllers::SetMode`. Only the MITM *server framework* differs per flavour, because
 libstratosphere is unavailable in the `ATMOSPHERE=0` build. The libnx MITM installs on `hid`
 through Atmosphère's `sm` tipc extensions (`sm_mitm.c`, a port of libstratosphere's

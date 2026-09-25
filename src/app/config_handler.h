@@ -64,11 +64,13 @@ namespace syscon::config
     //  - HIDDBG: attach virtual devices through hiddbg/HDLS (SwitchHDLHandler).
     //  - MITM:   man-in-the-middle the hid service and feed each game a fake HID
     //            shared memory (SwitchMITMHandler + SwitchMITMManager).
+    //  - DISABLED: sys-con exits right after reading the config.
     // Selected at runtime; both mechanisms are compiled into both build flavours.
     enum class VirtualPadMode
     {
         HIDDBG = 0,
         MITM = 1,
+        DISABLED = 2,
     };
 
     class GlobalConfig
