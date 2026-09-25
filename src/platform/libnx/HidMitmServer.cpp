@@ -180,6 +180,7 @@ namespace syscon::hid::mitm
 
         /* -------- hid vibration commands (https://switchbrew.org/wiki/HID_services) -------- */
 
+        constexpr u32 HidCmdDisconnectNpad = 107;
         constexpr u32 HidCmdGetVibrationDeviceInfo = 200;
         constexpr u32 HidCmdSendVibrationValue = 201;
         constexpr u32 HidCmdGetActualVibrationValue = 202;
@@ -824,6 +825,8 @@ namespace syscon::hid::mitm
                 return HookCreateVibrationDeviceList(idx, false);
             if (s.kind == SessionKind::Hid && HookVibration(r, command_id, false))
                 return true;
+            if (s.kind == SessionKind::Hid && command_id == HidCmdDisconnectNpad)
+                HidSharedMemoryManager::GetHidSharedMemoryManager().RetireDisconnectedNpad(*static_cast<const u32 *>(GetInData(r, false)));
             return ForwardAndReply(r, ForwardSessionFor(s), false);
         }
 
@@ -867,6 +870,8 @@ namespace syscon::hid::mitm
                         return HookCreateVibrationDeviceList(idx, true);
                     if (HookVibration(r, command_id, true))
                         return true;
+                    if (command_id == HidCmdDisconnectNpad)
+                        HidSharedMemoryManager::GetHidSharedMemoryManager().RetireDisconnectedNpad(*static_cast<const u32 *>(GetInData(r, true)));
                 }
             }
 

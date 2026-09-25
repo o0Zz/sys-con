@@ -303,6 +303,23 @@ bool HidSharedMemoryManager::IsPlayerIndexOwned(uint8_t player_idx) const
     return player_idx < m_player_owned.size() && m_player_owned[player_idx].load(std::memory_order_relaxed);
 }
 
+void HidSharedMemoryManager::RetireDisconnectedNpad(u32 npad_id)
+{
+    if (npad_id >= m_player_owned.size() || !IsPlayerIndexOwned(static_cast<uint8_t>(npad_id)))
+        return;
+
+    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+
+    m_player_retired[npad_id].store(true, std::memory_order_relaxed);
+    RestoreRealSlot(static_cast<uint8_t>(npad_id));
+}
+
+bool HidSharedMemoryManager::IsPlayerIndexRetired(uint8_t player_idx) const
+{
+    return player_idx < m_player_retired.size() && m_player_retired[player_idx].load(std::memory_order_relaxed);
+}
+
 void HidSharedMemoryManager::SetVibration(uint8_t player_idx, uint8_t device_idx, const HidVibrationValue &value)
 {
     VibrationSlot &slot = m_vibration[(player_idx * HidSharedMemoryController::VibrationDeviceCount) + (device_idx % HidSharedMemoryController::VibrationDeviceCount)];
@@ -368,6 +385,7 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
 
     m_controller_list[player_idx] = std::make_shared<HidSharedMemoryController>(player_idx, body_color, buttons_color);
     ClearVibration(player_idx);
+    m_player_retired[player_idx].store(false, std::memory_order_relaxed);
     m_player_owned[player_idx].store(true, std::memory_order_relaxed);
 
     {
@@ -404,7 +422,7 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
 
             {
                 std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-                controller->Clear();
+                RestoreRealSlot(static_cast<uint8_t>(i));
             }
 
             m_controller_list[i] = nullptr;
@@ -616,6 +634,30 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::FindEntry(HidFakeV
     return nullptr;
 }
 
+/*
+    Clear() alone is not a disconnected npad: it retires style_set and empties the lifos, but the
+    device type, footer, colours and the last samples of our pad stay behind, and the mirror
+    below never rewrites a slot that is empty on both sides. The grip/order screen read those
+    leftovers and kept slot 1 lit for a pad that was gone. So the slot is given the real hid's
+    own entry - exactly what a client would see had sys-con never been there.
+*/
+void HidSharedMemoryManager::RestoreRealSlot(uint8_t player_idx)
+{
+    for (size_t view = 0; view < HidFakeViewCount; view++)
+    {
+        std::shared_ptr<HidSharedMemoryEntry> source = FindEntry(static_cast<HidFakeView>(view));
+        if (source == nullptr)
+        {
+            HidNpadInternalState *internal_state = FakeNpadState(static_cast<HidFakeView>(view), player_idx);
+            if (internal_state != nullptr)
+                __atomic_store_n(&internal_state->style_set, 0u, __ATOMIC_RELEASE);
+            continue;
+        }
+
+        memcpy_64(&source->GetFakeAddr()->npad.entries[player_idx], &source->GetRealAddr()->npad.entries[player_idx], sizeof(HidNpadSharedMemoryEntry));
+    }
+}
+
 void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
 {
     HidSharedMemory *real = entry.GetRealAddr();
@@ -626,8 +668,9 @@ void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
 
     for (size_t i = 0; i < NpadEntryCount; i++)
     {
-        // A slot sys-con drives is its own: mirroring it would wipe the virtual pad.
-        if (i < m_controller_list.size() && IsPlayerIndexOwned(i))
+        // A slot sys-con drives is its own: mirroring it would wipe the virtual pad. A retired
+        // one is the real hid's again, even before the pad handler has released it.
+        if (i < m_controller_list.size() && IsPlayerIndexOwned(i) && !IsPlayerIndexRetired(i))
             continue;
 
         // An npad the console never populated stays zeroed on both sides. Skipping those
@@ -658,10 +701,10 @@ void HidSharedMemoryManager::OnRun()
                     Mirror(*source);
             }
 
-            for (const auto &controller : m_controller_list)
+            for (size_t i = 0; i < m_controller_list.size(); i++)
             {
-                if (controller != nullptr)
-                    controller->Publish();
+                if (m_controller_list[i] != nullptr && !IsPlayerIndexRetired(i))
+                    m_controller_list[i]->Publish();
             }
         }
 

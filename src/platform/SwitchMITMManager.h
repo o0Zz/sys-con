@@ -128,6 +128,15 @@ public:
     */
     bool IsPlayerIndexOwned(uint8_t player_idx) const;
 
+    /*
+        A client disconnecting one of our npads through hid - the grip/order screen does it to
+        every npad the moment it opens. The slot is cleared here, before the request is even
+        forwarded, so the client can never read our pad back after its own disconnect; the pad
+        handler then sees IsPlayerIndexRetired and releases its hiddbg device on its own thread.
+    */
+    void RetireDisconnectedNpad(u32 npad_id);
+    bool IsPlayerIndexRetired(uint8_t player_idx) const;
+
     void SetVibration(uint8_t player_idx, uint8_t device_idx, const HidVibrationValue &value);
     HidVibrationValue GetVibration(uint8_t player_idx, uint8_t device_idx) const;
     void GetRumble(uint8_t player_idx, float *amp_high, float *amp_low) const;
@@ -145,6 +154,9 @@ private:
 
     // real -> fake, for everything but the npad slots sys-con owns.
     void Mirror(HidSharedMemoryEntry &entry);
+
+    // Hands an npad slot back to the real hid in every view. Caller holds m_mutex_sharedmemory.
+    void RestoreRealSlot(uint8_t player_idx);
     std::shared_ptr<HidSharedMemoryEntry> FindEntry(HidFakeView view) const;
 
     void RunGarbageCollector();
@@ -172,6 +184,7 @@ protected:
     };
 
     std::array<std::atomic<bool>, 8> m_player_owned;
+    std::array<std::atomic<bool>, 8> m_player_retired;
     std::array<VibrationSlot, 8 * HidSharedMemoryController::VibrationDeviceCount> m_vibration;
 
     std::recursive_mutex m_mutex_sharedmemory;

@@ -1,5 +1,4 @@
 #include "SwitchMITMHandler.h"
-#include "SwitchHDLHandler.h"
 #include "SwitchLogger.h"
 #include <algorithm>
 #include <cmath>
@@ -133,11 +132,15 @@ Result SwitchMITMHandler::Initialize()
 
 /*
     The npad slot the fake shared memory overrides is the one hid gave to our hiddbg device,
-    so the pad exists exactly as long as that device does. hid destroys it on its own - the
-    grip/order screen unassigning the controllers, a game refusing another pad, a sleep cycle
-    - and only hid knows; the fake shared memory is ours and would always claim the pad is
-    there. Asking hiddbg is what tells them apart: an npad style set in that slot only says
-    somebody is there, which after a drop can be a real controller the console moved in.
+    and hid takes it back on its own - the grip/order screen unassigning every controller, a
+    game refusing another pad, a sleep cycle. The fake shared memory is ours and would claim
+    the pad is still there, so the real one is asked: sys-con's own hid view (main.cpp opens it,
+    and it is never mitm'd) empties that npad the moment hid lets go of it.
+
+    A shared memory read, where hiddbgIsHdlsVirtualDeviceAttached was an IPC on every poll -
+    and that one was the wrong question anyway: the grip/order screen unassigns the device
+    without detaching it, so hiddbg kept saying attached and the screen showed a controller
+    nobody had confirmed with L+R.
 
     Answering honestly is also what re-arms the L+R re-attach in
     SwitchVirtualGamepadHandler::UpdateInput, and the slot is given back here so the manager
@@ -148,12 +151,11 @@ bool SwitchMITMHandler::IsControllerAttached(uint16_t input_idx)
     if (m_hdlsHandle[input_idx].handle == 0)
         return false;
 
-    bool attached = false;
-    Result rc = hiddbgIsHdlsVirtualDeviceAttached(SwitchHDLHandler::GetHdlsSessionId(), m_hdlsHandle[input_idx], &attached);
-    if (R_SUCCEEDED(rc) && attached)
+    const uint8_t player_idx = m_controllerList[input_idx]->GetPlayerIndex();
+    if (!HidSharedMemoryManager::GetHidSharedMemoryManager().IsPlayerIndexRetired(player_idx) && hidGetNpadStyleSet(static_cast<HidNpadIdType>(player_idx)) != 0)
         return true;
 
-    syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the device on input: %d (Error: 0x%08X), releasing player %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc, m_controllerList[input_idx]->GetPlayerIndex() + 1);
+    syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the device on input: %d, releasing player %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, player_idx + 1);
 
     ReleaseController(input_idx);
 

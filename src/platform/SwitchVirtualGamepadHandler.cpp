@@ -194,6 +194,14 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     if (m_controllerData[input_idx].m_is_connected == false)
         return read_rc; // No need to update the controller state if it's not connected
 
+    /*
+        A pad at rest sends nothing, and the console can take it away in that silence - the
+        grip/order screen does. Asking on the idle path too is what lets the MITM give the slot
+        back at once rather than on the next button press; both handlers answer from memory.
+    */
+    if (read_rc == Status::Timeout)
+        IsControllerAttached(input_idx);
+
     if (read_rc != Status::Success)
         return read_rc;
 
