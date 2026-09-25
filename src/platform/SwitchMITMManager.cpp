@@ -29,60 +29,97 @@ namespace
 } // namespace
 
 /*
-    One fake shared memory for every mitm'd client, rather than one each.
+    One fake shared memory per view, not one per client.
     svcCreateSharedMemory charges 256 KiB against the shared system resource limit - sys-con
     has no reservation of its own (pool_partition 2, system_resource_size 0) - so a
     per-client allocation starts failing with 0x00010801 (LimitReached) as soon as the pool
     is tight, which leaves the client with no HID shared memory and takes the console down.
-    Every client can share one: the contents reflect the same physical controllers plus the
-    pads sys-con injects. Allocating it once at Start() also claims the memory while the
-    pool is still free, instead of mid-session when it is not.
-*/
-static ::SharedMemory g_fake_shared_memory{};
-static bool g_fake_shared_memory_seeded = false;
+    Both are allocated at Start(), while the pool is still free.
 
-static Result CreateFakeSharedMemory()
+    Two views rather than one because the real hid writes each aruid only the npad styles
+    that client declared through SetSupportedNpadStyleSet. The system applets declare
+    SystemExt, and an application mirrored from one of them sees it on the physical
+    controllers - which aborts nn::hid in a title that never asked for it (SSBU, 2162-0001).
+    Only one application runs at a time, so it gets a fake of its own mirrored from its own
+    real view, and every system applet shares the other.
+*/
+namespace
 {
-    if (g_fake_shared_memory.handle != INVALID_HANDLE)
+    constexpr u64 ApplicationProgramIdStart = 0x0100000000010000ul;
+
+    struct FakeSharedMemory
+    {
+        ::SharedMemory shmem;
+        const char *name;
+    };
+
+    std::array<FakeSharedMemory, HidFakeViewCount> g_fake_shared_memory{{
+        {::SharedMemory{}, "system"},
+        {::SharedMemory{}, "application"},
+    }};
+
+    HidFakeView ViewForProgram(u64 program_id)
+    {
+        return program_id >= ApplicationProgramIdStart ? HidFakeView::Application : HidFakeView::System;
+    }
+
+    FakeSharedMemory &Fake(HidFakeView view)
+    {
+        return g_fake_shared_memory[static_cast<size_t>(view)];
+    }
+
+    HidSharedMemory *FakeAddr(HidFakeView view)
+    {
+        return static_cast<HidSharedMemory *>(shmemGetAddr(&Fake(view).shmem));
+    }
+
+    // Null for a view whose fake could not be allocated; that failure is logged once, at
+    // allocation, and no client is ever handed that view.
+    HidNpadInternalState *FakeNpadState(HidFakeView view, uint8_t player_idx)
+    {
+        HidSharedMemory *fake = FakeAddr(view);
+        return fake != nullptr ? &fake->npad.entries[player_idx].internal_state : nullptr;
+    }
+} // namespace
+
+static Result CreateFakeSharedMemory(HidFakeView view)
+{
+    FakeSharedMemory &fake = Fake(view);
+    if (fake.shmem.handle != INVALID_HANDLE)
         return 0;
 
-    Result rc = shmemCreate(&g_fake_shared_memory, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R);
+    Result rc = shmemCreate(&fake.shmem, HID_SHARED_MEMORY_SIZE, Perm_Rw, Perm_R);
     if (R_FAILED(rc))
     {
-        ::syscon::logger::LogError("HidSharedMemory failed to create the shared fake memory: 0x%08X (Mod:%d - Desc:%d)", rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        g_fake_shared_memory = ::SharedMemory{};
+        ::syscon::logger::LogError("HidSharedMemory failed to create the %s fake memory: 0x%08X (Mod:%d - Desc:%d)", fake.name, rc, R_MODULE(rc), R_DESCRIPTION(rc));
+        fake.shmem = ::SharedMemory{};
         return rc;
     }
 
-    rc = shmemMap(&g_fake_shared_memory);
+    rc = shmemMap(&fake.shmem);
     if (R_FAILED(rc))
     {
-        ::syscon::logger::LogError("HidSharedMemory failed to map the shared fake memory: 0x%08X (Mod:%d - Desc:%d)", rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        shmemClose(&g_fake_shared_memory);
-        g_fake_shared_memory = ::SharedMemory{};
+        ::syscon::logger::LogError("HidSharedMemory failed to map the %s fake memory: 0x%08X (Mod:%d - Desc:%d)", fake.name, rc, R_MODULE(rc), R_DESCRIPTION(rc));
+        shmemClose(&fake.shmem);
+        fake.shmem = ::SharedMemory{};
         return rc;
     }
 
-    ::syscon::logger::LogInfo("HidSharedMemory shared fake memory ready (FakeAddr: %p)", shmemGetAddr(&g_fake_shared_memory));
+    ::syscon::logger::LogInfo("HidSharedMemory %s fake memory ready (FakeAddr: %p)", fake.name, shmemGetAddr(&fake.shmem));
     return 0;
 }
 
-static void DestroyFakeSharedMemory()
+static void DestroyFakeSharedMemories()
 {
-    if (g_fake_shared_memory.map_addr != nullptr)
-        shmemUnmap(&g_fake_shared_memory);
-    if (g_fake_shared_memory.handle != INVALID_HANDLE)
-        shmemClose(&g_fake_shared_memory);
+    for (FakeSharedMemory &fake : g_fake_shared_memory)
+    {
+        if (fake.shmem.map_addr != nullptr)
+            shmemUnmap(&fake.shmem);
+        if (fake.shmem.handle != INVALID_HANDLE)
+            shmemClose(&fake.shmem);
 
-    g_fake_shared_memory = ::SharedMemory{};
-    g_fake_shared_memory_seeded = false;
-}
-
-// The npad table of the one shared fake; null until CreateFakeSharedMemory() succeeds.
-static HidNpadSharedMemoryEntry *FakeNpadEntries()
-{
-    HidSharedMemory *fake = static_cast<HidSharedMemory *>(shmemGetAddr(&g_fake_shared_memory));
-    return fake != nullptr ? fake->npad.entries : nullptr;
+        fake.shmem = ::SharedMemory{};
+    }
 }
 
 static void memcpy_64(void *dest, const void *src, size_t n)
@@ -126,7 +163,7 @@ static Result _HidGetSharedMemoryHandle(Service *srv, Handle *handle_out)
 }
 
 HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId, u64 programId)
-    : m_process_id(processId), m_program_id(programId)
+    : m_process_id(processId), m_program_id(programId), m_view(ViewForProgram(programId))
 {
     Handle sharedMemHandle;
 
@@ -153,22 +190,11 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 processId
     }
 
     // Normally already created by Start(); this only has to do anything if that failed.
-    m_status = CreateFakeSharedMemory();
+    m_status = CreateFakeSharedMemory(m_view);
     if (R_FAILED(m_status))
         return;
 
-    ::syscon::logger::LogInfo("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", RealAddr: %p, FakeAddr: %p)", m_process_id, GetRealAddr(), GetFakeAddr());
-
-    /*
-        Seed from the first client only. The shared fake is already live for everyone else,
-        and the mirror thread keeps it current - copying over it again here would wipe the
-        npad slots sys-con has injected for the clients that are already running.
-    */
-    if (!g_fake_shared_memory_seeded)
-    {
-        memcpy_64(GetFakeAddr(), GetRealAddr(), HID_SHARED_MEMORY_SIZE);
-        g_fake_shared_memory_seeded = true;
-    }
+    ::syscon::logger::LogInfo("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", View: %s, RealAddr: %p, FakeAddr: %p)", m_process_id, Fake(m_view).name, GetRealAddr(), GetFakeAddr());
 }
 
 static void CloseSharedMemory(::SharedMemory *shared_memory)
@@ -192,7 +218,7 @@ HidSharedMemoryEntry::~HidSharedMemoryEntry()
 
 const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
 {
-    return g_fake_shared_memory;
+    return Fake(m_view).shmem;
 }
 
 ::HidSharedMemory *HidSharedMemoryEntry::GetRealAddr()
@@ -202,7 +228,7 @@ const ::SharedMemory &HidSharedMemoryEntry::GetSharedMemoryHandle() const
 
 ::HidSharedMemory *HidSharedMemoryEntry::GetFakeAddr()
 {
-    return (HidSharedMemory *)shmemGetAddr(&g_fake_shared_memory);
+    return FakeAddr(m_view);
 }
 
 u64 HidSharedMemoryEntry::GetProcessId() const
@@ -394,11 +420,20 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
 
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
 
         /*
-            The entry starts life as a byte copy of the real shared memory, so the slots
-            sys-con drives still hold whatever the console had there. Clearing them is what
-            makes Publish() see style_set == 0 and lay the virtual npad out from scratch.
+            Seed a view from its first live client only. Once one is running the mirror
+            thread keeps the fake current, and copying over it again would hand the clients
+            already reading it a jump in every lifo.
+        */
+        if (FindEntry(entry->GetView()) == nullptr)
+            memcpy_64(entry->GetFakeAddr(), entry->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+
+        /*
+            The seed is a byte copy of the real shared memory, so the slots sys-con drives
+            still hold whatever the console had there. Clearing them is what makes Publish()
+            see style_set == 0 and lay the virtual npad out from scratch.
         */
         for (const auto &controller : m_controller_list)
         {
@@ -406,7 +441,6 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
                 controller->Clear();
         }
 
-        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
         m_sharedmemory_entry_list.push_back(entry);
     }
 
@@ -505,11 +539,12 @@ int HidSharedMemoryManager::Start()
     ::syscon::logger::LogDebug("HidSharedMemoryManager::Start %p starting...", this);
 
     /*
-        Claim the 256 KiB now, while the system memory pool is still free. Leaving it until
+        Claim the 2 x 256 KiB now, while the system memory pool is still free. Leaving it until
         a client arrives means asking once an applet has already taken the slack, which is
         when svcCreateSharedMemory starts returning 0x00010801 (LimitReached).
     */
-    CreateFakeSharedMemory();
+    for (size_t view = 0; view < HidFakeViewCount; view++)
+        CreateFakeSharedMemory(static_cast<HidFakeView>(view));
 
     m_running = true;
 
@@ -537,7 +572,17 @@ void HidSharedMemoryManager::Stop()
     threadWaitForExit(&m_thread);
     threadClose(&m_thread);
 
-    DestroyFakeSharedMemory();
+    DestroyFakeSharedMemories();
+}
+
+std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::FindEntry(HidFakeView view) const
+{
+    for (const auto &entry : m_sharedmemory_entry_list)
+    {
+        if (entry->GetView() == view)
+            return entry;
+    }
+    return nullptr;
 }
 
 void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
@@ -575,20 +620,17 @@ void HidSharedMemoryManager::OnRun()
             std::lock_guard<std::recursive_mutex> controller_lock(m_mutex_controller);
             std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
 
-            /*
-                One fake serves every client, so mirror once from any client's real view -
-                they all reflect the same physical controllers - and publish the virtual
-                pads once, rather than repeating both for each client.
-            */
-            if (!m_sharedmemory_entry_list.empty())
+            for (size_t view = 0; view < HidFakeViewCount; view++)
             {
-                Mirror(*m_sharedmemory_entry_list.front());
+                std::shared_ptr<HidSharedMemoryEntry> source = FindEntry(static_cast<HidFakeView>(view));
+                if (source != nullptr)
+                    Mirror(*source);
+            }
 
-                for (const auto &controller : m_controller_list)
-                {
-                    if (controller != nullptr)
-                        controller->Publish();
-                }
+            for (const auto &controller : m_controller_list)
+            {
+                if (controller != nullptr)
+                    controller->Publish();
             }
         }
 
@@ -685,11 +727,6 @@ static void AppendState(Lifo *lifo, const State &state)
 */
 void HidSharedMemoryController::Publish()
 {
-    HidNpadInternalState *internal_state = &FakeNpadEntries()[m_player_idx].internal_state;
-
-    if (internal_state->style_set == 0)
-        Initialize(internal_state);
-
     HidNpadCommonState state{};
     state.sampling_number = m_sampling_number;
     state.buttons = m_state.buttons;
@@ -697,19 +734,11 @@ void HidSharedMemoryController::Publish()
     state.analog_stick_r = m_state.analog_stick_r;
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
 
-    AppendState(&internal_state->full_key_lifo, state);
-
-    // Filled for a style that is deliberately not announced: qlaunch, the Controllers applet
-    // and profile select read this lifo and nothing else.
-    AppendState(&internal_state->system_ext_lifo, state);
-
-    // The npad and six-axis lifos are only ever filled together, so they share one sampling
-    // number and neither can show the gap that hangs a reader.
+    HidSixAxisSensorState six_axis{};
     if (m_state.has_motion)
     {
         m_motion.Step(m_state.angular_velocity, POLLING_FREQUENCY_US / 1e6f);
 
-        HidSixAxisSensorState six_axis{};
         six_axis.delta_time = POLLING_FREQUENCY_US * 1000ULL;
         six_axis.sampling_number = m_sampling_number;
         six_axis.acceleration = m_state.acceleration;
@@ -717,8 +746,29 @@ void HidSharedMemoryController::Publish()
         six_axis.angle = m_motion.GetAngle();
         six_axis.direction = m_motion.GetDirection();
         six_axis.attributes = HidSixAxisSensorAttribute_IsConnected;
+    }
 
-        AppendState(&internal_state->full_key_six_axis_sensor_lifo, six_axis);
+    // Every view gets the same samples under the same sampling numbers, and Clear() empties
+    // them all at once: one m_sampling_number can then never show a gap in any of them.
+    for (size_t view = 0; view < HidFakeViewCount; view++)
+    {
+        HidNpadInternalState *internal_state = FakeNpadState(static_cast<HidFakeView>(view), m_player_idx);
+        if (internal_state == nullptr)
+            continue;
+
+        if (internal_state->style_set == 0)
+            Initialize(internal_state);
+
+        AppendState(&internal_state->full_key_lifo, state);
+
+        // Filled for a style that is deliberately not announced: qlaunch, the Controllers
+        // applet and profile select read this lifo and nothing else.
+        AppendState(&internal_state->system_ext_lifo, state);
+
+        // The npad and six-axis lifos are only ever filled together, so they share one
+        // sampling number and neither can show the gap that hangs a reader.
+        if (m_state.has_motion)
+            AppendState(&internal_state->full_key_six_axis_sensor_lifo, six_axis);
     }
 
     m_sampling_number++;
@@ -735,13 +785,18 @@ void HidSharedMemoryController::Publish()
 */
 void HidSharedMemoryController::Clear()
 {
-    HidNpadInternalState *internal_state = &FakeNpadEntries()[m_player_idx].internal_state;
+    for (size_t view = 0; view < HidFakeViewCount; view++)
+    {
+        HidNpadInternalState *internal_state = FakeNpadState(static_cast<HidFakeView>(view), m_player_idx);
+        if (internal_state == nullptr)
+            continue;
 
-    __atomic_store_n(&internal_state->style_set, 0u, __ATOMIC_RELEASE);
+        __atomic_store_n(&internal_state->style_set, 0u, __ATOMIC_RELEASE);
 
-    EmptyLifo(&internal_state->full_key_lifo);
-    EmptyLifo(&internal_state->system_ext_lifo);
-    EmptyLifo(&internal_state->full_key_six_axis_sensor_lifo);
+        EmptyLifo(&internal_state->full_key_lifo);
+        EmptyLifo(&internal_state->system_ext_lifo);
+        EmptyLifo(&internal_state->full_key_six_axis_sensor_lifo);
+    }
 
     m_sampling_number = 0;
 }

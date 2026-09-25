@@ -1,6 +1,7 @@
 #include "main.h"
 
 #include <switch.h>
+#include <unistd.h>
 #include "logger.h"
 #include "usb_module.h"
 #include "controller_handler.h"
@@ -10,6 +11,8 @@
 #include "version.h"
 #include "SwitchHDLHandler.h"
 #include "HidMitm.h"
+
+extern "C" char *fake_heap_start;
 
 namespace syscon
 {
@@ -112,6 +115,10 @@ namespace syscon
 
         ::syscon::logger::LogDebug("Initializing power supply managment ...");
         ::syscon::psc::Initialize();
+
+        // newlib's mallinfo() reports nonsense on this toolchain; how far sbrk has moved into the
+        // static heap is the high-water mark that actually decides INNER_HEAP_SIZE.
+        ::syscon::logger::LogInfo("Heap after startup: %ld bytes claimed", static_cast<long>(static_cast<char *>(sbrk(0)) - fake_heap_start));
 
         while ((::syscon::psc::IsRunning()))
         {

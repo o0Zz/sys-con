@@ -6,10 +6,21 @@
 #include "SwitchMotion.h"
 #include "SwitchPadState.h"
 
+#include <array>
 #include <vector>
 #include <memory>
 #include <mutex>
 #include <atomic>
+
+/* ------------------------------------------------ */
+
+enum class HidFakeView : u8
+{
+    System,
+    Application,
+};
+
+constexpr size_t HidFakeViewCount = 2;
 
 /* ------------------------------------------------ */
 
@@ -38,10 +49,12 @@ public:
 
     inline u64 GetProcessId() const;
     inline u64 GetProgramId() const;
+    HidFakeView GetView() const { return m_view; }
 
 private:
     u64 m_process_id;
     u64 m_program_id;
+    HidFakeView m_view;
     ::Result m_status = 0;
 
     // Zero-initialized on purpose: the constructor gives up at the first failing step, and
@@ -132,6 +145,7 @@ private:
 
     // real -> fake, for everything but the npad slots sys-con owns.
     void Mirror(HidSharedMemoryEntry &entry);
+    std::shared_ptr<HidSharedMemoryEntry> FindEntry(HidFakeView view) const;
 
     void RunGarbageCollector();
     void DumpProcessesAndMemoryAddr();

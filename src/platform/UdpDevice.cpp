@@ -37,13 +37,11 @@ namespace syscon
             formula then reuses the initial sizes) for 0x5000; do not reach for the defaults.
         */
         constexpr SocketInitConfig g_socketInitConfig = {
-            // Undersized buffers are not merely slow: at 20 KiB the session
-            // binds and polls but never delivers a datagram, and sendto()
-            // blocks outright. These are Nintendo's own values with
-            // sb_efficiency at 1 instead of 4, which is 148 KiB -- affordable
-            // against the 512 KiB heap, and known to work.
-            .tcp_tx_buf_size = 0x8000,
-            .tcp_rx_buf_size = 0x10000,
+            // The pad never opens a TCP socket, so TCP gets one page each; the
+            // UDP buffers keep Nintendo's sizes, since undersized ones bind and
+            // poll but never deliver a datagram. That is 60 KiB out of the heap.
+            .tcp_tx_buf_size = 0x1000,
+            .tcp_rx_buf_size = 0x1000,
             .tcp_tx_buf_max_size = 0,
             .tcp_rx_buf_max_size = 0,
             .udp_tx_buf_size = 0x2400,
@@ -86,6 +84,12 @@ namespace syscon
         }
 
         rc = socketInitialize(&g_socketInitConfig);
+        if (R_FAILED(rc))
+        {
+            smExit();
+            syscon::logger::LogError("NetworkPad: socketInitialize failed (0x%08X) - requested %d bytes of transfer memory", rc, static_cast<int>(g_socket_tmem_size));
+            return rc;
+        }
 
         /*
             A bound socket is not enough on Horizon: until this process has an
@@ -108,12 +112,6 @@ namespace syscon
             syscon::logger::LogDebug("NetworkPad: nifm network request accepted");
 
         smExit();
-
-        if (R_FAILED(rc))
-        {
-            syscon::logger::LogError("NetworkPad: socketInitialize failed (0x%08X) - requested %d bytes of transfer memory", rc, static_cast<int>(g_socket_tmem_size));
-            return rc;
-        }
 
         g_socket_initialized = true;
         syscon::logger::LogDebug("NetworkPad: socket driver up (%d bytes of transfer memory)", static_cast<int>(g_socket_tmem_size));

@@ -10,8 +10,9 @@
 #include "main.h"
 #include "StdFileManager.h"
 
-// Size of the inner heap (adjust as necessary).
-#define INNER_HEAP_SIZE 0x80000 // 512 KiB
+// Static, so it is charged to the ~7 MB of system memory Atmosphere leaves for every homebrew
+// sysmodule on 21.0.0+. main.cpp logs what is actually used; size it from that.
+#define INNER_HEAP_SIZE 0x40000 // 256 KiB
 
 #define R_ABORT_UNLESS(rc)             \
     {                                  \
