@@ -146,14 +146,28 @@ static void memcpy_64(void *dest, const void *src, size_t n)
 ************************************************************/
 
 /*
-    The real IAppletResource has to be the client's, not ours: hid keeps one shared memory per
-    aruid and writes into it only the npad styles that aruid declared. Created with sys-con's
-    own aruid and pid, every client was mirrored from the view of a process that never called
-    SetSupportedNpadStyleSet - SystemExt on every npad - and SSBU asserted in
+    hid keeps one shared memory per aruid, holding only the npad styles that aruid declared and,
+    for touch and the other sections, only what that aruid activated.
+
+    An application must be mirrored from its own: from sys-con's view - which never called
+    SetSupportedNpadStyleSet, so SystemExt is on every npad - SSBU asserts in
     GetVibrationDeviceHandles. libnx can only send our own pid, so the request is built by hand
     with the client's pid carrying the mitm tag, exactly as a forwarded request does.
+
+    The system applets are the opposite: they share one fake, and the first of them is
+    overlayDisp, which never activates the touch screen and never has focus. Mirrored from
+    overlayDisp's view, qlaunch lost the touch panel. sys-con's own view carries everything.
 */
-static Result _HidCreateAppletResource(Service *srv, u64 aruid, u64 client_pid, Service *out_iappletresource)
+static Result _HidCreateOwnAppletResource(Service *srv, Service *out_iappletresource)
+{
+    const u64 aruid = appletGetAppletResourceUserId();
+    return serviceDispatchIn(srv, 0, aruid,
+                             .in_send_pid = true,
+                             .out_num_objects = 1,
+                             .out_objects = out_iappletresource, );
+}
+
+static Result _HidCreateClientAppletResource(Service *srv, u64 aruid, u64 client_pid, Service *out_iappletresource)
 {
     constexpr u64 MitmProcessIdTag = 0xFFFE000000000000ul;
 
@@ -182,7 +196,9 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 aruid, u6
 {
     Handle sharedMemHandle;
 
-    m_status = _HidCreateAppletResource(hid_service, aruid, processId, &m_appletresource);
+    m_status = m_view == HidFakeView::Application
+                   ? _HidCreateClientAppletResource(hid_service, aruid, processId, &m_appletresource)
+                   : _HidCreateOwnAppletResource(hid_service, &m_appletresource);
     if (R_FAILED(m_status))
     {
         ::syscon::logger::LogError("HidSharedMemoryEntry failed to create applet resource (Process id: 0x%016" PRIx64 ")", m_process_id);
@@ -468,20 +484,25 @@ void HidSharedMemoryManager::RunGarbageCollector()
 {
     ::syscon::logger::LogDebug("HidSharedMemoryManager Garbage Collector running...");
 
-    // pm:dmnt accepts a single session, so hold it only for this sweep rather
-    // than for the process lifetime: anything else on the console that opens
-    // it - including whatever launched us - fails with SessionClosed while we
-    // keep it.
-    if (R_FAILED(pmdmntInitialize()))
+    /*
+        The kernel's process list, not pm:dmnt. pm:dmnt takes a single session, and at boot
+        opening it from here - on the MITM thread, with overlayDisp waiting for its
+        CreateAppletResource reply - sometimes never returned, and every hid client on the
+        console hung behind it.
+    */
+    u64 live_pids[0x80];
+    s32 live_count = 0;
+    Result rc = svcGetProcessList(&live_count, live_pids, static_cast<s32>(sizeof(live_pids) / sizeof(live_pids[0])));
+    if (R_FAILED(rc))
     {
-        ::syscon::logger::LogWarning("HidSharedMemoryManager: pm:dmnt unavailable, skipping garbage collection");
+        ::syscon::logger::LogError("HidSharedMemoryManager: svcGetProcessList failed: 0x%08X", rc);
         return;
     }
 
     /*
-        The mirror thread wants m_mutex_sharedmemory every 5 ms, and both the pm queries
-        below and LogWarning (an SD write, ~7 ms) are far too slow to do while holding it.
-        So: snapshot under the lock, decide unlocked, then take it again just to erase.
+        The mirror thread wants m_mutex_sharedmemory every 5 ms, and LogWarning (an SD write,
+        ~7 ms) is far too slow to do while holding it. So: snapshot under the lock, decide
+        unlocked, then take it again just to erase.
     */
     std::vector<std::shared_ptr<HidSharedMemoryEntry>> snapshot;
     {
@@ -492,17 +513,12 @@ void HidSharedMemoryManager::RunGarbageCollector()
     std::vector<std::shared_ptr<HidSharedMemoryEntry>> dead;
     for (const auto &entry : snapshot)
     {
-        u64 pid_out = 0;
-
-        Result ret = pmdmntGetProcessId(&pid_out, entry->GetProgramId());
-        if (R_SUCCEEDED(ret) && pid_out == entry->GetProcessId())
+        if (std::find(live_pids, live_pids + live_count, entry->GetProcessId()) != live_pids + live_count)
             continue;
 
-        ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it ! (Ret: 0x%08X - Mod:%d - Desc:%d)", entry->GetProcessId(), ret, R_MODULE(ret), R_DESCRIPTION(ret));
+        ::syscon::logger::LogWarning("HidSharedMemoryManager Process id 0x%016" PRIx64 " is not running anymore, remove it !", entry->GetProcessId());
         dead.push_back(entry);
     }
-
-    pmdmntExit();
 
     if (dead.empty())
         return;
