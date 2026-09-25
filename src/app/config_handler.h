@@ -68,9 +68,9 @@ namespace syscon::config
     // Selected at runtime; both mechanisms are compiled into both build flavours.
     enum class VirtualPadMode
     {
-        HIDDBG = 0,
-        MITM = 1,
-        DISABLED = 2,
+        DISABLED = 0,
+        HIDDBG = 1,
+        MITM = 2
     };
 
     class GlobalConfig
