@@ -23,18 +23,25 @@ python tools/devtools doctor 2>/dev/null
 Non-zero: stop and report what failed. A rig with a red check produces results
 that mean nothing — do not "try anyway".
 
+One exception: the current test console carries sys-con's `boot2.flag` on
+purpose (mitm needs sys-con up at boot to catch qlaunch), so its
+`syscon_autostart` check is red by design. Do not "fix" it with
+`setup-console --write`, which deletes that flag (see
+`tools/devtools/README.md`, Setup).
+
 ## 2. Decide whether hardware is needed at all
 
 Run `python tools/devtools test` and stop there when the change is confined to
 code the host suite covers:
 
-- `src/controllerlib/**`, `src/app/config_handler.cpp`, `external/ini/**`
+- `src/controllerlib/**`, `src/app/config_handler.cpp`, `src/app/logger.cpp`,
+  `external/ini/**`
 - `tests/**`, `doc/**`, `README.md`, CMake files
 
 Hardware is required when the change touches code with no host coverage:
 
 - `src/app/usb_module.cpp`, `psc_module.cpp`, `controller_handler.cpp`,
-  `logger.cpp`, `main.cpp`
+  `network_module.cpp`, `main.cpp`
 - anything under `src/platform/**` — highest risk, and the area that can hang
   the whole console
 - `src/app/sys-con.json` (NPDM), `Makefile`, `src/app/Makefile`, `toolbox.json`
@@ -133,21 +140,22 @@ It stops on its own: build/test failure, deploy failure, 3 consecutive
 `HEALTHY`, or the same crash signature 3 times. Prefer this over calling
 `iterate` in a shell loop.
 
-## The console only has two sound starts per boot
+## The console only has one sound start per boot
 
-`hiddbgInitialize` leaks across launches. By the **third** start in a boot the
-call quietly does nothing, and sys-con either fails to start or comes up unable
-to drive a virtual controller.
+`hiddbgInitialize` leaks across launches. On this console the **second** start
+in a boot already fails with `LimitReached`; past the budget the call can also
+quietly do nothing, and sys-con either fails to start or comes up unable to
+drive a virtual controller.
 
 The second failure mode is the dangerous one: the process runs, logs a clean
 startup, reports `Controller[ffff-0001] plugged !` — and no input ever reaches
 the console. That is indistinguishable from a real input bug, so a result
-gathered on a third start is worse than no result.
+gathered past the budget is worse than no result.
 
 `iterate` enforces this itself (`MAX_STARTS_PER_BOOT` in `config.py`): it
 tracks starts against the console's uptime and reboots before spending a start
 it cannot trust. **When starting sys-con by hand, count your starts** —
-`devtools start` does not, and two is the budget.
+`devtools start` does not, and one is the budget.
 
 Symptoms that mean you have already overrun it, not that you found a bug:
 
@@ -157,7 +165,7 @@ Symptoms that mean you have already overrun it, not that you found a bug:
 - `devtools input` succeeding while the log shows no receive activity
 
 The fix is always `power/restart`, never another start. Budget one reboot
-(~60 s) per two experiments and plan the session around that, rather than
+(~60 s) per experiment and plan the session around that, rather than
 retrying and reading the wreckage.
 
 ## Waking a sleeping console
@@ -166,7 +174,7 @@ A console that has gone to sleep shows the lock screen on HOME. Dismissing it
 takes **four** taps in the middle of the screen:
 
 ```sh
-python -m devtools touch 640 380   # x4
+python tools/devtools touch 640 380   # x4
 ```
 
 Fewer taps leave it on the lock screen; the fourth is what lets it through.
@@ -195,11 +203,13 @@ looks exactly the same: run `doctor` and read its `keep_awake` check.
 - Re-create `/atmosphere/contents/690000000000000D/flags/boot2.flag`. sys-con
   is started on demand; with that flag a startup crash locks the console on
   every boot and there is no server left to upload a fix through. The fence
-  refuses it — do not look for another way.
+  refuses it — do not look for another way. (The current test console already
+  carries it on purpose for mitm; leave that one alone, too.)
 - Sync `out/` wholesale to the console. `make all` puts `boot2.flag` in it.
 - Deploy a build whose host tests failed.
-- `make distclean` or `mrproper` — they can `git reset --hard` the
-  Atmosphere-libs submodule.
+- `make distclean RESET_ATMOSPHERE=1` — it `git reset --hard`s the
+  Atmosphere-libs submodule. Plain `distclean` skips the reset, and `mrproper`
+  only cleans (including the libstratosphere and HIDDataInterpreter builds).
 - Commit or push (see CLAUDE.md).
 
 ## Housekeeping

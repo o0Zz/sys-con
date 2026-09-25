@@ -174,8 +174,11 @@ buffer would truncate the large DS4 report).
 
 **Expected result:**
 - sys-con boots without crashing.
-- Either a default config is regenerated or built-in defaults are used.
-- A plugged controller still works with default mappings.
+- `config.ini` is **not** regenerated (auto-add refuses to create the file).
+- The log shows `Unable to open configuration file: '/config/sys-con/config.ini' !`.
+- `mode` stays `hiddbg` and no network pad is created.
+- A plugged controller is attached with an empty, unmapped config (generic HID driver, no
+  buttons or sticks bound), so it shows up but does not respond to input.
 
 **If this test fails, investigate:**
 [config_handler.cpp](../src/app/config_handler.cpp) (missing-file
@@ -202,3 +205,64 @@ No crash, and on wake the controller keeps working.
 `PscThreadFunc` handler runs `controllers::Clear()` on `psc_thread_stack`; its teardown
 chains through every connected controller plus stack-heavy `Log*()`/`vsnprintf` calls.
 A crash here means `psc_thread_stack` is likely undersized.
+
+---
+
+## TC11: mode=disabled
+
+**Steps:**
+1. Set `mode=disabled` in the `[global]` section of `config.ini`.
+2. Boot the Switch and plug a known controller.
+
+**Expected result:**
+- The log shows the `SYS-CON started ...` line, then `sys-con is disabled (mode=disabled) - exiting`,
+  and nothing after it.
+- No virtual pad appears; the console is otherwise unaffected.
+
+**If this test fails, investigate:**
+[main.cpp](../src/app/main.cpp) (`RunApp`, the `VirtualPadMode::DISABLED` early return) and
+[config_handler.cpp](../src/app/config_handler.cpp) (`mode` parsing).
+
+---
+
+## TC12: Network pad
+
+**Steps:**
+1. Set `network_controller=1` in the `[global]` section of `config.ini`, keeping the shipped
+   `[network]` profile and `[ffff-0001]` section.
+2. Boot the Switch and, from a PC on the same network, run
+   `python tools/networkpad.py --host <switch-ip> tap A`, then
+   `python tools/networkpad.py --host <switch-ip> --hold 1 stick left 0 1`.
+3. Remove the `[network]` profile from `config.ini` and reboot.
+
+**Expected result:**
+- Step 2: the pad appears on the first packet, the A press and the stick movement are seen
+  in the input test menu.
+- Step 3: the log shows `NetworkPad: config.ini has no [network] profile - network controller disabled`
+  and no network pad is created. No crash.
+
+**If this test fails, investigate:**
+[network_module.cpp](../src/app/network_module.cpp) (`CreatePad`),
+[UdpDevice.cpp](../src/platform/UdpDevice.cpp) and
+[NetworkController.cpp](../src/controllerlib/drivers/NetworkController.cpp).
+
+---
+
+## TC13: mode=mitm smoke test
+
+**Steps:**
+1. Set `mode=mitm` in the `[global]` section of `config.ini` and reboot (do not just restart
+   sys-con: a stale `hid` MITM registration is only released by a reboot).
+2. Plug a known controller, then start any game so the profile-select applet opens.
+3. Move the selection with the controller.
+
+**Expected result:**
+The log shows the applet (`0x0100000000001007`) being intercepted (libnx build:
+`HidMitm: CreateAppletResource hooked for program ...`; ams build: `HidMitmService::CreateAppletResource...`
+at `log_level=1` or lower), the selection follows the
+controller, and the console stays stable.
+
+**If this test fails, investigate:**
+[SwitchMITMHandler.cpp](../src/platform/SwitchMITMHandler.cpp),
+[SwitchMITMManager.cpp](../src/platform/SwitchMITMManager.cpp) and the MITM server of the
+flavour under test ([ams](../src/platform/ams/) or [libnx](../src/platform/libnx/)).

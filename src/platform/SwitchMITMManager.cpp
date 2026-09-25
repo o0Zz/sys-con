@@ -427,10 +427,10 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 aruid, u64 processId, u64 programId)
 {
     /*
-        Reclaim before allocating, not after. Every mitm'd process costs a 256 KiB fake
-        shared memory plus a mapping of the real one, and applets come and go constantly -
-        so without this the list only grows and shmemCreate eventually fails with
-        0xE401, leaving every later applet with no HID shared memory at all.
+        Reclaim before allocating, not after. Every mitm'd process costs an applet resource
+        session and a mapping of its real shared memory, and applets come and go constantly -
+        so without this the list only grows until a later applet can no longer get its HID
+        shared memory at all.
         Running it from Add() would be too late: the allocation that needs the room
         happens in the constructor below.
     */

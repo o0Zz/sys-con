@@ -91,9 +91,10 @@ into everything downstream.
 ## Layout
 
 ```
-ControllerLib/
+controllerlib/
   Status.h/.cpp         the library's only error type
   IController.h         the driver interface + normalized output
+  ControllerTypes.h     buffer-size limits, ControllerFeature, rumble types
   IUSBDevice/Interface/Endpoint.h, ILogger.h    what the host implements
   ControllerConfig.h    mapping, deadzones, combos
   PinId.h               physical input pin (what a driver reports)

@@ -100,7 +100,7 @@ One pass of this runs per controller, per poll, on that controller's own thread:
  BaseController::MapRawInputToNormalized()
      │                                   deadzone → factor → pin-to-button mapping →
      │                                   analog-as-digital → combo simulation
-     ▼  NormalizedButtonData   buttons indexed by ControllerButton, sticks as floats,
+     ▼  NormalizedButtonData   buttons indexed by GamepadButton, sticks as floats,
      │                         motion in SDL's frame (see NormalizedMotion)
  SwitchVirtualGamepadHandler::UpdateInput()
      │
@@ -111,12 +111,12 @@ One pass of this runs per controller, per poll, on that controller's own thread:
 ### The two button index spaces
 
 This trips up nearly everyone, so it is worth stating plainly. There are **two different
-arrays of booleans**, both called `buttons`, both sized `MAX_CONTROLLER_BUTTONS`:
+arrays of booleans**, both called `buttons`:
 
 | Array | Indexed by | Meaning |
 |---|---|---|
-| `RawInputData::buttons` | physical pin id | "button 5 on the wire is pressed" |
-| `NormalizedButtonData::buttons` | `ControllerButton` | "the Switch's `A` is pressed" |
+| `RawInputData::buttons` (`RawButtonStates`, `MaxPinCount` = 36) | physical pin id (`PinId`) | "button 5 on the wire is pressed" |
+| `NormalizedButtonData::buttons` (`GamepadButtonStates`) | `GamepadButton` | "the Switch's `A` is pressed" |
 
 `ControllerConfig::buttonsPin` is the mapping between them, and it is what a user edits in
 `config.ini` (`a=2` means "Switch A comes from pin 2"). Pin `0` means *unmapped*.
@@ -126,8 +126,9 @@ Two consequences to be careful about:
 - Drivers are not consistent about whether pins are 0- or 1-based. Most start writing at
   `buttons[1]`; `GenericHIDController` starts at `buttons[0]`, which collides with the
   "unmapped" sentinel.
-- The D-pad occupies a *third* numbering: `DPAD_UP_BUTTON_ID`..`DPAD_LEFT_BUTTON_ID`
-  (32–35), separate from `ControllerButton::DPAD_UP` (21).
+- The D-pad occupies pseudo-pins above the HID button range: `DPAD_UP_BUTTON_ID` 32,
+  `DPAD_DOWN_BUTTON_ID` 33, `DPAD_LEFT_BUTTON_ID` 34, `DPAD_RIGHT_BUTTON_ID` 35
+  (`PinId.h`), separate from `GamepadButton::DPAD_UP`.
 
 ---
 
@@ -140,20 +141,22 @@ Two consequences to be careful about:
 | USB interface change | `usb_module.cpp` | `0x2C`, any core | notices unplugs, calls `RemoveAllNonPlugged` |
 | per-controller polling | `SwitchVirtualGamepadHandler::InitThread` | config `polling_thread_priority`, **core 3** | the pipeline above, one thread per controller |
 | PSC | `psc_module.cpp` | `0x2C`, any core | sleep/wake; calls `controllers::Clear()` |
-| HID MITM | `HidMitmServer.cpp` (libnx) / `HidMitmModule.cpp` (ams); `mode=mitm` only | `0x20`/`20`, core 3 | serves the MITM'd `hid` IPC |
+| HID MITM | `HidMitmServer.cpp` (libnx) / `HidMitmModule.cpp` (ams); `mode=mitm` only | libnx `0x20`, core 3 / ams `20`, default core | serves the MITM'd `hid` IPC |
+| MITM shared-memory mirror | `HidSharedMemoryManager::Start` (`SwitchMITMManager.cpp`); `mode=mitm` only | `38`, core 3 | mirrors the real hid shared memory into the fake ones at 200 Hz |
 
 Shared state and its lock:
 
 - `controllerHandlers` (the live controller set) is guarded by `controllerMutex` in
   `controller_handler.cpp`. It is touched by the USB event thread (insert), the interface
-  change thread (remove), the PSC thread (clear) and main (exit).
+  change thread (remove) and the PSC thread (clear); at shutdown `usb::Exit()` clears it.
 - All USB access is serialised by `SwitchUSBLock`, a RAII wrapper over one process-wide
   `std::recursive_mutex`.
 - Polling threads run on **core 3**, which is the core Horizon reserves for input; this is
   deliberate and affects latency.
 
-**Stack sizes are tight.** Polling and PSC threads get 16 KiB. Config parsing puts inih's
-~1.3 KiB line buffer on the caller's stack, and the logger formats through `vsnprintf`.
+**Stack sizes are tight.** Polling threads get 8 KiB, PSC, USB and MITM threads 16 KiB.
+Config parsing puts inih's ~1.1 KiB line buffer (`INI_MAX_LINE`) on the caller's stack,
+and the logger formats through `vsnprintf`.
 A stack overflow here presents as a hang or a crash on sleep/wake — see TC10 below.
 
 ---
@@ -189,28 +192,29 @@ builds and ships.**
 | file I/O | `StdFileManager` | `AMSFileManager` |
 | MITM server framework | hand-written (`sm_mitm` + `HidMitmServer`) | libstratosphere (`HidMitmService`/`Module`) |
 
-The flavour-agnostic program — the shared bring-up helpers (`ReadFirmwareVersion`,
-`InitializeModules`/`FinalizeModules`) and the application body (`RunApp`) — lives once in
+The flavour-agnostic program — the shared bring-up helpers
+(`InitializeModules`/`FinalizeModules`) and the application body (`RunApp`) — lives once in
 `src/app/main.cpp` (device-build only; `src/app/CMakeLists.txt` does not list it, so
 `<switch.h>` never reaches the host tests). Each flavour's runtime file is the *overhead* that
 genuinely differs and calls into it. The entry point is the important asymmetry: the libnx
 build owns `__appInit`/`main`, whereas the Atmosphère build must **not** — libstratosphere's
 `init_libnx_shim` already defines `__appInit`/`main` and calls `ams::Main()` plus the
 `ams::init::*` hooks, which `AmsRuntime.cpp` supplies. Both call the same
-`InitializeModules()` (hiddbg, usbHs, pscm) and `ReadFirmwareVersion()`, so only the SM/FS
+`InitializeModules()` (set:sys and the firmware version, then usbHs, pscm, hid); `RunApp`
+opens hiddbg once it has read the config. Only the SM/FS
 bring-up and the ams heap/allocator are written per flavour.
 
 Both virtual-pad handlers — `SwitchHDLHandler` (hiddbg HDLS) and `SwitchMITMHandler` (fake
 HID shared memory) — plus the shared `SwitchMITMManager` data plane compile into **both**
-flavours; the config `mode` (`hiddbg`, `mitm` or `disabled`, default `hiddbg`) picks one at runtime via
+flavours; the config `mode` (`hiddbg`, `mitm` or `disabled`; the shipped config.ini sets `mitm`, a missing or invalid value gives `hiddbg`) picks one at runtime via
 `controllers::SetMode`. Only the MITM *server framework* differs per flavour, because
 libstratosphere is unavailable in the `ATMOSPHERE=0` build. The libnx MITM installs on `hid`
 through Atmosphère's `sm` tipc extensions (`sm_mitm.c`, a port of libstratosphere's
 `sm_ams.os.horizon.c`) — so Atmosphère is required at runtime for either flavour's MITM.
 
 `IFileManager` (`src/platform/IFileManager.h`) is the clean seam between them: one
-interface, two implementations, one of which each flavour's runtime file passes to `RunApp`
-as a factory at startup.
+interface, two implementations; each flavour's runtime file constructs its own on the stack
+and passes it to `RunApp` as an `IFileManager &`.
 
 The variant is selected **by directory**, not by filtering filenames. `src/app/Makefile`
 adds `../platform` (shared by both) plus exactly one of `../platform/libnx` or
@@ -219,14 +223,25 @@ adds `../platform` (shared by both) plus exactly one of `../platform/libnx` or
 flavour compiles the other's code — so the ams build never sees libnx's `__appInit`, and vice
 versa.
 
+The libnx flavour builds with `-fno-asynchronous-unwind-tables -fno-unwind-tables
+-fdata-sections` and discards the libraries' `.eh_frame` through a linker script and specs
+file the Makefile writes into `build/` (`DISCARD_EHFRAME_LD` / `DISCARD_EHFRAME_SPECS`). The
+C++ exception runtime libstdc++ drags in is `--wrap`ped (`CXXWRAPPED` in `src/app/Makefile`)
+into aborts defined in `LibnxRuntime.cpp`, which also defines `operator new`/`delete`
+(abort on OOM) — what libstratosphere already does for the ams flavour. The two symbol lists
+must match: a wrapped symbol that is referenced but has no `__wrap_` definition fails the link.
+
 Caveats worth knowing before you touch the MITM path:
 
-- The two handlers are not feature-equivalent: the MITM path hardcodes its npad identity
-  and ignores the per-controller colours and `controllerType` the HDL path honours.
-- `MITM_CONFIG_GC_ENABLED` is 0, so the shared-memory entry list is never pruned.
-- The libnx `HidMitmServer` forwards non-hooked commands without domain-object tracking
-  (unlike libstratosphere). This is fine for `hid` — clients do not domain-convert the hid
-  session — but is a genuine limitation if the hooked interface ever changes.
+- The MITM handler creates each pad through hiddbg first (`BuildHdlsDeviceInfo`, so the
+  per-controller `controllerType` and colours apply), then claims the npad the console
+  assigned it (`WaitForNewNpad`) so the fake shared memory overrides that very slot.
+- `HidSharedMemoryManager::Start` creates two fake shared memories up front — a system and
+  an application view (`HidFakeViewCount`) — while the system pool still has room.
+- The shared-memory entry list is garbage-collected on every `CreateIfNotExists`, against
+  the live pids from `svcGetProcessList`.
+- The libnx `HidMitmServer` tracks domains itself (`HookConvertToDomain`,
+  `ProcessDomainRequest`).
 
 ---
 
@@ -236,7 +251,7 @@ Condensed from [TestPlan.md](TestPlan.md), which carries the full manual test ma
 
 | Symptom | Start here |
 |---|---|
-| No log file / empty log | `logger.cpp` (`Initialize`, `LogWriteToFile`), `filemanager_*.h` |
+| No log file / empty log | `logger.cpp` (`Initialize`, `LogWriteToFile`), `StdFileManager.h` (libnx) / `AMSFileManager.h` (ams) |
 | Controller works but mapping is wrong | `config_handler.cpp`, then `BaseController::MapRawInputToNormalized` |
 | Unknown pad not auto-added to `config.ini` | `config_handler.cpp` auto-add path, `ini.h` |
 | A specific pad misreports buttons/axes | that driver's `ParseData`, then `BaseController` |
@@ -271,7 +286,8 @@ ctest --test-dir build --output-on-failure
 
 What is and is not covered:
 
-- **Covered:** every driver's `ParseData`, the normalization pipeline, deadzone/factor,
+- **Covered:** most drivers' `ParseData` (not `GenericHIDController`, `Xbox360Controller` or
+  `XboxController`, which have no tests), the normalization pipeline, deadzone/factor,
   config parsing (against the *real shipped* `src/app/config.ini`), and the
   INI line reader.
 - **Not covered:** `usb_module`, `controller_handler`, `psc_module`, `network_module` and all of
@@ -292,9 +308,9 @@ plugged in, which is the only way to test anything below `src/controllerlib/` au
 It is **not** a special case in the pipeline. It is a UDP socket wearing the `IUSBDevice` /
 `IUSBInterface` / `IUSBEndpoint` interfaces (`src/platform/UdpDevice.h`), feeding an
 ordinary `BaseController` subclass (`src/controllerlib/drivers/NetworkController.h`) that
-decodes a 20-byte packet. So it goes through the same `ReadNextBuffer` → `ParseData` →
-`MapRawInputToNormalized` → handler path as a real pad, and `usb_module`, `controller_handler`
-and both virtual-pad handlers need to know nothing about it.
+decodes a 44-byte packet (`NetworkPadReport`). So it goes through the same
+`ReadNextBuffer` → `ParseData` → `MapRawInputToNormalized` → handler path as a real pad,
+and `usb_module`, `controller_handler` and both virtual-pad handlers need to know nothing about it.
 
 Its pin numbers are the identity — bit N of the packet is pin N, and N is a `GamepadButton`
 value — because nothing physical dictates them. The shipped `[network]` profile writes that
@@ -304,9 +320,10 @@ still agree, against the real `config.ini`.
 Three things about it are easy to get wrong:
 
 - **The socket is UDP-only on purpose.** `socketInitializeDefault()` asks bsd for ~2.2 MiB of
-  transfer memory and `tmemCreate` takes it from the process heap, which is 512 KiB in total —
-  so it does not merely waste memory, it fails. Zeroing the TCP buffers and setting
-  `sb_efficiency = 1` brings it to 12 KiB. Do not "fix" a socket problem by enlarging this.
+  transfer memory and `tmemCreate` takes it from the process heap, which is 256 KiB in total
+  (`INNER_HEAP_SIZE`, libnx) or 512 KiB (ams) — so it does not merely waste memory, it fails.
+  One page per TCP buffer, Nintendo's UDP sizes and `sb_efficiency = 1` bring it to 60 KiB
+  (`g_socketInitConfig` in `UdpDevice.cpp`). Do not "fix" a socket problem by enlarging this.
 - **The pad opts out of `RemoveAllNonPlugged`** (`SwitchVirtualGamepadHandler::SetRemovable`).
   That function decides "unplugged" by looking for usbHs interface IDs, which this pad has
   none of, so it would otherwise be destroyed the first time a real device was plugged in.

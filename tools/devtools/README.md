@@ -38,7 +38,17 @@ missing.
    and wrong for a test console: never sync `out/` wholesale, and the fence
    refuses to upload the flag.
 
-`python tools/devtools setup-console --write` applies 2 and 3, backing up
+   **Exception: the current test console carries sys-con's `boot2.flag` on
+   purpose**, because `mode=mitm` only intercepts processes that open `hid`
+   after the MITM is up, and catching qlaunch needs sys-con at boot. On that
+   console `doctor`'s `syscon_autostart` check fails by design, and
+   `setup-console --write` would delete the flag mitm testing relies on — do
+   not run it there unless you restore the flag afterwards. The tooling itself
+   still enforces the rule above.
+
+`python tools/devtools setup-console --write` applies 2 and 3 and also enables
+`network_controller=1` in `/config/sys-con/config.ini` (adding it, with
+`network_controller_port`, to `[global]` if the key is missing), backing up
 anything it overwrites into `debug/console-backup/`.
 
 The console must also stay awake: sleep powers down the WLAN module, so every
@@ -63,6 +73,7 @@ All configuration is environment variables:
 | `SYSCON_AUTOPILOT_USER` / `_PASS` | *(none; used for HTTP Basic)* |
 | `SYSCON_MSYS2_BASH` | `C:\msys64\usr\bin\bash.exe` |
 | `SYSCON_DEVKITPRO_WIN` | `C:\msys64\opt\devkitpro` |
+| `SYSCON_ATMOSPHERE` | `0`; `1` builds the libstratosphere (`ATMOSPHERE=1`) flavour |
 
 The device build runs through MSYS2 because `make` and devkitPro are not on the
 Windows PATH. The title ID always comes from `make print-title-id`, with the
@@ -130,7 +141,7 @@ moves on screen.
 
 ```
 doctor                       environment + console preflight, read-only
-setup-console --write        fatal_auto_reboot_interval, remove sys-con boot2.flag
+setup-console --write        fatal_auto_reboot_interval, remove sys-con boot2.flag, network_controller=1
 build / test                 device build (+ archive) / host ctest
 deploy                       upload exefs.nsp, verify by on-console SHA-256
 start / stop / restart / status
@@ -204,11 +215,12 @@ When the server vanishes mid-run the loop waits out the auto-reboot (up to
 signature repeats: **the same crash twice is a code bug, and rebooting harder
 produces no new information.**
 
-## Two sound starts per boot
+## One sound start per boot
 
-`hiddbgInitialize` leaks across launches. The third start in a boot either
-fails outright (`LimitReached`, `rc=0x00010801`) or — worse — succeeds into a
-process that logs a clean startup and registers its pad while no input ever
+`hiddbgInitialize` leaks across launches. On this console the second start in
+a boot already fails with `LimitReached`, so the budget is one
+(`MAX_STARTS_PER_BOOT = 1`). A start past the budget either fails outright
+(`LimitReached`, `rc=0x00010801`) or — worse — succeeds into a process that logs a clean startup and registers its pad while no input ever
 reaches the console. That reads exactly like an input bug in the build under
 test, which is why this is enforced rather than merely documented:
 `MAX_STARTS_PER_BOOT` in `config.py`, applied by `iterate` through the
@@ -227,9 +239,11 @@ driving by hand, and the remedy is always a reboot, never another start.
 - **Crash report filenames are not ordered.** They come from the console RTC,
   which on a modchipped console repeats or is wildly wrong. New reports are
   found by `(name, size)` set difference — never by sorting or mtime.
-- **`log.txt` wraps.** 128 KiB cap, truncated only at startup, so at Trace with
-  a pad attached the boot record is the first thing lost. The log is pulled
-  right after boot, not only at the end of a soak.
+- **`log.txt` is only reset at startup.** `logger::Initialize` deletes it if it
+  is already at least 128 KiB (`LOG_FILE_SIZE_MAX`), otherwise appends; nothing
+  caps it during a run. So one boot's log can start with the tail of earlier
+  boots, or lose them entirely. The log is pulled right after boot, not only at
+  the end of a soak.
 - **The ELF is archived per build** under `debug/builds/<build-id>/`, because
   `make all` overwrites it and a crash report can arrive an iteration late.
   Symbolizing against the wrong ELF produces plausible garbage.

@@ -21,7 +21,7 @@ namespace ams
         namespace
         {
             // Also serves libnx through __libnx_alloc below, and the socket driver alone
-            // takes ~148 KiB of it for its transfer memory. Do not grow this past 512 KiB:
+            // takes 60 KiB of it for its transfer memory (UdpDevice.cpp). Do not grow this past 512 KiB:
             // it is static storage, so it counts against the memory the kernel reserves for
             // the process, and pm refuses to launch the module at all (LimitReached) beyond it.
             alignas(0x40) constinit u8 g_heap_memory[512_KB];

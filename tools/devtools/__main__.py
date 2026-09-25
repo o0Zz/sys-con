@@ -98,7 +98,8 @@ def cmd_doctor(cfg, args):
 
 
 def cmd_setup_console(cfg, args):
-    """Applies the two console-side settings the loop depends on.
+    """Applies the console-side settings the loop depends on:
+    fatal_auto_reboot_interval, no sys-con boot2.flag, and network_controller=1.
 
     Requires --write, and backs up anything it overwrites, because one of
     these files is the console's own Atmosphere configuration.
@@ -283,7 +284,7 @@ def cmd_crashes(cfg, args):
 
 
 def cmd_dumps(cfg, args):
-    """HID memory captures written by the MITM path, for tools/HID_Parser.
+    """HID memory captures (*.dmp) in /config/sys-con/, for offline HID analysis.
 
     They accumulate on the card, so --pull offers to clear them afterwards --
     but only after every file has been written locally, never before.
@@ -523,7 +524,7 @@ def build_parser():
     cr = sub.add_parser("crashes", help="list/pull crash artifacts")
     cr.add_argument("--pull", action="store_true")
 
-    dm = sub.add_parser("dumps", help="list/pull HID dumps (for tools/HID_Parser)")
+    dm = sub.add_parser("dumps", help="list/pull HID dumps (*.dmp, for offline HID analysis)")
     dm.add_argument("--pull", action="store_true")
     dm.add_argument("--delete", action="store_true",
                     help="with --pull, clear them from the console afterwards")

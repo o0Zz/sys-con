@@ -20,11 +20,13 @@ Use it as a library:
 or from the shell:
 
     python networkpad.py --host 192.168.1.42 tap A
-    python networkpad.py --host 192.168.1.42 press ZL --hold 2
-    python networkpad.py --host 192.168.1.42 stick left 0 1 --hold 1
+    python networkpad.py --host 192.168.1.42 --hold 2 press ZL
+    python networkpad.py --host 192.168.1.42 --hold 1 stick left 0 1
     python networkpad.py --host 192.168.1.42 sequence A B DPAD_UP
     python networkpad.py --host 192.168.1.42 --hold 2 motion --gyro 0 3.14 0
     python networkpad.py --host 192.168.1.42
+
+--hold is a top-level option, so it goes before the command.
 
 With no command it goes interactive: the terminal is put in raw mode and your keyboard
 becomes the pad -- arrows are the d-pad, WASD/ZQSD the left stick, IJKL the right one,

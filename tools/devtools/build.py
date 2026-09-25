@@ -82,7 +82,7 @@ def run_build(cfg, jobs=4, clean=False, log_path=None):
 
     ATMOSPHERE=0 is the shipped flavour and the one CI builds, so it is what
     the loop tests by default. SYSCON_ATMOSPHERE=1 switches to the
-    libstratosphere flavour, which is the only one with a working HID MITM.
+    libstratosphere flavour; both flavours have a working HID MITM.
     Note `make clean` also deletes src/app/build/sys-con.elf, which is exactly
     why archiving happens immediately after a build.
     """
@@ -90,8 +90,8 @@ def run_build(cfg, jobs=4, clean=False, log_path=None):
 
     # Both flavours compile into the same src/app/build, and make cannot tell them apart:
     # after building one, the other finds every object "up to date" and silently relinks the
-    # wrong binary. That ships a libnx MITM as if it were the Atmosphere one, which wedges
-    # the console, so switching flavour forces a clean.
+    # wrong binary -- a build labelled as one flavour that is really the other -- so switching
+    # flavour forces a clean.
     marker = os.path.join(repo.ROOT, "src", "app", "build", ".flavour")
     previous = None
     if os.path.exists(marker):

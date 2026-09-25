@@ -22,9 +22,9 @@ Where rstick_xxxx could be: Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, D
 
 ##  ZL/ZR don't work or can't be bound
 First, remove any existing ZL/ZR bindings from your [vid-pid] section.
-In most cases, these triggers are internally associated with Rz or -Rz, and sys-con binds them automatically.
+By default (`[default]` section), ZL is bound to Rx and ZR to Ry, which covers most controllers.
 
-If that doesn’t work, try binding them manually to regular buttons (numbers 0–15) to check if they’re detected as digital inputs.
+If that doesn’t work, try binding them manually to regular buttons (numbers 1–31, 0 means unmapped) to check if they’re detected as digital inputs.
 
 If they still don’t respond, it likely means that ZL/ZR are mapped as analog inputs. In that case, you will need to test them using analog axes until you find the correct mapping.
 
@@ -113,7 +113,7 @@ To fix the problem:
 1. Edit the `/config/sys-con/config.ini` and change `discovery_mode=0` to `discovery_mode=2`
 2. Reboot the switch.
 
-(This should solve your issue, but it will only detect Xbox controllers and any controllers listed in `discovery_vidpid=`)
+(This should solve your issue, but it will only detect controllers listed in `discovery_vidpid=` - Xbox controllers are no longer auto-detected in this mode, use `discovery_mode=1` to keep them)
 
 ## I got error: "Failed to initialize controller: Error: 0x6B ..."
 This error happens when your USB device is not an HID controller. 
@@ -150,13 +150,17 @@ https://www.amazon.com/Mcbazel-Wireless-Receiver-Microsoft-Xbox-360/dp/B076GZFLR
 ## My controller is detected but don't works at all
 This probably means that your controller is not configure with the correct driver.
 In the `/config/sys-con/config.ini`, you need to find your controller (\[VID/PID\]) and edit the `driver=` key with one of the following:
- - generic (default if nothing is set)
+ - dualshock3
+ - xbox360w (Xbox 360 wireless receiver)
  - xbox360
- - xbox
  - xboxone
- - dualshock4
+ - xbox (Xbox 1st gen)
  - switch
+ - wii (Wii U GameCube adapter)
  - sinput (SInput HID gamepads, e.g. the HOJA ProGCC in SInput mode)
+ - steam2026 (Steam Controller 2026)
+
+Any other value, or no `driver=` at all, uses the generic HID driver (this is how DualShock 4 pads work: the `[dualshock4]` profile has no `driver=`).
 
 Typically, if you know your controller is an xboxone controller, just add
 ```
@@ -215,7 +219,7 @@ x=13,2,+X
 ## I don't see any logs in /config/sys-con/log.txt
 If you don't see any logs in /config/sys-con/log.txt, it indicates that sys-con isn't loading correctly. Sys-con should automatically generate a log entry upon boot, similar to the following:
 ```
-|I|00:00:08.383|5E953330| SYS-CON started 1.3.0+6-411aff0 (Build date: Aug 26 2024 22:22:53)
+|I|00:00:08.383|5E953330| SYS-CON started 1.3.0+6-411aff0 (Build date: Aug 26 2024 22:22:53) - https://github.com/o0Zz/sys-con
 ```
 
 1. Verify Installation Files: Ensure that the following files are installed correctly:
@@ -256,37 +260,43 @@ A typically working flow will look like:
 
 ```
 |I|00:00:08.362|5E953330| -----------------------------------------------------
-|I|00:00:08.383|5E953330| SYS-CON started 1.3.0+6-411aff0 (Build date: Aug 26 2024 22:22:53)
-|I|00:00:08.397|5E953330| OS version: 17.0.1 (Built with Atmosphere 1.7.x-0e4ac884)
+|I|00:00:08.383|5E953330| SYS-CON started 1.3.0+6-411aff0 (Build date: Aug 26 2024 22:22:53) - https://github.com/o0Zz/sys-con
+|I|00:00:08.397|5E953330| OS version: 17.0.1
+|D|00:00:08.410|5E953330| Initializing configuration ...
+|D|00:00:08.420|5E953330| Loading global config: '/config/sys-con/config.ini' ...
 |D|00:00:08.572|5E953330| Initializing controllers ...
-|D|00:00:08.590|5E953330| Polling frequency: 500 ms
+|D|00:00:08.590|5E953330| Polling timeout: 10 ms
+|D|00:00:08.595|5E953330| Initializing hiddbg HDLS ...
 |D|00:00:08.606|5E953330| Initializing USB stack ...
 |I|00:00:08.625|5E953330| USB configuration: Discovery mode(0), Auto add controller(true)
 |D|00:00:08.649|5E953330| Adding event with filter: XBOX (1/3)...
 |D|00:00:08.664|5E953330| Adding event with filter: USB_CLASS_HID (2/3)...
-|D|00:00:08.679|5E953330| Initializing power supply managment ...
+|D|00:00:08.679|5E953330| Initializing power supply management ...
 |D|00:00:08.719|5E94C0D0| New USB device detected (Or polling timeout), checking for controllers ...
 |D|00:00:08.930|5E94C0D0| No HID or XBOX interfaces found !
 |D|00:00:36.401|5E94C0D0| New USB device detected (Or polling timeout), checking for controllers ...
 |I|00:00:36.417|5E94C0D0| Trying to initialize USB device: [057e-2009] (Class: 0x00, SubClass: 0x00, Protocol: 0x00, bcd: 0x0200)...
-|D|00:00:36.434|5E94C0D0| Loading controller config: 'sdmc:/config/sys-con/config.ini' [default] ...
-|D|00:00:36.723|5E94C0D0| Loading controller config: 'sdmc:/config/sys-con/config.ini' [057e-2009] ...
-|D|00:00:37.013|5E94C0D0| Loading controller config: 'sdmc:/config/sys-con/config.ini' (Profile: [switch]) ... 
+|D|00:00:36.434|5E94C0D0| Loading controller config: '/config/sys-con/config.ini' [default] ...
+|D|00:00:36.723|5E94C0D0| Loading controller config: '/config/sys-con/config.ini' [057e-2009] ...
+|D|00:00:37.013|5E94C0D0| Loading controller config: '/config/sys-con/config.ini' (Profile: [switch]) ... 
 |I|00:00:37.572|5E94C0D0| Controller successfully loaded (B=3, A=4, Y=1, X=2, ...) !
-|I|00:00:37.589|5E94C0D0| Initializing Switch (Interface count: 1) ...
+|I|00:00:37.589|5E94C0D0| Initializing Switch controller (Interface count: 1) ...
 |D|00:00:37.603|5E94C0D0| Controller[057e-2009] Created !
-|D|00:00:37.618|5E94C0D0| SwitchHDLHandler[057e-2009] Initializing ...
+|D|00:00:37.618|5E94C0D0| SwitchVirtualGamepadHandler[057e-2009] Initializing ...
 |D|00:00:37.630|5E94C0D0| Controller[057e-2009] Initializing ...
 |D|00:00:37.647|5E94C0D0| Controller[057e-2009] Opening interfaces ...
-|D|00:00:37.685|5E94C0D0| Controller[057e-2009] Opening interface idx=0 ...
-|D|00:00:37.703|5E94C0D0| SwitchUSBInterface[057e-2009] Openning ...
+|D|00:00:37.685|5E94C0D0| Controller[057e-2009] Opening interface 1/1 ...
+|D|00:00:37.703|5E94C0D0| SwitchUSBInterface[057e-2009] Opening ...
 |D|00:00:37.719|5E94C0D0| SwitchUSBInterface[057e-2009] Input endpoint found 0x81 (Idx: 0)
 |D|00:00:37.730|5E94C0D0| SwitchUSBInterface[057e-2009] Output endpoint found 0x1 (Idx: 0)
-|D|00:00:37.745|5E94C0D0| SwitchUSBEndpoint Opening 0x81 (Pkt size: 64)...
-|D|00:00:37.767|5E94C0D0| SwitchUSBEndpoint successfully opened!
-|D|00:00:37.785|5E94C0D0| SwitchUSBEndpoint Opening 0x1 (Pkt size: 64)...
-|D|00:00:37.800|5E94C0D0| SwitchUSBEndpoint successfully opened!
+|D|00:00:37.745|5E94C0D0| SwitchUSBEndpoint[0x81] Opening (Pkt size: 64)...
+|D|00:00:37.767|5E94C0D0| SwitchUSBEndpoint[0x81] Successfully opened !
+|D|00:00:37.785|5E94C0D0| SwitchUSBEndpoint[0x01] Opening (Pkt size: 64)...
+|D|00:00:37.800|5E94C0D0| SwitchUSBEndpoint[0x01] Successfully opened !
 |D|00:00:37.813|5E94C0D0| Controller[057e-2009] successfully opened !
+|D|00:00:37.820|5E94C0D0| SwitchHDLHandler[057e-2009] Initializing HDL state ...
+|I|00:00:37.845|5E94C0D0| SwitchHDLHandler[057e-2009] Initialized !
+|I|00:00:37.851|5E94C0D0| Controller[057e-2009] plugged !
 ```
 
 Search for logs starting with `|E|`, If you find one, this is an error and it might give you a hint about the issue.

@@ -25,6 +25,14 @@ When a new controller is plugged, the configuration is loaded in below order
 In other words, the loading order is: `[Default]` `[Profile]` `[VID-PID]`.
 If you want to override a setting for only 1 controller, it's adviced to change the configuration in `[VID-PID]` in order to not impact others controllers
 
+### Mode
+The `mode=` key of the `[global]` section selects how controllers are published to the console:
+- `hiddbg`: virtual controllers are attached through hiddbg (HDLS).
+- `mitm` (set in the shipped `config.ini`): sys-con intercepts the `hid` service and feeds each game a fake HID shared memory. Required for rumble.
+- `disabled`: sys-con starts, writes its log, then exits without creating any controller.
+
+A `config.ini` without a `mode=` key, with an unknown value, or missing altogether falls back to `hiddbg`.
+
 ## Logs
 In case of issue, you can look at the logs in `/config/sys-con/log.txt` (On your SDCard).
 The logs are automatically created with a log level equal to Info.
@@ -44,11 +52,11 @@ Reboot the Nintendo Switch.
 - [x] Custom key mapping using VID/PID and profile.
 - [x] Automatically add new controllers (Try to determine the best driver)
 - [x] Configurable deadzone
-- [x] Configurable polling frequency
-- [x] Configurable controller color using #RGBA
+- [x] Configurable polling timeout (`polling_timeout_ms`)
+- [x] Configurable controller color (`color_body`, `color_buttons`, `color_leftgrip`, `color_rightgrip`) using `#RRGGBB` or `#RRGGBBAA`
 - [x] Network controller over UDP, for scripted input during testing (off by default)
 - [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
-- [ ] Motion controls
+- [x] Motion controls (for drivers that report it: Switch Pro, SInput, Steam Controller 2026, network controller)
 - [ ] HID keyboard / mouse support
 
 ## Supported controller
@@ -201,7 +209,8 @@ simulate_<BUTTON>=
 **Possible Values:**
 
  - **1 to 31**: Represent the Button ID of the controller
- - **Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial, Brake, -Brake, Accelerator, -Accelerator**: Represents the analog inputs (e.g., joystick, slider).
+ - **X, -X, Y, -Y, Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial, Brake, -Brake, Accelerator, -Accelerator**: Represents the analog inputs (e.g., joystick, slider).
+ - **None** (or **0**): Unmapped.
  - **32 to 35**:  Represents the hat switch (D-Pad) directions:
    - `32` — `dpad_up`
    - `33` — `dpad_down`
@@ -223,6 +232,8 @@ deadzone_rx=5
 deadzone_ry=5
 deadzone_slider=20
 deadzone_dial=20
+deadzone_brake=20
+deadzone_accelerator=20
 
 factor_x=100
 factor_y=100
@@ -232,6 +243,8 @@ factor_rx=100
 factor_ry=100
 factor_slider=100
 factor_dial=100
+factor_brake=100
+factor_accelerator=100
 ```
 
 All these values are in percentages
@@ -239,7 +252,7 @@ All these values are in percentages
 - Typical Factor range: 100% to 150%
 
 ### Home & Capture shortcuts
-By default, the **HOME** and **CAPTURE** can be triggered by pressing `Minus + DPAD_UP` and `Minus + DPAD_DOWN`, respectively. Minus button is often mapped to the select button.
+By default, the **HOME** and **CAPTURE** can be triggered by pressing `Minus + DPAD_DOWN` and `Minus + DPAD_UP`, respectively. Minus button is often mapped to the select button.
 
 ### Simulating buttons
 You can simulate buttons by combining multiple button presses.
@@ -291,14 +304,14 @@ Edit `/config/sys-con/config.ini`:
 ```
 [global]
 network_controller=1
-network_controller_port=26780
+network_controller_port=56789
 ```
 
 Reboot the Nintendo Switch, then from a PC on the same network:
 
 ```bash
 python tools/networkpad.py --host <switch-ip> tap A
-python tools/networkpad.py --host <switch-ip> stick left 0 1 --hold 1
+python tools/networkpad.py --host <switch-ip> --hold 1 stick left 0 1
 python tools/networkpad.py --host <switch-ip> buttons      # list the button names
 ```
 
@@ -314,7 +327,10 @@ with NetworkPad("192.168.1.42") as pad:
 ```
 
 Its button mapping lives in the `[network]` profile in `config.ini` and can be remapped like any
-other controller.
+other controller. That profile (with `driver=network`) and the `[ffff-0001]` section pointing at it
+(`profile=network`) are both required: the network pad is never auto-added, and without them sys-con
+logs `NetworkPad: config.ini has no [network] profile - network controller disabled` and creates no
+pad. If you are upgrading with your own `config.ini`, copy both sections from the new one.
 
 > **This opens a UDP port that anyone on your network can send button presses to.** There is no
 > authentication. Leave `network_controller=0` unless you are actively testing.
@@ -395,7 +411,8 @@ Open MSYS console, move to the project root directory and use one of the followi
 - `make -j8`: Build the project
 - `make clean`: Cleans the project files (but not the dependencies).
 - `make mrproper`: Cleans the project files and the dependencies.
-- `syscon.sh build`: Build and package sys-con (Similar to github release packages)
+- `make dist`: Clean, build and package sys-con into a zip (Similar to github release packages)
+- `make distclean`: Same as `make dist`, but also cleans the dependencies first
 
 Output folder will be there: `out/`
 For an in-depth explanation of how sys-con works, see [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).

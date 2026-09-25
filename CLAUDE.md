@@ -81,17 +81,22 @@
   from `InstallMitm("hid")` when a second sys-con instance starts while the first holds it).
 - **A MITM only catches processes that open `hid` after it installs.** Atmosphere resolves it
   at `sm:GetService` time, so nothing already running — qlaunch included — is ever
-  intercepted. In production that is what `boot2.flag` solves. On the test console, where
-  that flag is forbidden, an experiment has to launch an applet or game *after* sys-con is
-  up, and a mitm-mode run with no `session accepted` line in the log proves nothing.
+  intercepted. In production that is what `boot2.flag` solves, and the test console carries
+  it too (see *Hardware test rig*). Without the flag, an experiment has to launch an applet
+  or game *after* sys-con is up. Either way, a mitm-mode run proves nothing unless the log
+  shows a client being intercepted: `HidMitm: session accepted` / `CreateAppletResource
+  hooked for program` in the libnx flavour, `HidMitmService creation for program id`
+  (Debug level) in the ams one.
 - **Good test target: the profile-select applet** (`0x0100000000001007`), reached by starting
   any game. It is a separate process, so it gets MITM'd, and its selection visibly moves
   under the UDP pad.
-- **Data plane** (`SwitchMITMManager`, shared by both flavours): the manager thread mirrors
-  the whole real shared memory into the fake one at 200 Hz, skipping the npad slots sys-con
+- **Data plane** (`SwitchMITMManager`, shared by both flavours): two fake shared memories,
+  one per view (system applets / applications), both allocated at `Start()`. The manager
+  thread mirrors the real shared memory into them at 200 Hz, skipping the npad slots sys-con
   owns and slots empty on both sides; `Update` only stores the latest pad state and the
-  manager publishes it every tick, so the pad keeps sampling like real hardware. Slot
-  allocation avoids npads the real hid is using.
+  manager publishes it every tick, so the pad keeps sampling like real hardware. Each pad is
+  also created as a hiddbg HDLS device, and its npad slot is the one the real hid assigns to
+  that device (`WaitForNewNpad`).
 - **Home and Capture go through hiddbg, not the fake shared memory.** `HiddbgNpadButton_Home`/
   `_Capture` (bits 18/19) are `HidNpadButton_StickLRight`/`StickLDown` in npad memory, and `am`
   reads Home/Capture via hidsys from the real hid it opened before sys-con. So
@@ -119,8 +124,9 @@
   LimitReached that a too-large heap gives, because a second instance cannot
   fit. Before chasing a memory budget, check `/atmosphere/contents/<TID>/flags/`
   and whether `/config/sys-con/log.txt` has a fresh mtime. The test console
-  currently *does* carry sys-con's `boot2.flag` (mitm needs it to catch
-  qlaunch), which contradicts `tools/devtools/README.md`'s setup rule.
+  carries sys-con's `boot2.flag` (mitm needs it to catch qlaunch), against
+  `tools/devtools/README.md`'s setup rule: `devtools doctor`'s boot2 check is red
+  there by design, and `setup-console --write` would delete the flag.
 - **sys-autopilot gives up `hid:dbg` whenever it launches a sysmodule**, so its scripted input
   dies for as long as sys-con runs (`/input/tap` → `0xe401`). It takes it back only in
   `process_stop`. Its `process.c` was patched with `reopen_hiddbg()`, which wraps

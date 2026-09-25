@@ -117,14 +117,13 @@ LOG_LEVEL_TRACE = 0
 # Startup milestones, in order, as logged by syscon::RunApp. Kept as literal
 # substrings so `doctor` can grep src/app/main.cpp and fail loudly if one is
 # renamed -- otherwise a rename silently turns every run into a BOOT_HANG.
-# Note "managment": the typo is in the source and must be matched as-is.
 MILESTONES = [
     ("started", "SYS-CON started "),
     ("osversion", "OS version: "),
     ("config", "Initializing configuration ..."),
     ("controllers", "Initializing controllers ..."),
     ("usb", "Initializing USB stack ..."),
-    ("psc", "Initializing power supply managment ..."),
+    ("psc", "Initializing power supply management ..."),
 ]
 
 # The last milestone before RunApp's idle loop; reaching it means "fully up".
