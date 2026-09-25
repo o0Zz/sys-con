@@ -4,8 +4,6 @@
 #include <sys/stat.h>
 #include <mutex>
 #include <thread>
-#include <fstream>
-#include <filesystem>
 #include <inttypes.h>
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)
@@ -19,7 +17,7 @@ namespace syscon::logger
         // Mutex to protect log writing
         static std::mutex sLogMutex;
 
-        static std::filesystem::path sLogPath;
+        static std::string sLogPath;
         static LogLevel sLogLevel = LogLevel::Trace;
         static IFileManager *sFileManager = nullptr;
 
@@ -31,13 +29,13 @@ namespace syscon::logger
         {
             uint64_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-            int written = std::snprintf(line, lineSize, "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ",
-                                        kLogLevelStr[static_cast<size_t>(lvl)],
-                                        (current_time_ms / 3600000) % 24,
-                                        (current_time_ms / 60000) % 60,
-                                        (current_time_ms / 1000) % 60,
-                                        current_time_ms % 1000,
-                                        (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
+            int written = SYSCON_SNPRINTF(line, lineSize, "|%c|%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 ".%03" PRIu64 "|%08X| ",
+                                          kLogLevelStr[static_cast<size_t>(lvl)],
+                                          (current_time_ms / 3600000) % 24,
+                                          (current_time_ms / 60000) % 60,
+                                          (current_time_ms / 1000) % 60,
+                                          current_time_ms % 1000,
+                                          (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
             return written < 0 ? 0 : std::min((size_t)written, lineSize - 1);
         }
@@ -48,7 +46,7 @@ namespace syscon::logger
                 return offset;
 
             const size_t space = lineSize - offset;
-            int written = std::vsnprintf(&line[offset], space, fmt, vl);
+            int written = SYSCON_VSNPRINTF(&line[offset], space, fmt, vl);
             if (written < 0)
                 return offset;
 
@@ -60,13 +58,12 @@ namespace syscon::logger
 
     void Initialize(const std::string &log, IFileManager &file)
     {
-        sLogPath = std::filesystem::path(log);
+        sLogPath = log;
         sFileManager = &file;
 
         std::lock_guard<std::mutex> printLock(sLogMutex);
-        std::filesystem::path basePath = sLogPath.parent_path();
 
-        sFileManager->create_directories(basePath);
+        sFileManager->create_directories(sLogPath.substr(0, sLogPath.find_last_of('/')));
 
         if (sFileManager->file_size(sLogPath) >= LOG_FILE_SIZE_MAX)
             sFileManager->remove(sLogPath);
@@ -123,7 +120,7 @@ namespace syscon::logger
         size_t start_offset = FormatHeader(line, sizeof(line) - 1, lvl);
 
         const size_t space = sizeof(line) - 1 - start_offset;
-        int written = std::snprintf(&line[start_offset], space, "Buffer (%zu): \n", size);
+        int written = SYSCON_SNPRINTF(&line[start_offset], space, "Buffer (%zu): \n", size);
         if (written > 0)
             LogWriteToFile(line, start_offset + std::min((size_t)written, space - 1));
 
@@ -131,7 +128,7 @@ namespace syscon::logger
         {
             size_t length = start_offset;
             for (size_t k = 0; k < std::min((size_t)16, size - i); k++)
-                length += std::snprintf(&line[length], sizeof(line) - 1 - length, "%02X ", buffer[i + k]);
+                length += SYSCON_SNPRINTF(&line[length], sizeof(line) - 1 - length, "%02X ", buffer[i + k]);
 
             line[length++] = '\n';
             LogWriteToFile(line, length);

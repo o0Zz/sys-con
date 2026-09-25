@@ -4,8 +4,6 @@
 #include "ControllerTypes.h"
 #include "ControllerConfig.h"
 #include <string>
-#include <sstream>
-#include <iomanip>
 #include <vector>
 #include <stdlib.h>
 
@@ -34,11 +32,16 @@ namespace syscon::config
 
         operator std::string() const
         {
-            std::stringstream ss;
-            ss << std::setfill('0') << std::setw(4) << std::hex << vid;
-            ss << "-";
-            ss << std::setfill('0') << std::setw(4) << std::hex << pid;
-            return ss.str();
+            static constexpr char kHexDigits[] = "0123456789abcdef";
+
+            std::string out(9, '-');
+            for (int nibble = 0; nibble < 4; nibble++)
+            {
+                out[3 - nibble] = kHexDigits[(vid >> (nibble * 4)) & 0xF];
+                out[8 - nibble] = kHexDigits[(pid >> (nibble * 4)) & 0xF];
+            }
+
+            return out;
         }
 
         bool operator==(const ControllerVidPid &other) const

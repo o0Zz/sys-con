@@ -61,27 +61,27 @@ public:
     void SetFile(const std::string &path, std::string contents) { m_files[path] = std::move(contents); }
     const std::string &GetFile(const std::string &path) { return m_files[path]; }
 
-    std::unique_ptr<syscon::IFile> open(const std::filesystem::path &path, syscon::OpenFlags flags) override
+    std::unique_ptr<syscon::IFile> open(const std::string &path, syscon::OpenFlags flags) override
     {
-        auto it = m_files.find(path.string());
+        auto it = m_files.find(path);
         if (it == m_files.end())
         {
             if (!(flags & (syscon::OpenFlags_Write | syscon::OpenFlags_Append)))
                 return nullptr; // Reading a file that does not exist.
 
-            it = m_files.emplace(path.string(), std::string()).first;
+            it = m_files.emplace(path, std::string()).first;
         }
 
         return std::make_unique<MemoryFile>(&it->second, (flags & syscon::OpenFlags_Append) != 0);
     }
 
-    bool create_directories(const std::filesystem::path &) override { return true; }
+    bool create_directories(const std::string &) override { return true; }
 
-    bool remove(const std::filesystem::path &p) override { return m_files.erase(p.string()) > 0; }
+    bool remove(const std::string &p) override { return m_files.erase(p) > 0; }
 
-    std::uintmax_t file_size(const std::filesystem::path &p) const override
+    std::uintmax_t file_size(const std::string &p) const override
     {
-        auto it = m_files.find(p.string());
+        auto it = m_files.find(p);
         return it == m_files.end() ? 0 : it->second.size();
     }
 

@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
-#include <filesystem>
 #include <string_view>
 #include <chrono>
 
@@ -317,6 +316,36 @@ namespace syscon::config
             return 1; // Success
         }
 
+        constexpr struct
+        {
+            std::string_view name;
+            AnalogAxis axis;
+        } AnalogAxisNames[] = {
+            {"x", AnalogAxis::X},
+            {"y", AnalogAxis::Y},
+            {"z", AnalogAxis::Z},
+            {"rz", AnalogAxis::Rz},
+            {"rx", AnalogAxis::Rx},
+            {"ry", AnalogAxis::Ry},
+            {"slider", AnalogAxis::Slider},
+            {"dial", AnalogAxis::Dial},
+        };
+
+        AnalogAxis stringToAnalogAxis(std::string_view name, std::string_view prefix)
+        {
+            if (!name.starts_with(prefix))
+                return AnalogAxis::Unknown;
+
+            const std::string_view axis = name.substr(prefix.size());
+            for (const auto &entry : AnalogAxisNames)
+            {
+                if (axis == entry.name)
+                    return entry.axis;
+            }
+
+            return AnalogAxis::Unknown;
+        }
+
         int ParseControllerConfigLine(void *data, const char *section, const char *name, const char *value)
         {
             ConfigINIData *ini_data = static_cast<ConfigINIData *>(data);
@@ -362,38 +391,10 @@ namespace syscon::config
                 else
                     syscon::logger::LogError("Unknown key: %s, continue anyway ...", nameStr.c_str());
             }
-            else if (nameStr == "deadzone_x")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::X] = atoi(value);
-            else if (nameStr == "deadzone_y")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Y] = atoi(value);
-            else if (nameStr == "deadzone_z")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Z] = atoi(value);
-            else if (nameStr == "deadzone_rz")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Rz] = atoi(value);
-            else if (nameStr == "deadzone_rx")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Rx] = atoi(value);
-            else if (nameStr == "deadzone_ry")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Ry] = atoi(value);
-            else if (nameStr == "deadzone_slider")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Slider] = atoi(value);
-            else if (nameStr == "deadzone_dial")
-                ini_data->controller_config->analogDeadzonePercent[AnalogAxis::Dial] = atoi(value);
-            else if (nameStr == "factor_x")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::X] = atoi(value);
-            else if (nameStr == "factor_y")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Y] = atoi(value);
-            else if (nameStr == "factor_z")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Z] = atoi(value);
-            else if (nameStr == "factor_rz")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Rz] = atoi(value);
-            else if (nameStr == "factor_rx")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Rx] = atoi(value);
-            else if (nameStr == "factor_ry")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Ry] = atoi(value);
-            else if (nameStr == "factor_slider")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Slider] = atoi(value);
-            else if (nameStr == "factor_dial")
-                ini_data->controller_config->analogFactorPercent[AnalogAxis::Dial] = atoi(value);
+            else if (AnalogAxis deadzoneAxis = stringToAnalogAxis(nameStr, "deadzone_"); deadzoneAxis != AnalogAxis::Unknown)
+                ini_data->controller_config->analogDeadzonePercent[deadzoneAxis] = atoi(value);
+            else if (AnalogAxis factorAxis = stringToAnalogAxis(nameStr, "factor_"); factorAxis != AnalogAxis::Unknown)
+                ini_data->controller_config->analogFactorPercent[factorAxis] = atoi(value);
             else if (nameStr == "vibration")
             {
                 // Not the previous layer's template: a broken key means this controller has none.
@@ -589,9 +590,6 @@ namespace syscon::config
 
     int AddControllerToConfig(const std::string &path, const std::string &section, const std::string &profile)
     {
-        std::stringstream ss;
-
-        // Get the current time.
         auto now = std::chrono::system_clock::now();
         auto timeT = std::chrono::system_clock::to_time_t(now);
         struct tm timeinfo;
@@ -618,31 +616,16 @@ namespace syscon::config
             return -1; // Replace with appropriate error code.
         }
 
-        // Write the new section and profile data.
-        ss << "\n";
-        ss << "[" << section << "] ; Automatically added on " << std::put_time(&timeinfo, "%Y-%m-%d %H:%M:%S UTC") << "\n";
+        char stamp[32];
+        SYSCON_SNPRINTF(stamp, sizeof(stamp), "%04d-%02d-%02d %02d:%02d:%02d UTC",
+                        timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                        timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 
+        std::string payload = "\n[" + section + "] ; Automatically added on " + stamp + "\n";
         if (!profile.empty())
-        {
-            ss << "profile=" << profile << "\n";
-        }
+            payload += "profile=" + profile + "\n";
         else
-        {
-            ss << "b=1\n"
-               << "a=2\n"
-               << "x=3\n"
-               << "y=4\n"
-               << "l=5\n"
-               << "r=6\n"
-               << "zl=7\n"
-               << "zr=8\n"
-               << "minus=9\n"
-               << "plus=10\n"
-               << "capture=11\n"
-               << "home=12\n";
-        }
-
-        const std::string payload = ss.str();
+            payload += "b=1\na=2\nx=3\ny=4\nl=5\nr=6\nzl=7\nzr=8\nminus=9\nplus=10\ncapture=11\nhome=12\n";
         if (configFile->write(payload.data(), payload.size()) != payload.size())
         {
             syscon::logger::LogError("Error: Failed to write to configuration file: %s", path.c_str());

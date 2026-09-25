@@ -69,12 +69,12 @@ namespace syscon
     class AMSFileManager final : public IFileManager
     {
     private:
-        static std::string to_ams_path(const std::filesystem::path &path) { return "sdmc:/" + path.string(); }
+        static std::string to_ams_path(const std::string &path) { return "sdmc:/" + path; }
 
     public:
         ~AMSFileManager() override = default;
 
-        std::unique_ptr<IFile> open(const std::filesystem::path &path, OpenFlags flags) override
+        std::unique_ptr<IFile> open(const std::string &path, OpenFlags flags) override
         {
             int mode = 0;
             if (flags & OpenFlags_Read)
@@ -94,21 +94,21 @@ namespace syscon
             return std::make_unique<AMSFile>(std::move(file), mode);
         }
 
-        bool create_directories(const std::filesystem::path &dir) override
+        bool create_directories(const std::string &dir) override
         {
             if (R_FAILED(ams::fs::CreateDirectory(to_ams_path(dir).c_str())))
                 return false;
             return true;
         }
 
-        bool remove(const std::filesystem::path &path) override
+        bool remove(const std::string &path) override
         {
             if (R_FAILED(ams::fs::DeleteFile(to_ams_path(path).c_str())))
                 return false;
             return true;
         }
 
-        std::uintmax_t file_size(const std::filesystem::path &path) const override
+        std::uintmax_t file_size(const std::string &path) const override
         {
             ams::fs::FileHandle file;
             s64 fileOffset = 0;

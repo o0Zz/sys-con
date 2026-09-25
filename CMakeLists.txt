@@ -23,6 +23,9 @@ if(MSVC)
         /wd4100             # Unreferenced parameter: the codebase marks these with (void)x.
         /wd4201             # Anonymous struct in a union (RGBAColor) - deliberate, and the
                             # device build compiles as gnu++23 where it is standard.
+        /wd4996             # "Consider fopen_s instead": StdFileManager uses std::fopen on
+                            # purpose. <fstream> would pull libstdc++'s locale machinery into
+                            # the sysmodule, which is half its binary size.
     )
     if(SYSCON_WERROR)
         target_compile_options(syscon_warnings INTERFACE /WX)

@@ -1,8 +1,8 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <memory>
+#include <string>
 
 namespace syscon
 {
@@ -31,12 +31,12 @@ namespace syscon
     public:
         virtual ~IFileManager() = default;
 
-        virtual std::unique_ptr<IFile> open(const std::filesystem::path &path, OpenFlags flags) = 0;
+        virtual std::unique_ptr<IFile> open(const std::string &path, OpenFlags flags) = 0;
 
-        virtual bool create_directories(const std::filesystem::path &dir) = 0;
-        virtual bool remove(const std::filesystem::path &p) = 0;
+        virtual bool create_directories(const std::string &dir) = 0;
+        virtual bool remove(const std::string &p) = 0;
 
-        virtual std::uintmax_t file_size(const std::filesystem::path &p) const = 0;
+        virtual std::uintmax_t file_size(const std::string &p) const = 0;
     };
 
 } // namespace syscon

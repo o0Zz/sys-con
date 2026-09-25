@@ -1,13 +1,25 @@
 #pragma once
 #include "IFileManager.h"
-#include <fstream>
+#include <cerrno>
+#include <cstdio>
+#include <sys/stat.h>
+
+// The host tests drive this implementation too (tests/app/test_config_store.cpp reads the
+// shipped config.ini through it), and MSVC spells POSIX mkdir differently and without a mode.
+#ifdef _WIN32
+    #include <direct.h>
+    #define syscon_mkdir(path) ::_mkdir(path)
+#else
+    #define syscon_mkdir(path) ::mkdir(path, 0777)
+#endif
+
 namespace syscon
 {
     class StdFile final : public IFile
     {
     public:
-        explicit StdFile(std::fstream &&fs)
-            : m_file(std::move(fs))
+        explicit StdFile(std::FILE *file)
+            : m_file(file)
         {
         }
 
@@ -18,38 +30,36 @@ namespace syscon
 
         void close() noexcept override
         {
-            if (m_file.is_open())
-                m_file.close();
+            if (m_file != nullptr)
+            {
+                std::fclose(m_file);
+                m_file = nullptr;
+            }
         }
 
         bool is_open() const noexcept override
         {
-            return m_file.is_open();
+            return m_file != nullptr;
         }
 
         std::size_t read(void *buffer, std::size_t bytes) noexcept override
         {
-            if (!m_file.is_open() || !buffer || bytes == 0)
+            if (m_file == nullptr || !buffer || bytes == 0)
                 return 0;
 
-            m_file.read(static_cast<char *>(buffer), static_cast<std::streamsize>(bytes));
-            return static_cast<std::size_t>(m_file.gcount());
+            return std::fread(buffer, 1, bytes, m_file);
         }
 
         std::size_t write(const void *buffer, std::size_t bytes) noexcept override
         {
-            if (!m_file.is_open() || !buffer || bytes == 0)
+            if (m_file == nullptr || !buffer || bytes == 0)
                 return 0;
 
-            m_file.write(static_cast<const char *>(buffer), static_cast<std::streamsize>(bytes));
-            if (m_file.bad())
-                return 0;
-
-            return bytes;
+            return std::fwrite(buffer, 1, bytes, m_file);
         }
 
     private:
-        std::fstream m_file;
+        std::FILE *m_file;
     };
 
     class StdFileManager final : public IFileManager
@@ -57,42 +67,37 @@ namespace syscon
     public:
         ~StdFileManager() override = default;
 
-        std::unique_ptr<IFile> open(const std::filesystem::path &path, OpenFlags flags) override
+        std::unique_ptr<IFile> open(const std::string &path, OpenFlags flags) override
         {
-            std::ios_base::openmode mode = std::ios::binary;
-            if (flags & OpenFlags_Read)
-                mode |= std::ios::in;
-            if (flags & OpenFlags_Write)
-                mode |= std::ios::out;
-            if (flags & OpenFlags_Append)
-                mode |= std::ios::app;
+            const char *mode = (flags & OpenFlags_Append) ? "ab" : ((flags & OpenFlags_Write) ? "wb" : "rb");
 
-            std::fstream logFile(path, mode);
-            if (!logFile.is_open())
+            std::FILE *file = std::fopen(path.c_str(), mode);
+            if (file == nullptr)
                 return nullptr;
 
-            return std::make_unique<StdFile>(std::move(logFile));
+            return std::make_unique<StdFile>(file);
         }
 
-        bool create_directories(const std::filesystem::path &dir) override
+        bool create_directories(const std::string &dir) override
         {
-            if (!dir.empty() && !std::filesystem::exists(dir))
-                std::filesystem::create_directories(dir);
+            for (std::size_t slash = dir.find('/', 1); slash != std::string::npos; slash = dir.find('/', slash + 1))
+                syscon_mkdir(dir.substr(0, slash).c_str());
 
-            return true;
+            return syscon_mkdir(dir.c_str()) == 0 || errno == EEXIST;
         }
 
-        bool remove(const std::filesystem::path &p) override
+        bool remove(const std::string &p) override
         {
-            return std::filesystem::remove(p);
+            return std::remove(p.c_str()) == 0;
         }
 
-        std::uintmax_t file_size(const std::filesystem::path &p) const override
+        std::uintmax_t file_size(const std::string &p) const override
         {
-            if (!std::filesystem::exists(p))
+            struct stat info;
+            if (::stat(p.c_str(), &info) != 0)
                 return 0;
 
-            return std::filesystem::file_size(p);
+            return static_cast<std::uintmax_t>(info.st_size);
         }
     };
 } // namespace syscon
