@@ -795,6 +795,36 @@ static void AppendState(Lifo *lifo, const State &state)
 }
 
 /*
+    The real hid reports a stick pushed past half its range as a button too, and the system
+    applets navigate on those bits rather than on the analog value - the Album ignored our left
+    stick while taking its d-pad. In hiddbg mode hid derives them itself from the HDLS sticks;
+    here nobody would, so they are derived the same way.
+*/
+static u64 StickPseudoButtons(const HidAnalogStickState &left, const HidAnalogStickState &right)
+{
+    constexpr s32 Threshold = JOYSTICK_MAX / 2;
+
+    u64 buttons = 0;
+    if (left.x < -Threshold)
+        buttons |= HidNpadButton_StickLLeft;
+    if (left.x > Threshold)
+        buttons |= HidNpadButton_StickLRight;
+    if (left.y > Threshold)
+        buttons |= HidNpadButton_StickLUp;
+    if (left.y < -Threshold)
+        buttons |= HidNpadButton_StickLDown;
+    if (right.x < -Threshold)
+        buttons |= HidNpadButton_StickRLeft;
+    if (right.x > Threshold)
+        buttons |= HidNpadButton_StickRRight;
+    if (right.y > Threshold)
+        buttons |= HidNpadButton_StickRUp;
+    if (right.y < -Threshold)
+        buttons |= HidNpadButton_StickRDown;
+    return buttons;
+}
+
+/*
     Called from the manager thread, once per tick per client, whether or not the pad
     reported anything new: a real controller keeps sampling at a fixed rate and the
     console treats a lifo that stops advancing as a pad that went away.
@@ -803,7 +833,7 @@ void HidSharedMemoryController::Publish()
 {
     HidNpadCommonState state{};
     state.sampling_number = m_sampling_number;
-    state.buttons = m_state.buttons;
+    state.buttons = m_state.buttons | StickPseudoButtons(m_state.analog_stick_l, m_state.analog_stick_r);
     state.analog_stick_l = m_state.analog_stick_l;
     state.analog_stick_r = m_state.analog_stick_r;
     state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
