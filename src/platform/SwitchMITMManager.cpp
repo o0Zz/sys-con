@@ -399,7 +399,7 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
         m_controller_list[player_idx]->Clear();
     }
 
-    ::syscon::logger::LogInfo("HidSharedMemoryManager attached a controller on player %d", player_idx + 1);
+    ::syscon::logger::LogDebug("HidSharedMemoryManager attached a controller on player %d", player_idx + 1);
     return m_controller_list[player_idx];
 }
 
@@ -411,7 +411,7 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
 */
 void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryController> controller)
 {
-    ::syscon::logger::LogInfo("HidSharedMemoryManager detaching a controller ...");
+    ::syscon::logger::LogDebug("HidSharedMemoryManager detaching a controller ...");
 
     int player_idx = -1;
 
@@ -437,8 +437,7 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
         }
     }
 
-    if (player_idx >= 0)
-        ::syscon::logger::LogInfo("HidSharedMemoryManager detached the controller of player %d", player_idx + 1);
+    ::syscon::logger::LogDebug("HidSharedMemoryManager detached the controller of player %d", player_idx);
 }
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 aruid, u64 processId, u64 programId)

@@ -98,7 +98,6 @@ namespace
     }
 } // namespace
 
-
 /******************************************************************************
  * SwitchMITMHandler Implementation
  *****************************************************************************/
@@ -176,9 +175,9 @@ void SwitchMITMHandler::ReleaseController(uint16_t input_idx)
 
     if (m_hdlsHandle[input_idx].handle != 0)
     {
-        syscon::logger::LogInfo("SwitchMITMHandler releasing the hiddbg device of input: %d ...", input_idx);
+        syscon::logger::LogDebug("SwitchMITMHandler releasing the hiddbg device of input: %d ...", input_idx);
         Result rc = hiddbgDetachHdlsVirtualDevice(m_hdlsHandle[input_idx]);
-        syscon::logger::LogInfo("SwitchMITMHandler released the hiddbg device of input: %d (Error: 0x%08X)", input_idx, rc);
+        syscon::logger::LogDebug("SwitchMITMHandler released the hiddbg device of input: %d (Error: 0x%08X)", input_idx, rc);
         m_hdlsHandle[input_idx].handle = 0;
     }
 }
@@ -296,10 +295,7 @@ Result SwitchMITMHandler::UpdateOutput()
     if (!m_controller->Support(SUPPORTS_RUMBLE))
         return 0;
 
-    // GetInputCount() can exceed CONTROLLER_MAX_INPUTS on a controller with more endpoints
-    // than sys-con tracks (see SwitchVirtualGamepadHandler::UpdateInput).
     const uint16_t input_count = std::min<uint16_t>(m_controller->GetInputCount(), CONTROLLER_MAX_INPUTS);
-
     for (uint16_t input_idx = 0; input_idx < input_count; input_idx++)
     {
         if (!IsControllerAttached(input_idx))
@@ -310,18 +306,9 @@ Result SwitchMITMHandler::UpdateOutput()
         if (rumble == m_lastRumble[input_idx])
             continue;
 
-        const bool was_rumbling = m_lastRumble[input_idx].IsActive();
         m_lastRumble[input_idx] = rumble;
 
         controllerlib::Status rc = m_controller->SetRumble(input_idx, rumble);
-
-        // Only the edges: an SD write costs several milliseconds on the very thread that
-        // polls the pad, and a game changes the amplitude every frame while it rumbles.
-        if (was_rumbling != rumble.IsActive())
-            syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] rumble %s on idx %d (high: %d%%, low: %d%%, rc: %d)",
-                                    m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(),
-                                    rumble.IsActive() ? "started" : "stopped", input_idx,
-                                    (int)(rumble.HighAmplitude() * 100), (int)(rumble.LowAmplitude() * 100), rc);
     }
 
     return 0;

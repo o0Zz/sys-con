@@ -46,28 +46,6 @@ namespace ams::syscon::hid::mitm
     {
         constexpr u32 HidCmdCreateActiveVibrationDeviceList = 203;
 
-        /*
-            A client polls most of the vibration commands at pad rate and an SD write costs
-            milliseconds on the MITM thread, so each trace point fires once per boot. That is
-            enough for the log to name the last command reached should one of them ever hang.
-        */
-        bool TraceOnce(u32 key)
-        {
-            static u32 seen[12] = {};
-            static size_t count = 0;
-
-            for (size_t i = 0; i < count; i++)
-            {
-                if (seen[i] == key)
-                    return false;
-            }
-
-            if (count < (sizeof(seen) / sizeof(seen[0])))
-                seen[count++] = key;
-
-            return true;
-        }
-
         ::HidVibrationDeviceHandle ToVibrationDeviceHandle(u32 type_value)
         {
             ::HidVibrationDeviceHandle handle;
@@ -85,9 +63,6 @@ namespace ams::syscon::hid::mitm
     {
         const ::HidVibrationDeviceHandle handle = ToVibrationDeviceHandle(vibration_device_handle);
 
-        if (TraceOnce(200))
-            ::syscon::logger::LogInfo("HidMitmService: GetVibrationDeviceInfo (handle 0x%08X, owned: %d)", vibration_device_handle, (int)::syscon::hid::mitm::vibration::IsOwned(handle));
-
         if (!::syscon::hid::mitm::vibration::IsOwned(handle))
             R_THROW(sm::mitm::ResultShouldForwardToSession());
 
@@ -101,9 +76,6 @@ namespace ams::syscon::hid::mitm
 
         const ::HidVibrationDeviceHandle handle = ToVibrationDeviceHandle(vibration_device_handle);
 
-        if (TraceOnce(201))
-            ::syscon::logger::LogInfo("HidMitmService: SendVibrationValue (handle 0x%08X, owned: %d, amp %d/%d%%)", vibration_device_handle, (int)::syscon::hid::mitm::vibration::IsOwned(handle), (int)(vibration_value.amp_high * 100), (int)(vibration_value.amp_low * 100));
-
         if (!::syscon::hid::mitm::vibration::IsOwned(handle))
             R_THROW(sm::mitm::ResultShouldForwardToSession());
 
@@ -115,9 +87,6 @@ namespace ams::syscon::hid::mitm
     {
         AMS_UNUSED(applet_resource_user_id);
 
-        if (TraceOnce(202))
-            ::syscon::logger::LogInfo("HidMitmService: GetActualVibrationValue (handle 0x%08X)", vibration_device_handle);
-
         ::HidVibrationValue value;
         if (!::syscon::hid::mitm::vibration::Load(ToVibrationDeviceHandle(vibration_device_handle), &value))
             R_THROW(sm::mitm::ResultShouldForwardToSession());
@@ -128,19 +97,12 @@ namespace ams::syscon::hid::mitm
 
     Result HidMitmService::CreateActiveVibrationDeviceList(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmActiveVibrationDeviceListInterface>> out)
     {
-        if (TraceOnce(203))
-            ::syscon::logger::LogInfo("HidMitmService: CreateActiveVibrationDeviceList - forwarding to the real hid ...");
-
         ::Service forward_list = {};
         R_TRY(serviceDispatch(this->m_forward_service.get(), HidCmdCreateActiveVibrationDeviceList,
                               .out_num_objects = 1,
                               .out_objects = &forward_list, ));
 
         out.SetValue(ams::sf::CreateSharedObjectEmplaced<IHidMitmActiveVibrationDeviceListInterface, HidMitmActiveVibrationDeviceList>(forward_list));
-
-        if (TraceOnce(1203))
-            ::syscon::logger::LogInfo("HidMitmService: CreateActiveVibrationDeviceList hooked (program 0x%016" PRIx64 ")", m_client_info.program_id.value);
-
         R_SUCCEED();
     }
 
@@ -154,9 +116,6 @@ namespace ams::syscon::hid::mitm
         AMS_UNUSED(applet_resource_user_id);
 
         const size_t count = std::min(handles.GetSize(), values.GetSize());
-
-        if (TraceOnce(206))
-            ::syscon::logger::LogInfo("HidMitmService: SendVibrationValues (%zu handles)", count);
 
         size_t owned = 0;
         for (size_t i = 0; i < count; i++)
@@ -178,9 +137,6 @@ namespace ams::syscon::hid::mitm
     {
         AMS_UNUSED(applet_resource_user_id);
 
-        if (TraceOnce(211))
-            ::syscon::logger::LogInfo("HidMitmService: IsVibrationDeviceMounted (handle 0x%08X)", vibration_device_handle);
-
         if (!::syscon::hid::mitm::vibration::IsOwned(ToVibrationDeviceHandle(vibration_device_handle)))
             R_THROW(sm::mitm::ResultShouldForwardToSession());
 
@@ -198,9 +154,6 @@ namespace ams::syscon::hid::mitm
     {
         ::HidVibrationDeviceHandle handle;
         handle.type_value = vibration_device_handle;
-
-        if (TraceOnce(1000))
-            ::syscon::logger::LogInfo("HidMitmService: ActivateVibrationDevice (handle 0x%08X, owned: %d)", vibration_device_handle, (int)::syscon::hid::mitm::vibration::IsOwned(handle));
 
         if (::syscon::hid::mitm::vibration::IsOwned(handle))
             R_SUCCEED();
