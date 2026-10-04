@@ -11,6 +11,7 @@ sys-autopilot's source rather than guessed:
     DELETE /files?path=P            -> {"deleted":P}
     GET    /process?titleId=T       -> {"titleId","running":bool,"pid":"N"}
     POST   /process/{start,stop,restart} {"titleId":"T"}
+                                    start: 409 if running; stop: 404 if not
     POST   /input/touch             {"x":N,"y":N,"durationMs":N}
     POST   /input/swipe             {"fromX":N,"fromY":N,"toX":N,"toY":N,...}
     POST   /power/restart           -> {"ok":true,...} then the console goes down
@@ -200,13 +201,27 @@ class Autopilot:
         d = self._json("GET", "/process", query={"titleId": title_id})
         return bool(d.get("running")), d.get("pid")
 
-    def process_start(self, title_id):
-        return self._json("POST", "/process/start",
-                          body=json.dumps({"titleId": title_id}).encode())
+    def process_start(self, title_id, allow_running=False):
+        """409 means already running. Off by default: iterate must not mistake
+        a process launched before the deploy for the build it just uploaded."""
+        try:
+            return self._json("POST", "/process/start",
+                              body=json.dumps({"titleId": title_id}).encode())
+        except ApiError as e:
+            if allow_running and e.status == 409:
+                return {"ok": True, "note": "already running"}
+            raise
 
     def process_stop(self, title_id):
-        return self._json("POST", "/process/stop",
-                          body=json.dumps({"titleId": title_id}).encode())
+        # 404 means not running: the goal is already met, and the process can
+        # exit on its own between a status check and this call.
+        try:
+            return self._json("POST", "/process/stop",
+                              body=json.dumps({"titleId": title_id}).encode())
+        except ApiError as e:
+            if e.status == 404:
+                return {"ok": True, "note": "not running"}
+            raise
 
     def process_restart(self, title_id):
         return self._json("POST", "/process/restart",
@@ -227,23 +242,46 @@ class Autopilot:
 
     # --- touch screen --------------------------------------------------------
     # hiddbg's touch auto-pilot, not sys-con's UDP pad. It is the only scripted
-    # input that survives sys-con running: /input/tap drives an HDLS pad, whose
-    # npad slots the MITM replaces, while the touch panel is mirrored through
-    # to the intercepted process untouched.
+    # input that reaches an intercepted process: /input/tap drives an HDLS pad,
+    # whose npad slots the MITM replaces, while the touch panel is mirrored
+    # through untouched.
+    #
+    # sys-autopilot hands hid:dbg to every sysmodule it launches and takes it
+    # back only once that process is gone, so after `start` every touch fails
+    # with a 500. A launch that fails reopens hid:dbg right away; the
+    # profile-select applet is not under /atmosphere/contents, so starting it
+    # always fails in the location resolver and launches nothing.
+
+    def reopen_input(self):
+        try:
+            self._json("POST", "/process/start", attempts=1,
+                       body=json.dumps({"titleId": config.INPUT_REOPEN_TID}).encode())
+        except ApiError:
+            pass  # the failure is the point
+
+    def _touch(self, path, body):
+        def send():
+            return self._json("POST", path, body=json.dumps(body).encode(),
+                              attempts=1, read_timeout=config.TOUCH_READ)
+        try:
+            return send()
+        except ApiError as e:
+            if e.status != 500 or "input failed" not in e.message:
+                raise
+        self.reopen_input()
+        return send()
 
     def input_touch(self, x, y, duration_ms=None):
         body = {"x": x, "y": y}
         if duration_ms is not None:
             body["durationMs"] = duration_ms
-        return self._json("POST", "/input/touch", body=json.dumps(body).encode(),
-                          attempts=1, read_timeout=config.TOUCH_READ)
+        return self._touch("/input/touch", body)
 
     def input_swipe(self, from_x, from_y, to_x, to_y, duration_ms=None):
         body = {"fromX": from_x, "fromY": from_y, "toX": to_x, "toY": to_y}
         if duration_ms is not None:
             body["durationMs"] = duration_ms
-        return self._json("POST", "/input/swipe", body=json.dumps(body).encode(),
-                          attempts=1, read_timeout=config.TOUCH_READ)
+        return self._touch("/input/swipe", body)
 
     # --- power ---------------------------------------------------------------
 

@@ -25,7 +25,7 @@ When a new controller is plugged, the configuration is loaded in below order
 In other words, the loading order is: `[Default]` `[Profile]` `[VID-PID]`.
 If you want to override a setting for only 1 controller, it's adviced to change the configuration in `[VID-PID]` in order to not impact others controllers
 
-### Mode
+## Mode
 The `mode=` key of the `[global]` section selects how controllers are published to the console:
 - `hiddbg`: virtual controllers are attached through hiddbg (HDLS).
 - `mitm` (set in the shipped `config.ini`): sys-con intercepts the `hid` service and feeds each game a fake HID shared memory. Required for rumble.
@@ -57,7 +57,7 @@ Reboot the Nintendo Switch.
 - [x] Network controller over UDP, for scripted input during testing (off by default)
 - [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
 - [x] Motion controls (for drivers that report it: Switch Pro, SInput, Steam Controller 2026, network controller)
-- [ ] HID keyboard / mouse support
+- [x] USB keyboard / mouse (boot protocol, experimental)
 
 ## Supported controller
 - [x] All PC Controllers
@@ -294,6 +294,19 @@ Capture a rumble report from the PC driver with Wireshark
 not in `config.ini` yet.
 
 Rumble is only delivered to the pad in `mode=mitm`.
+
+## Keyboard and mouse (experimental)
+A USB keyboard or mouse whose interface advertises the HID boot protocol is switched to it and
+published to the console as a keyboard or mouse (not as a pad), in both modes. Games and applets
+that read a keyboard or mouse see it; nothing needs to be configured.
+
+- Keyboards report at most 6 keys at once (boot protocol). Caps/Num/Scroll lock state is tracked
+  by sys-con; the keyboard's own LEDs are not updated.
+- Mice report 3 buttons plus back/forward and the wheel. The cursor position is kept inside the
+  1280x720 screen.
+- A device whose `[VID-PID]` names a `driver=` (Steam controllers, for example) keeps its boot
+  interfaces for the pad.
+- Requires `discovery_mode=0`, or the device's VID listed in `discovery_vidpid`.
 
 ## Network controller (for testing)
 sys-con can present a controller that is driven from a PC over the network instead of by

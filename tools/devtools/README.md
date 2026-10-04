@@ -137,6 +137,11 @@ HDLS virtual pad, so it needs no controller attached and no `network_controller`
 Handheld mode only: docked, the panel is off and a tap succeeds while nothing
 moves on screen.
 
+sys-autopilot hands `hid:dbg` to every sysmodule it launches, so after `start`
+a tap fails until sys-con exits. `touch` and `swipe` handle this: on that
+failure they start the profile-select applet (`0100000000001007`), which always
+fails to launch and makes sys-autopilot reopen `hid:dbg`, then retry once.
+
 ## Commands
 
 ```
@@ -144,7 +149,7 @@ doctor                       environment + console preflight, read-only
 setup-console --write        fatal_auto_reboot_interval, remove sys-con boot2.flag, network_controller=1
 build / test                 device build (+ archive) / host ctest
 deploy                       upload exefs.nsp, verify by on-console SHA-256
-start / stop / restart / status
+start / stop / restart / status   start when running, stop when stopped: no-op
 logs / crashes / dumps       pull artifacts off the console
 symbolize --report FILE      crash report -> symbolized stack trace
 input [BUTTONS...]           press buttons via the UDP pad

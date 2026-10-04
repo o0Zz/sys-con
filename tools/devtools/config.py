@@ -108,6 +108,11 @@ SMOKE_BUTTONS = ["A", "B", "X", "Y", "DPAD_UP", "DPAD_DOWN", "L", "R"]
 TOUCH_WIDTH = 1280
 TOUCH_HEIGHT = 720
 
+# Started only to fail: a failed /process/start makes sys-autopilot reopen
+# hid:dbg (see Autopilot.reopen_input). The profile-select applet. Never use
+# Tesla or sys-patch for this; starting those took the console down.
+INPUT_REOPEN_TID = "0100000000001007"
+
 
 # --- log parsing -------------------------------------------------------------
 # Logger line format is "|L|HH:MM:SS.mmm|TTTTTTTT| message" (src/app/logger.cpp).

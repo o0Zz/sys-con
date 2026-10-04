@@ -32,6 +32,15 @@ It picks the ELF from `debug/builds/<build-id>/` automatically. Override with
 the report has no module base, pass `--module-base 0xHEX` — the "Start Address"
 shown on the fatal screen.
 
+For a `fatal_errors/*.bin` with no `.log`:
+
+```sh
+tools/AFE_Parser.exe -report <bin> -elf src/app/build/sys-con.elf -addr2line C:/msys64/opt/devkitpro/devkitA64/bin/aarch64-none-elf-addr2line.exe
+```
+
+The tool's default addr2line path is wrong on this machine; without the flag the trace comes
+out unsymbolized.
+
 ## Reading the result
 
 - `signature` / `signature_hash` — `func@file:line` of the top in-module frame.

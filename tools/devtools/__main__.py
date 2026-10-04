@@ -231,7 +231,7 @@ def cmd_process(cfg, args):
     api = autopilot.Autopilot(cfg)
     tid = repo.title_id()
     if args.command == "start":
-        api.process_start(tid)
+        api.process_start(tid, allow_running=True)
         ok = api.wait_running(tid, True, config.START_SETTLE)
     elif args.command == "stop":
         api.process_stop(tid)
@@ -363,11 +363,14 @@ def cmd_input(cfg, args):
 def cmd_touch(cfg, args):
     """Tap the touch panel through hiddbg.
 
-    This is the input path that still works while sys-con is running: `input`
+    This is the input path that reaches an intercepted process: `input`
     drives an HDLS pad, whose npad slots the MITM replaces with its own, so the
     intercepted process never sees the press. The touch panel is mirrored
     straight through, so a tap reaches the applet. Handheld mode only -- docked,
     the panel is off and the tap succeeds while nothing moves on screen.
+
+    After `start`, sys-autopilot has handed hid:dbg to sys-con and the tap
+    fails; the client then reopens hid:dbg and retries once.
     """
     _check_touch_bounds(args.x, args.y)
     api = autopilot.Autopilot(cfg)
@@ -542,8 +545,8 @@ def build_parser():
     inp.add_argument("--port", type=int)
     inp.add_argument("--hold", type=float, default=0.12)
 
-    tp = sub.add_parser("touch", help="tap the touch panel (works while "
-                                      "sys-con is running)")
+    tp = sub.add_parser("touch", help="tap the touch panel (reaches "
+                                      "processes the MITM intercepts)")
     tp.add_argument("x", type=int)
     tp.add_argument("y", type=int)
     tp.add_argument("--duration", type=int, help="ms the finger stays down")
