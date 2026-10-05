@@ -2,7 +2,7 @@
 | Controller name         | Supported | Rumble | Motion | Comment | Link |
 |-------------------------|-----------|--------|--------|---------|------|
 | 8BitDo Ultimate 2C | Yes | Yes | No | Might be long to dectect (Up to 2min) - Might don't works with Dock (See [#78](https://github.com/o0Zz/sys-con/issues/78)) | - |
-| 8bitdo Ultimate 2C Wireless Dongle | Yes | No | No | - | - |
+| 8bitdo Ultimate 2C Wireless Dongle | Yes | No | No | XInput mode: once the controller is linked, the dongle enumerates as 2dc8-310a (same as the cable) and works with the built-in xbox360 profile, docked and handheld with an OTG adapter (sys-con 2.0.0, HOS 23.0.0). While no controller is linked it shows up as 2dc8-301c "IDLE". | [#93](https://github.com/o0Zz/sys-con/issues/93) |
 | 8BitDo Wireless Bluetooth USB Adapter 2 | Yes | No | No | You need to use Dinput mode. See "Manual setting" in https://support.8bitdo.com/Manual/USB-Adapter-2/xbox-switch.html | - |
 | 8BitDo Ultimate C 2.4g Wireless Controller  | No | - | - | Not detected: [#21](https://github.com/o0Zz/sys-con/issues/21) | - |
 | 8BitDo Ultimate 2.4g Wireless Controller  | Yes | No | No | You need to use Dinput mode. Controller has a physical switch [#91](https://github.com/o0Zz/sys-con/issues/91) | - |
