@@ -40,6 +40,10 @@ namespace controllerlib
                 return "UsbEndpointOpen";
             case Status::InvalidIndex:
                 return "InvalidIndex";
+            case Status::HidIsNotKeyboard:
+                return "HidIsNotKeyboard";
+            case Status::HidIsNotMouse:
+                return "HidIsNotMouse";
             case Status::UnknownError:
                 return "UnknownError";
         }

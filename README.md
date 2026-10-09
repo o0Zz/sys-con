@@ -57,7 +57,7 @@ Reboot the Nintendo Switch.
 - [x] Network controller over UDP, for scripted input during testing (off by default)
 - [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
 - [x] Motion controls (for drivers that report it: Switch Pro, SInput, Steam Controller 2026, network controller)
-- [x] USB keyboard / mouse (boot protocol, experimental)
+- [x] USB keyboard / mouse
 
 ## Supported controller
 - [x] All PC Controllers
@@ -296,16 +296,18 @@ not in `config.ini` yet.
 Rumble is only delivered to the pad in `mode=mitm`.
 
 ## Keyboard and mouse (experimental)
-A USB keyboard or mouse whose interface advertises the HID boot protocol is switched to it and
-published to the console as a keyboard or mouse (not as a pad), in both modes. Games and applets
-that read a keyboard or mouse see it; nothing needs to be configured.
+A USB keyboard or mouse whose interface advertises the HID boot subclass is read in the HID
+report protocol, decoded through its own report descriptor, and published to the console as a
+keyboard or mouse (not as a pad), in both modes. Games and applets that read a keyboard or mouse
+see it; nothing needs to be configured. Home Menu and System Settings read neither, so the
+software keyboard is the place to check a keyboard; the console never draws a mouse pointer.
 
-- Keyboards report at most 6 keys at once (boot protocol). Caps/Num/Scroll lock state is tracked
-  by sys-con; the keyboard's own LEDs are not updated.
-- Mice report 3 buttons plus back/forward and the wheel. The cursor position is kept inside the
-  1280x720 screen.
-- A device whose `[VID-PID]` names a `driver=` (Steam controllers, for example) keeps its boot
-  interfaces for the pad.
+- Keyboards report at most 6 keys at once (plus modifiers). Caps/Num/Scroll lock state is
+  tracked by sys-con; the keyboard's own LEDs are not updated.
+- Mice report up to 5 buttons (left, right, middle, back, forward) and the wheel when the
+  device has one. The cursor position is kept inside the 1280x720 screen.
+- A device whose `[VID-PID]` names a `driver=` (Steam controllers, for example) keeps its keyboard
+  and mouse interfaces for the pad.
 - Requires `discovery_mode=0`, or the device's VID listed in `discovery_vidpid`.
 
 ## Network controller (for testing)

@@ -104,6 +104,7 @@ unset(_controllerlib_hdi_default)
 # not re-run CMake when a file is added, so a new driver silently fails to build until
 # someone reconfigures by hand.
 set(SRC_FILES
+    HidKeyboardMouse.cpp
     Status.cpp
     drivers/BaseController.cpp
     drivers/Dualshock3Controller.cpp
@@ -122,6 +123,7 @@ set(SRC_FILES
 # Listed only so they show up in IDE project trees.
 set(HEADER_FILES
     AnalogAxis.h
+    HidKeyboardMouse.h
     EnumArray.h
     GamepadButton.h
     PinId.h

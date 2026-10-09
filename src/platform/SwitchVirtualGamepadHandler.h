@@ -2,6 +2,7 @@
 #include <switch.h>
 #include "IController.h"
 #include "SwitchPadState.h"
+#include "SwitchDeviceHandler.h"
 
 class SwitchVirtualGamepadHandlerData
 {
@@ -12,7 +13,7 @@ public:
 };
 
 // Base class for SwitchHDLHandler (hiddbg) and SwitchMITMHandler (mitm).
-class SwitchVirtualGamepadHandler
+class SwitchVirtualGamepadHandler : public SwitchDeviceHandler
 {
     friend void SwitchVirtualGamepadHandlerThreadFunc(void *arg);
 
@@ -27,7 +28,6 @@ protected:
     alignas(0x1000) u8 thread_stack[0x2000];
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
-    bool m_removable = true; // see SetRemovable()
 
     // Describes the pad to hiddbg. Both handlers create their devices through it, so the
     // description is built once here from the controller's config.
@@ -43,9 +43,9 @@ protected:
 public:
     // thread_priority (0x00~0x3F); 0x2C is the usual priority of the main thread, 0x3B is a special priority on cores 0..2 that enables preemptive multithreading (0x3F on core 3).
     SwitchVirtualGamepadHandler(std::unique_ptr<controllerlib::IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority = 0x30);
-    virtual ~SwitchVirtualGamepadHandler();
+    ~SwitchVirtualGamepadHandler() override;
 
-    virtual Result Initialize();
+    Result Initialize() override;
     virtual void Exit();
 
     Result InitThread();
@@ -60,7 +60,5 @@ public:
     static u8 ControllerTypeToDeviceType(controllerlib::ControllerType type);
 
     inline controllerlib::IController *GetController() { return m_controller.get(); }
-
-    inline void SetRemovable(bool removable) { m_removable = removable; }
-    inline bool IsRemovable() const { return m_removable; }
+    controllerlib::IUSBDevice *GetDevice() override { return m_controller->GetDevice(); }
 };

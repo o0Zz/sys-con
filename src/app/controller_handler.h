@@ -9,8 +9,10 @@ namespace syscon::controllers
 
     // removable=false keeps RemoveAllNonPlugged() away from the handler, for a controller that
     // did not come from USB and so has no usbHs interface to be found among the plugged ones.
-    // See SwitchVirtualGamepadHandler::SetRemovable.
+    // See SwitchDeviceHandler::SetRemovable.
     Result Insert(std::unique_ptr<controllerlib::IController> &&controllerPtr, bool removable = true);
+    Result InsertKeyboard(std::unique_ptr<controllerlib::IUSBDevice> &&device);
+    Result InsertMouse(std::unique_ptr<controllerlib::IUSBDevice> &&device);
     void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged);
 
     void SetPollingParameters(int32_t _polling_timeout_ms, s8 _thread_priority);

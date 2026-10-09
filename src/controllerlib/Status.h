@@ -30,6 +30,8 @@ namespace controllerlib
         Timeout = 115,
         UsbEndpointOpen = 116,
         InvalidIndex = 117,
+        HidIsNotKeyboard = 118,
+        HidIsNotMouse = 119,
         UnknownError = 255,
     };
 

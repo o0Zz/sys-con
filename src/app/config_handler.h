@@ -101,4 +101,7 @@ namespace syscon::config
 
     int LoadControllerConfig(const std::string &configFullPath, controllerlib::ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile);
 
+    // The driver= that [VID-PID] (or its profile) names, without adding the device to the file.
+    std::string FindControllerDriver(const std::string &configFullPath, uint16_t vendor_id, uint16_t product_id);
+
 }; // namespace syscon::config

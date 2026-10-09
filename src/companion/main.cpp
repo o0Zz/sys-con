@@ -46,6 +46,54 @@ std::string buttonToStr(u64 ButtonMask)
     return buttonStr;
 }
 
+std::string mouseButtonToStr(u32 ButtonMask)
+{
+    std::string buttonStr;
+
+    if (ButtonMask & HidMouseButton_Left)
+        buttonStr += "Left ";
+    if (ButtonMask & HidMouseButton_Right)
+        buttonStr += "Right ";
+    if (ButtonMask & HidMouseButton_Middle)
+        buttonStr += "Middle ";
+    if (ButtonMask & HidMouseButton_Back)
+        buttonStr += "Back ";
+    if (ButtonMask & HidMouseButton_Forward)
+        buttonStr += "Forward ";
+
+    buttonStr.erase(buttonStr.find_last_not_of(' ') + 1);
+
+    return buttonStr;
+}
+
+std::string heldKeysToStr(const HidKeyboardState &state)
+{
+    std::string keysStr;
+    char usage[8];
+
+    for (int key = 0; key < 256; key++)
+    {
+        if (hidKeyboardStateGetKey(&state, static_cast<HidKeyboardKey>(key)))
+        {
+            snprintf(usage, sizeof(usage), "%02X ", key);
+            keysStr += usage;
+        }
+    }
+
+    keysStr.erase(keysStr.find_last_not_of(' ') + 1);
+
+    return keysStr;
+}
+
+// Key-down edges since launch: a key pressed twice must count twice.
+int countKeyDowns(const HidKeyboardState &previous, const HidKeyboardState &current)
+{
+    int downs = 0;
+    for (int i = 0; i < 4; i++)
+        downs += __builtin_popcountll(current.keys[i] & ~previous.keys[i]);
+    return downs;
+}
+
 int main()
 {
     char outputBuffer[256];
@@ -64,6 +112,14 @@ int main()
 
     hidSetNpadHandheldActivationMode(HidNpadHandheldActivationMode_Single);
 
+    hidInitializeMouse();
+    hidInitializeKeyboard();
+
+    HidKeyboardState previousKeyboard{};
+    int keyDowns = 0;
+    int pointerRow = 0;
+    int pointerColumn = 0;
+
     if (R_FAILED(hidInitializeVibrationDevices(&vibrationDeviceHandle, 1, HidNpadIdType_No1, HidNpadStyleTag_NpadFullKey)))
         printf("ERR: hidInitializeVibrationDevices failed !\n");
 
@@ -81,6 +137,7 @@ int main()
     printf("Press + to increase vibration (On controller No1)\n");
     printf("Press - to decrease vibration (On controller No1)\n");
     printf("Press + and - to exit\n");
+    printf("USB mouse: X is the pointer below (# while a button is held)\n");
     printf("\n");
 
     while (appletMainLoop())
@@ -115,6 +172,39 @@ int main()
                  sixAxis.angle.x, sixAxis.angle.y, sixAxis.angle.z);
         outputBuffer[console->consoleWidth] = '\0';
         printf("\x1b[8;1H%s", outputBuffer);
+
+        HidMouseState mouse{};
+        hidGetMouseStates(&mouse, 1);
+        snprintf(outputBuffer, sizeof(outputBuffer), "Mouse: %s Pos [%04d, %04d] Delta [%+04d, %+04d] Wheel [%+04d] Button: [%s]                              ",
+                 (mouse.attributes & HidMouseAttribute_IsConnected) ? "Connected" : "Disconnected",
+                 mouse.x, mouse.y,
+                 mouse.delta_x, mouse.delta_y,
+                 mouse.wheel_delta_x,
+                 mouseButtonToStr(mouse.buttons).c_str());
+        outputBuffer[console->consoleWidth] = '\0';
+        printf("\x1b[10;1H%s", outputBuffer);
+
+        HidKeyboardState keyboard{};
+        hidGetKeyboardStates(&keyboard, 1);
+        keyDowns += countKeyDowns(previousKeyboard, keyboard);
+        previousKeyboard = keyboard;
+        // The upper half of the modifiers word is hid's keyboard attribute; bit 0 is IsConnected.
+        snprintf(outputBuffer, sizeof(outputBuffer), "Keyboard: %s Modifiers [%04X] Key downs [%d] Held: [%s]                              ",
+                 ((keyboard.modifiers >> 32) & 1) ? "Connected" : "Disconnected",
+                 (u32)keyboard.modifiers,
+                 keyDowns,
+                 heldKeysToStr(keyboard).c_str());
+        outputBuffer[console->consoleWidth] = '\0';
+        printf("\x1b[11;1H%s", outputBuffer);
+
+        constexpr int PointerFirstRow = 13;
+        const int row = PointerFirstRow + std::clamp(mouse.y, 0, 719) * (console->consoleHeight - PointerFirstRow) / 720;
+        const int column = 1 + std::clamp(mouse.x, 0, 1279) * console->consoleWidth / 1280;
+        if (pointerRow != 0 && (row != pointerRow || column != pointerColumn))
+            printf("\x1b[%d;%dH ", pointerRow, pointerColumn);
+        printf("\x1b[%d;%dH%c", row, column, mouse.buttons ? '#' : 'X');
+        pointerRow = row;
+        pointerColumn = column;
 
         if (buttonDown & HidNpadButton_Plus)
             current_vibration = std::min(current_vibration + 0.1, 1.0);

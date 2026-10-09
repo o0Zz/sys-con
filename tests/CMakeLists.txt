@@ -16,6 +16,7 @@ FetchContent_MakeAvailable(googletest_1_15_0)
 enable_testing()
 
 set(TEST_FILES
+    core/test_hid_keyboard_mouse.cpp
     core/test_deadzone.cpp
     core/test_input_binding.cpp
     core/test_normalize.cpp

@@ -5,6 +5,7 @@
 // runtime from the config `mode` (see SetMode / g_mode below).
 #include "SwitchMITMHandler.h"
 #include "SwitchHDLHandler.h"
+#include "SwitchKeyboardMouseHandler.h"
 
 #include "SwitchUSBInterface.h"
 #include <mutex>
@@ -18,12 +19,27 @@ namespace syscon::controllers
     namespace
     {
         constexpr size_t MaxControllerHandlersSize = 10;
-        std::vector<std::unique_ptr<SwitchVirtualGamepadHandler>> controllerHandlers;
+        std::vector<std::unique_ptr<SwitchDeviceHandler>> controllerHandlers;
         std::mutex controllerMutex;
         int32_t polling_timeout_ms = 0;
         int8_t polling_thread_priority = 0x30;
         config::VirtualPadMode virtual_pad_mode = config::VirtualPadMode::HIDDBG;
 
+        Result Add(std::unique_ptr<SwitchDeviceHandler> &&handler)
+        {
+            Result rc = handler->Initialize();
+            if (R_FAILED(rc))
+            {
+                syscon::logger::LogError("Controller[%04x-%04x] Failed to initialize controller: Error: 0x%X (Module: 0x%X, Desc: 0x%X)", handler->GetDevice()->GetVendor(), handler->GetDevice()->GetProduct(), rc, R_MODULE(rc), R_DESCRIPTION(rc));
+                return rc;
+            }
+
+            syscon::logger::LogInfo("Controller[%04x-%04x] plugged !", handler->GetDevice()->GetVendor(), handler->GetDevice()->GetProduct());
+
+            std::lock_guard<std::mutex> scoped_lock(controllerMutex);
+            controllerHandlers.push_back(std::move(handler));
+            return 0;
+        }
     } // namespace
 
     bool IsAtControllerLimit()
@@ -42,20 +58,17 @@ namespace syscon::controllers
 
         switchHandler->SetRemovable(removable);
 
-        Result rc = switchHandler->Initialize();
-        if (R_SUCCEEDED(rc))
-        {
-            syscon::logger::LogInfo("Controller[%04x-%04x] plugged !", switchHandler->GetController()->GetDevice()->GetVendor(), switchHandler->GetController()->GetDevice()->GetProduct());
+        return Add(std::move(switchHandler));
+    }
 
-            std::lock_guard<std::mutex> scoped_lock(controllerMutex);
-            controllerHandlers.push_back(std::move(switchHandler));
-        }
-        else
-        {
-            syscon::logger::LogError("Controller[%04x-%04x] Failed to initialize controller: Error: 0x%X (Module: 0x%X, Desc: 0x%X)", switchHandler->GetController()->GetDevice()->GetVendor(), switchHandler->GetController()->GetDevice()->GetProduct(), rc, R_MODULE(rc), R_DESCRIPTION(rc));
-        }
+    Result InsertKeyboard(std::unique_ptr<IUSBDevice> &&device)
+    {
+        return Add(std::make_unique<SwitchKeyboardHandler>(std::move(device), polling_timeout_ms, polling_thread_priority));
+    }
 
-        return rc;
+    Result InsertMouse(std::unique_ptr<IUSBDevice> &&device)
+    {
+        return Add(std::make_unique<SwitchMouseHandler>(std::move(device), polling_timeout_ms, polling_thread_priority));
     }
 
     void RemoveAllNonPlugged(const std::vector<s32> &interfaceIDsPlugged)
@@ -65,7 +78,7 @@ namespace syscon::controllers
             run while controllerMutex is held. Move the unplugged handlers into this local
             vector under the lock and let it destroy them once the lock is released.
         */
-        std::vector<std::unique_ptr<SwitchVirtualGamepadHandler>> unpluggedHandlers;
+        std::vector<std::unique_ptr<SwitchDeviceHandler>> unpluggedHandlers;
 
         {
             std::lock_guard<std::mutex> scoped_lock(controllerMutex);
@@ -80,7 +93,7 @@ namespace syscon::controllers
 
                 bool found = false;
 
-                for (auto &&ptr : (*it)->GetController()->GetDevice()->GetInterfaces())
+                for (auto &&ptr : (*it)->GetDevice()->GetInterfaces())
                 {
                     for (auto &&interfaceID : interfaceIDsPlugged)
                     {
@@ -100,7 +113,7 @@ namespace syscon::controllers
                     continue;
                 }
 
-                syscon::logger::LogInfo("Controller[%04x-%04x] unplugged !", (*it)->GetController()->GetDevice()->GetVendor(), (*it)->GetController()->GetDevice()->GetProduct());
+                syscon::logger::LogInfo("Controller[%04x-%04x] unplugged !", (*it)->GetDevice()->GetVendor(), (*it)->GetDevice()->GetProduct());
 
                 unpluggedHandlers.push_back(std::move(*it));
                 it = controllerHandlers.erase(it);

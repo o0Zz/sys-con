@@ -2,6 +2,7 @@
 #include "usb_module.h"
 #include "controller_handler.h"
 #include "Controllers.h"
+#include "HidKeyboardMouse.h"
 
 #include "SwitchUSBDevice.h"
 #include "SwitchUSBLock.h"
@@ -45,18 +46,36 @@ namespace syscon::usb
 
         constexpr u16 InterfaceClassSubClassProtocol = UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass | UsbHsInterfaceFilterFlags_bInterfaceProtocol;
 
+        enum class DeviceKind
+        {
+            Gamepad,
+            Keyboard,
+            Mouse,
+        };
+
         // Probed in order; the first match decides the profile the config falls back to.
+        // Keyboards and mice come before the HID catch-all so it never turns one into a pad.
         constexpr struct
         {
             UsbHsInterfaceFilter filter;
+            DeviceKind kind;
             const char *default_profile;
         } ProbedInterfaces[] = {
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x01}, "xbox360"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, "xbox360w"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, "xboxone"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = 0x58, .bInterfaceSubClass = 0x42, .bInterfaceProtocol = 0x00}, "xbox"},
-            {{.Flags = UsbHsInterfaceFilterFlags_bInterfaceClass, .bInterfaceClass = USB_CLASS_HID}, ""},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x01}, DeviceKind::Gamepad, "xbox360"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, DeviceKind::Gamepad, "xbox360w"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, DeviceKind::Gamepad, "xboxone"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = 0x58, .bInterfaceSubClass = 0x42, .bInterfaceProtocol = 0x00}, DeviceKind::Gamepad, "xbox"},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = HidSubclassBoot, .bInterfaceProtocol = HidProtocolKeyboard}, DeviceKind::Keyboard, ""},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = HidSubclassBoot, .bInterfaceProtocol = HidProtocolMouse}, DeviceKind::Mouse, ""},
+            {{.Flags = UsbHsInterfaceFilterFlags_bInterfaceClass, .bInterfaceClass = USB_CLASS_HID}, DeviceKind::Gamepad, ""},
         };
+
+        // A pad with a dedicated driver may expose boot keyboard/mouse interfaces of its own
+        // (Steam controllers do); those stay with the pad.
+        bool BelongsToDedicatedDriver(const UsbHsInterface &interface)
+        {
+            return !::syscon::config::FindControllerDriver(CONFIG_FULLPATH, interface.device_desc.idVendor, interface.device_desc.idProduct).empty();
+        }
 
         template <typename T>
         std::unique_ptr<IController> MakeController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
@@ -112,12 +131,17 @@ namespace syscon::usb
                     SwitchUSBLock usbLock;
 
                     s32 total_entries = 0;
+                    DeviceKind kind = DeviceKind::Gamepad;
                     std::string default_profile;
                     for (const auto &probe : ProbedInterfaces)
                     {
                         total_entries = QueryAvailableInterfaces(interfaces, sizeof(interfaces), probe.filter);
+                        if (total_entries > 0 && probe.kind != DeviceKind::Gamepad && BelongsToDedicatedDriver(interfaces[0]))
+                            total_entries = 0;
+
                         if (total_entries > 0)
                         {
+                            kind = probe.kind;
                             default_profile = probe.default_profile;
                             break;
                         }
@@ -142,6 +166,20 @@ namespace syscon::usb
                                                 interface->device_desc.bDeviceSubClass,
                                                 interface->device_desc.bDeviceProtocol,
                                                 interface->device_desc.bcdDevice);
+
+                        if (kind == DeviceKind::Keyboard)
+                        {
+                            syscon::logger::LogInfo("Initializing keyboard ...");
+                            controllers::InsertKeyboard(std::make_unique<SwitchUSBDevice>(interfaces, 1));
+                            continue;
+                        }
+
+                        if (kind == DeviceKind::Mouse)
+                        {
+                            syscon::logger::LogInfo("Initializing mouse ...");
+                            controllers::InsertMouse(std::make_unique<SwitchUSBDevice>(interfaces, 1));
+                            continue;
+                        }
 
                         ControllerConfig config;
                         ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, interface->device_desc.idVendor, interface->device_desc.idProduct, g_auto_add_controller, default_profile);

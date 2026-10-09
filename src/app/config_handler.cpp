@@ -620,7 +620,7 @@ namespace syscon::config
         return 0;
     }
 
-    int LoadControllerConfig(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile)
+    static int LoadControllerLayers(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile)
     {
         ControllerVidPid controllerVidPid(vendor_id, product_id);
         ConfigINIData cfg_default("default", config);
@@ -674,11 +674,30 @@ namespace syscon::config
                 return rc;
         }
 
+        return 0;
+    }
+
+    int LoadControllerConfig(const std::string &configFullPath, ControllerConfig *config, uint16_t vendor_id, uint16_t product_id, bool auto_add_controller, const std::string &default_profile)
+    {
+        int rc = LoadControllerLayers(configFullPath, config, vendor_id, product_id, auto_add_controller, default_profile);
+        if (rc)
+            return rc;
+
         if (config->buttonsPin[GamepadButton::B][0] == 0 && config->buttonsPin[GamepadButton::A][0] == 0 && config->buttonsPin[GamepadButton::Y][0] == 0 && config->buttonsPin[GamepadButton::X][0] == 0)
             syscon::logger::LogError("No buttons configured for this controller [%04x-%04x] - Stick might works but buttons will not work (https://github.com/o0Zz/sys-con/blob/master/doc/Troubleshooting.md)", vendor_id, product_id);
         else
             syscon::logger::LogInfo("Controller successfully loaded (B=%d, A=%d, Y=%d, X=%d, ...) !", config->buttonsPin[GamepadButton::B][0], config->buttonsPin[GamepadButton::A][0], config->buttonsPin[GamepadButton::Y][0], config->buttonsPin[GamepadButton::X][0]);
 
         return 0;
+    }
+
+    std::string FindControllerDriver(const std::string &configFullPath, uint16_t vendor_id, uint16_t product_id)
+    {
+        ControllerConfig config;
+        int rc = LoadControllerLayers(configFullPath, &config, vendor_id, product_id, false, "");
+        if (rc)
+            syscon::logger::LogError("Unable to load the configuration of [%04x-%04x] (Error: %d) !", vendor_id, product_id, rc);
+
+        return config.driver;
     }
 } // namespace syscon::config
