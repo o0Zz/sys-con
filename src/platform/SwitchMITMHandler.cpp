@@ -144,6 +144,10 @@ bool SwitchMITMHandler::IsControllerAttached(uint16_t input_idx)
     if (m_hdlsHandle[input_idx].handle == 0)
         return false;
 
+    // A Joy-Con claims no slot; hid dropping it surfaces as hiddbgSetHdlsState failing.
+    if (m_controllerList[input_idx] == nullptr)
+        return true;
+
     const uint8_t player_idx = m_controllerList[input_idx]->GetPlayerIndex();
     if (!HidSharedMemoryManager::GetHidSharedMemoryManager().IsPlayerIndexRetired(player_idx) && hidGetNpadStyleSet(static_cast<HidNpadIdType>(player_idx)) != 0)
         return true;
@@ -195,9 +199,29 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
         return 0;
 
     HiddbgHdlsDeviceInfo deviceInfo;
-    BuildHdlsDeviceInfo(&deviceInfo);
+    BuildHdlsDeviceInfo(&deviceInfo, input_idx);
 
     std::unique_lock<std::mutex> attach_lock(g_attach_mutex);
+
+    /*
+        A sideways Joy-Con stays a plain hiddbg device that hid owns outright: the fake shared
+        memory only ever publishes FullKey, and hid alone can make it the single Joy-Con the
+        game asked for. It still takes the attach lock, or its npad appearing would make a
+        concurrent Pro attach's slot ambiguous.
+    */
+    if (IsAttachingAsJoyCon(input_idx))
+    {
+        Result rc = hiddbgAttachHdlsVirtualDevice(&m_hdlsHandle[input_idx], &deviceInfo);
+        if (R_FAILED(rc))
+        {
+            syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] Failed to create the Joy-Con for input: %d (Error: 0x%08X) !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc);
+            m_hdlsHandle[input_idx].handle = 0;
+            return rc;
+        }
+
+        syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] Created a sideways Joy-Con for input: %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+        return 0;
+    }
 
     const u32 npad_mask_before = GetRealNpadMask();
 
@@ -253,6 +277,23 @@ Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uin
         }
     }
 
+    if (m_controllerList[input_idx] == nullptr)
+    {
+        HiddbgHdlsState hdls_state{};
+        hdls_state.battery_level = 4;
+        hdls_state.buttons = state.buttons;
+        hdls_state.analog_stick_l = state.analog_stick_l;
+        hdls_state.analog_stick_r = state.analog_stick_r;
+
+        Result rc = hiddbgSetHdlsState(m_hdlsHandle[input_idx], &hdls_state);
+        if (R_FAILED(rc))
+        {
+            syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the Joy-Con on input: %d (Error: 0x%08X)", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc);
+            ReleaseController(input_idx);
+        }
+        return 0;
+    }
+
     /*
         Home and Capture only exist as hiddbg HDLS bits; in npad shared memory the same bits
         are the StickLRight/StickLDown pseudo-buttons. They go to the hiddbg device instead,
@@ -292,7 +333,7 @@ Result SwitchMITMHandler::UpdateOutput()
     const uint16_t input_count = std::min<uint16_t>(m_controller->GetInputCount(), CONTROLLER_MAX_INPUTS);
     for (uint16_t input_idx = 0; input_idx < input_count; input_idx++)
     {
-        if (!IsControllerAttached(input_idx))
+        if (!IsControllerAttached(input_idx) || m_controllerList[input_idx] == nullptr)
             continue;
 
         const controllerlib::RumbleValue rumble = m_controllerList[input_idx]->GetRumble();
