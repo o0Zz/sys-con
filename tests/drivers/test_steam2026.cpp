@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 
 #include <cstring>
+#include <thread>
 
 #include "drivers/SteamController2026.h"
 #include "mocks/Device.h"
