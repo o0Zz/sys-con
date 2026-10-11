@@ -2,6 +2,7 @@
 
 #include "logger.h"
 #include "ini.h"
+#include <algorithm>
 
 #include <array>
 #include <cctype>
@@ -683,7 +684,7 @@ namespace syscon::config
         if (rc)
             return rc;
 
-        if (config->buttonsPin[GamepadButton::B][0] == 0 && config->buttonsPin[GamepadButton::A][0] == 0 && config->buttonsPin[GamepadButton::Y][0] == 0 && config->buttonsPin[GamepadButton::X][0] == 0)
+        if (std::none_of(AllDigitalButtons.begin(), AllDigitalButtons.end(), [config](GamepadButton button) { return config->buttonsPin[button][0] != 0; }))
             syscon::logger::LogError("No buttons configured for this controller [%04x-%04x] - Stick might works but buttons will not work (https://github.com/o0Zz/sys-con/blob/master/doc/Troubleshooting.md)", vendor_id, product_id);
         else
             syscon::logger::LogInfo("Controller successfully loaded (B=%d, A=%d, Y=%d, X=%d, ...) !", config->buttonsPin[GamepadButton::B][0], config->buttonsPin[GamepadButton::A][0], config->buttonsPin[GamepadButton::Y][0], config->buttonsPin[GamepadButton::X][0]);
