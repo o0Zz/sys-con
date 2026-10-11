@@ -117,7 +117,7 @@ namespace syscon
         }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
-        ::syscon::usb::Initialize(globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
+        ::syscon::usb::Initialize(fileManager, globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
         ::syscon::networkpad::Initialize(globalConfig);
 
         ::syscon::logger::LogDebug("Initializing power supply management ...");

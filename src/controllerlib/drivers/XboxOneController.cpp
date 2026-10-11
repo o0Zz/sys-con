@@ -145,6 +145,34 @@ namespace controllerlib
         return SendInitBytes(0);
     }
 
+    void XboxOneController::DecodeInput(const XboxOneButtonData &report, RawInputData *rawData)
+    {
+        rawData->buttons[1] = report.button1;
+        rawData->buttons[2] = report.button2;
+        rawData->buttons[3] = report.button3;
+        rawData->buttons[4] = report.button4;
+        rawData->buttons[5] = report.button5;
+        rawData->buttons[6] = report.button6;
+        rawData->buttons[7] = report.button7;
+        rawData->buttons[8] = report.button8;
+        rawData->buttons[9] = report.button9;
+        rawData->buttons[10] = report.button10;
+        rawData->buttons[11] = report.button11;
+
+        rawData->analog[AnalogAxis::Rx] = BaseController::Normalize(report.trigger_left, 0, 1023);
+        rawData->analog[AnalogAxis::Ry] = BaseController::Normalize(report.trigger_right, 0, 1023);
+
+        rawData->analog[AnalogAxis::X] = BaseController::Normalize(report.stick_left_x, -32768, 32767);
+        rawData->analog[AnalogAxis::Y] = BaseController::Normalize(-report.stick_left_y, -32768, 32767);
+        rawData->analog[AnalogAxis::Z] = BaseController::Normalize(report.stick_right_x, -32768, 32767);
+        rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(-report.stick_right_y, -32768, 32767);
+
+        rawData->buttons[DPAD_UP_BUTTON_ID] = report.dpad_up;
+        rawData->buttons[DPAD_RIGHT_BUTTON_ID] = report.dpad_right;
+        rawData->buttons[DPAD_DOWN_BUTTON_ID] = report.dpad_down;
+        rawData->buttons[DPAD_LEFT_BUTTON_ID] = report.dpad_left;
+    }
+
     Status XboxOneController::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
     {
         (void)input_idx;
@@ -163,30 +191,7 @@ namespace controllerlib
                 return Status::UnexpectedData;
             }
 
-            m_rawInput.buttons[1] = buttonData->button1;
-            m_rawInput.buttons[2] = buttonData->button2;
-            m_rawInput.buttons[3] = buttonData->button3;
-            m_rawInput.buttons[4] = buttonData->button4;
-            m_rawInput.buttons[5] = buttonData->button5;
-            m_rawInput.buttons[6] = buttonData->button6;
-            m_rawInput.buttons[7] = buttonData->button7;
-            m_rawInput.buttons[8] = buttonData->button8;
-            m_rawInput.buttons[9] = buttonData->button9;
-            m_rawInput.buttons[10] = buttonData->button10;
-            m_rawInput.buttons[11] = buttonData->button11;
-
-            m_rawInput.analog[AnalogAxis::Rx] = BaseController::Normalize(buttonData->trigger_left, 0, 1023);
-            m_rawInput.analog[AnalogAxis::Ry] = BaseController::Normalize(buttonData->trigger_right, 0, 1023);
-
-            m_rawInput.analog[AnalogAxis::X] = BaseController::Normalize(buttonData->stick_left_x, -32768, 32767);
-            m_rawInput.analog[AnalogAxis::Y] = BaseController::Normalize(-buttonData->stick_left_y, -32768, 32767);
-            m_rawInput.analog[AnalogAxis::Z] = BaseController::Normalize(buttonData->stick_right_x, -32768, 32767);
-            m_rawInput.analog[AnalogAxis::Rz] = BaseController::Normalize(-buttonData->stick_right_y, -32768, 32767);
-
-            m_rawInput.buttons[DPAD_UP_BUTTON_ID] = buttonData->dpad_up;
-            m_rawInput.buttons[DPAD_RIGHT_BUTTON_ID] = buttonData->dpad_right;
-            m_rawInput.buttons[DPAD_DOWN_BUTTON_ID] = buttonData->dpad_down;
-            m_rawInput.buttons[DPAD_LEFT_BUTTON_ID] = buttonData->dpad_left;
+            DecodeInput(*buttonData, &m_rawInput);
 
             *rawData = m_rawInput;
 

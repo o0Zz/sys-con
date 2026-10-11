@@ -4,6 +4,7 @@
 #include "drivers/Xbox360WirelessController.h"
 #include "drivers/XboxController.h"
 #include "drivers/XboxOneController.h"
+#include "drivers/XboxWirelessAdapter.h"
 #include "drivers/Dualshock3Controller.h"
 #include "drivers/SwitchController.h"
 #include "drivers/WiiController.h"

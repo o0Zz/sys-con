@@ -51,6 +51,9 @@ namespace controllerlib
         Status WriteAckModeReport(uint16_t input_idx, uint8_t sequence);
 
     public:
+        // Decodes a GIP input report (command 0x20) into pins 1-11, the D-pad and the analog axes.
+        static void DecodeInput(const XboxOneButtonData &report, RawInputData *rawData);
+
         XboxOneController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);
         virtual ~XboxOneController() override;
 

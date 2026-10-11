@@ -36,6 +36,10 @@ namespace syscon::usb
         bool is_usb_event_thread_running = false;
         bool is_usb_interface_change_thread_running = false;
         bool g_auto_add_controller = false;
+        IFileManager *g_file_manager = nullptr;
+
+        // Interfaces whose driver failed in a way a retry cannot fix; they stay ignored until replugged.
+        std::vector<s32> g_rejected_interface_ids;
 
         Event g_usbEvent[MaxUsbEvents] = {};
         Waiter g_usbWaiters[MaxUsbEvents] = {};
@@ -45,6 +49,8 @@ namespace syscon::usb
         s32 QueryAvailableInterfaces(UsbHsInterface *interfaces, size_t interfaces_maxsize, const UsbHsInterfaceFilter &filter);
 
         constexpr u16 InterfaceClassSubClassProtocol = UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass | UsbHsInterfaceFilterFlags_bInterfaceProtocol;
+
+        constexpr u16 InterfaceVidPid = UsbHsInterfaceFilterFlags_idVendor | UsbHsInterfaceFilterFlags_idProduct;
 
         enum class DeviceKind
         {
@@ -61,6 +67,8 @@ namespace syscon::usb
             DeviceKind kind;
             const char *default_profile;
         } ProbedInterfaces[] = {
+            {{.Flags = InterfaceVidPid, .idVendor = 0x045e, .idProduct = 0x02e6}, DeviceKind::Gamepad, "xboxadapter"},
+            {{.Flags = InterfaceVidPid, .idVendor = 0x045e, .idProduct = 0x02fe}, DeviceKind::Gamepad, "xboxadapter"},
             {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x01}, DeviceKind::Gamepad, "xbox360"},
             {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, DeviceKind::Gamepad, "xbox360w"},
             {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, DeviceKind::Gamepad, "xboxone"},
@@ -83,22 +91,57 @@ namespace syscon::usb
             return std::make_unique<T>(std::move(device), config, std::make_unique<syscon::logger::Logger>());
         }
 
+        constexpr const char *XboxAdapterFirmwarePath = CONFIG_PATH "xbox_adapter_firmware.bin";
+
+        class FileFirmwareSource final : public IFirmwareSource
+        {
+        public:
+            explicit FileFirmwareSource(std::unique_ptr<IFile> &&file) : m_file(std::move(file)) {}
+
+            size_t Read(uint8_t *buffer, size_t size) override { return m_file->read(buffer, size); }
+
+        private:
+            std::unique_ptr<IFile> m_file;
+        };
+
+        std::unique_ptr<IController> MakeXboxWirelessAdapter(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
+        {
+            std::unique_ptr<IFile> firmware = g_file_manager->open(XboxAdapterFirmwarePath, OpenFlags_Read);
+            if (!firmware)
+            {
+                syscon::logger::LogError("Xbox Wireless Adapter: firmware not found at '%s' - copy FW_ACC_00U.bin from Microsoft's driver package there and rename it", XboxAdapterFirmwarePath);
+                return nullptr;
+            }
+
+            syscon::logger::LogInfo("Xbox Wireless Adapter: firmware '%s' (%d bytes)", XboxAdapterFirmwarePath, static_cast<int>(g_file_manager->file_size(XboxAdapterFirmwarePath)));
+            return std::make_unique<XboxWirelessAdapter>(std::move(device), config, std::make_unique<syscon::logger::Logger>(), std::make_unique<FileFirmwareSource>(std::move(firmware)));
+        }
+
+        bool IsRejected(const UsbHsInterface &interface)
+        {
+            return std::find(g_rejected_interface_ids.begin(), g_rejected_interface_ids.end(), interface.inf.ID) != g_rejected_interface_ids.end();
+        }
+
         constexpr struct
         {
             const char *driver;
             const char *name;
             std::unique_ptr<IController> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
+            // Set when a failed start cannot succeed on retry and a retry is expensive: the adapter
+            // spends seconds uploading firmware, during which the USB stack is locked.
+            bool reject_on_failure;
         } Drivers[] = {
-            {"dualshock3", "Dualshock 3", MakeController<Dualshock3Controller>},
-            {"xbox360w", "Xbox 360 Wireless", MakeController<Xbox360WirelessController>},
-            {"xbox360", "Xbox 360", MakeController<Xbox360Controller>},
+            {"dualshock3", "Dualshock 3", MakeController<Dualshock3Controller>, false},
+            {"xbox360w", "Xbox 360 Wireless", MakeController<Xbox360WirelessController>, false},
+            {"xbox360", "Xbox 360", MakeController<Xbox360Controller>, false},
             /* One XboxOne controller exposes 2 interfaces, thus we have to take all of them */
-            {"xboxone", "Xbox One", MakeController<XboxOneController>},
-            {"xbox", "Xbox 1st gen", MakeController<XboxController>},
-            {"switch", "Switch", MakeController<SwitchController>},
-            {"wii", "Wii", MakeController<WiiController>},
-            {"sinput", "SInput", MakeController<SInputController>},
-            {"steam2026", "Steam Controller 2026", MakeController<SteamController2026>},
+            {"xboxone", "Xbox One", MakeController<XboxOneController>, false},
+            {"xboxadapter", "Xbox Wireless Adapter", MakeXboxWirelessAdapter, true},
+            {"xbox", "Xbox 1st gen", MakeController<XboxController>, false},
+            {"switch", "Switch", MakeController<SwitchController>, false},
+            {"wii", "Wii", MakeController<WiiController>, false},
+            {"sinput", "SInput", MakeController<SInputController>, false},
+            {"steam2026", "Steam Controller 2026", MakeController<SteamController2026>, false},
         };
 
         Result AddEvent(UsbHsInterfaceFilter *filter, const std::string &name);
@@ -136,6 +179,8 @@ namespace syscon::usb
                     for (const auto &probe : ProbedInterfaces)
                     {
                         total_entries = QueryAvailableInterfaces(interfaces, sizeof(interfaces), probe.filter);
+                        if (total_entries > 0 && IsRejected(interfaces[0]))
+                            total_entries = 0;
                         if (total_entries > 0 && probe.kind != DeviceKind::Gamepad && BelongsToDedicatedDriver(interfaces[0]))
                             total_entries = 0;
 
@@ -190,7 +235,13 @@ namespace syscon::usb
                         if (driver != std::end(Drivers))
                         {
                             syscon::logger::LogInfo("Initializing %s controller (Interface count: %d) ...", driver->name, total_entries);
-                            controllers::Insert(driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config));
+                            std::unique_ptr<IController> controller = driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config);
+                            Result rc = controller ? controllers::Insert(std::move(controller)) : syscon::ToHorizonResult(Status::OpenFailed);
+                            if (R_FAILED(rc) && driver->reject_on_failure)
+                            {
+                                syscon::logger::LogError("%s failed to start - ignoring it until it is replugged", driver->name);
+                                g_rejected_interface_ids.push_back(interface->inf.ID);
+                            }
                         }
                         else
                         {
@@ -284,8 +335,9 @@ namespace syscon::usb
 
     } // namespace
 
-    int Initialize(syscon::config::DiscoveryMode discovery_mode, std::vector<syscon::config::ControllerVidPid> &discovery_vidpid, bool auto_add_controller)
+    int Initialize(IFileManager &fileManager, syscon::config::DiscoveryMode discovery_mode, std::vector<syscon::config::ControllerVidPid> &discovery_vidpid, bool auto_add_controller)
     {
+        g_file_manager = &fileManager;
         g_auto_add_controller = auto_add_controller;
 
         syscon::logger::LogInfo("USB configuration: Discovery mode(%d), Auto add controller(%s)", discovery_mode, auto_add_controller ? "true" : "false");
