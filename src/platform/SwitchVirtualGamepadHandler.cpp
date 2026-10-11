@@ -33,6 +33,92 @@ namespace
         {GamepadButton::CAPTURE, HiddbgNpadButton_Capture},
         {GamepadButton::HOME, HiddbgNpadButton_Home},
     };
+
+    // Half the stick's travel, so a resting stick never turns L+R into a Joy-Con chord.
+    constexpr s32 ChordStickThreshold = JOYSTICK_MAX / 2;
+
+    // ZL+ZR counts too: pads that put their shoulder pair on ZL/ZR (fighting and NSO layouts) keep it.
+    bool HoldsReattachChord(const SwitchPadState &state)
+    {
+        return ((state.buttons & HidNpadButton_L) && (state.buttons & HidNpadButton_R)) ||
+               ((state.buttons & HidNpadButton_ZL) && (state.buttons & HidNpadButton_ZR));
+    }
+
+    /*
+        Holding Left or Right with the chord picks a sideways Joy-Con of that side instead of the
+        configured type, for games that only take single Joy-Cons: a virtual Joy-Con can never
+        send SL+SR (HDLS masks bits 20-27), so this is the only way to get one.
+    */
+    bool ChordJoyCon(const SwitchPadState &state, ControllerType *type_out)
+    {
+        if ((state.buttons & HidNpadButton_Left) || state.analog_stick_l.x < -ChordStickThreshold)
+            *type_out = ControllerType_JoyLeft;
+        else if ((state.buttons & HidNpadButton_Right) || state.analog_stick_l.x > ChordStickThreshold)
+            *type_out = ControllerType_JoyRight;
+        else
+            return false;
+        return true;
+    }
+
+    s32 DpadAxis(u64 buttons, u64 negative, u64 positive, s32 stick)
+    {
+        if (buttons & negative)
+            return JOYSTICK_MIN;
+        if (buttons & positive)
+            return JOYSTICK_MAX;
+        return stick;
+    }
+
+    /*
+        Games read a sideways Joy-Con turned a quarter: measured in Virtua Racing, a left one's
+        Right button is the top face button, Up the right one, and stick up steers left. The
+        pad's face buttons are moved to the Joy-Con button in the same place once turned, and
+        its stick and D-pad - a lone Joy-Con has one stick and no D-pad - turned back, so the
+        pad plays as it is held. Left/Down for the left Joy-Con's bottom/left are inferred.
+    */
+    SwitchPadState ToSidewaysJoyCon(const SwitchPadState &pad, ControllerType side)
+    {
+        constexpr struct
+        {
+            u64 pad;
+            u64 left;
+            u64 right;
+        } FaceButtons[] = {
+            {HidNpadButton_X, HidNpadButton_Right, HidNpadButton_Y},
+            {HidNpadButton_A, HidNpadButton_Up, HidNpadButton_X},
+            {HidNpadButton_B, HidNpadButton_Left, HidNpadButton_A},
+            {HidNpadButton_Y, HidNpadButton_Down, HidNpadButton_B},
+        };
+
+        const bool left = side == ControllerType_JoyLeft;
+
+        SwitchPadState joycon = pad;
+        joycon.buttons = pad.buttons & (HiddbgNpadButton_Home | HiddbgNpadButton_Capture);
+
+        for (const auto &entry : FaceButtons)
+        {
+            if (pad.buttons & entry.pad)
+                joycon.buttons |= left ? entry.left : entry.right;
+        }
+
+        if (pad.buttons & (HidNpadButton_Plus | HidNpadButton_Minus))
+            joycon.buttons |= left ? HidNpadButton_Minus : HidNpadButton_Plus;
+        if (pad.buttons & (HidNpadButton_StickL | HidNpadButton_StickR))
+            joycon.buttons |= left ? HidNpadButton_StickL : HidNpadButton_StickR;
+        joycon.buttons |= pad.buttons & (left ? (HidNpadButton_L | HidNpadButton_ZL) : (HidNpadButton_R | HidNpadButton_ZR));
+
+        const s32 x = DpadAxis(pad.buttons, HidNpadButton_Left, HidNpadButton_Right, pad.analog_stick_l.x);
+        const s32 y = DpadAxis(pad.buttons, HidNpadButton_Down, HidNpadButton_Up, pad.analog_stick_l.y);
+
+        joycon.analog_stick_l = {};
+        joycon.analog_stick_r = {};
+        if (left)
+            joycon.analog_stick_l = {y, -x};
+        else
+            joycon.analog_stick_r = {-y, x};
+
+        return joycon;
+    }
 } // namespace
 
 
@@ -184,6 +270,7 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
         {
             // If state change to connected, we need to re-attach the controller ASAP
             m_controllerData[input_idx].m_reattach_controller = true;
+            m_controllerData[input_idx].m_attach_type = m_controller->GetConfig().controllerType;
         }
         else
         {
@@ -221,18 +308,30 @@ Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
     if (state.has_motion)
         ConvertMotionToSwitchMotion(buttonData.motion, &state.acceleration, &state.angular_velocity);
 
-    if (!IsControllerAttached(input_idx) && !m_controllerData[input_idx].m_reattach_controller)
-        m_controllerData[input_idx].m_reattach_controller = (state.buttons & HidNpadButton_L) && (state.buttons & HidNpadButton_R); // L+R on the switch allow to re-attach the controller
+    /*
+        The type is settled on the first report with the chord held, so the direction has to be
+        held before L+R or ZL+ZR is pressed.
+    */
+    SwitchVirtualGamepadHandlerData &data = m_controllerData[input_idx];
+    if (!IsControllerAttached(input_idx) && !data.m_reattach_controller && HoldsReattachChord(state))
+    {
+        data.m_attach_type = m_controller->GetConfig().controllerType;
+        ChordJoyCon(state, &data.m_attach_type);
+        data.m_reattach_controller = true;
+    }
 
     if (m_controllerData[input_idx].m_reattach_controller)
     {
-        syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Re-attaching controller on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+        syscon::logger::LogInfo("SwitchVirtualGamepadHandler[%04x-%04x] Re-attaching controller on idx: %d as type %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, m_controllerData[input_idx].m_attach_type);
         AttachController(input_idx);
         m_controllerData[input_idx].m_reattach_controller = false;
     }
 
     // We get the button inputs from the input packet and update the state of our controller
     syscon::logger::LogDebug("SwitchVirtualGamepadHandler[%04x-%04x] Updating controller state on idx: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
+    if (IsJoyCon(m_controllerData[input_idx].m_attach_type))
+        state = ToSidewaysJoyCon(state, m_controllerData[input_idx].m_attach_type);
+
     Result res = UpdateControllerState(state, input_idx);
 
     s64 execution_time_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTimer).count();
@@ -258,12 +357,14 @@ Result SwitchVirtualGamepadHandler::UpdateOutput()
     return 0;
 }
 
-void SwitchVirtualGamepadHandler::BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo)
+void SwitchVirtualGamepadHandler::BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo, uint16_t input_idx)
 {
     memset(deviceInfo, 0, sizeof(*deviceInfo));
 
-    deviceInfo->deviceType = ControllerTypeToDeviceType(m_controller->GetConfig().controllerType);
-    deviceInfo->npadInterfaceType = HidNpadInterfaceType_USB;
+    const ControllerType type = m_controllerData[input_idx].m_attach_type;
+    deviceInfo->deviceType = ControllerTypeToDeviceType(type);
+    // Rail would merge the Joy-Con into an existing controller, and Joy-Cons have no USB mode.
+    deviceInfo->npadInterfaceType = IsJoyCon(type) ? HidNpadInterfaceType_Bluetooth : HidNpadInterfaceType_USB;
 
     // The grip colors are for Pro-Controller on [9.0.0+].
     deviceInfo->singleColorBody = __builtin_bswap32(m_controller->GetConfig().bodyColor.rgbaValue);
@@ -308,6 +409,8 @@ u8 SwitchVirtualGamepadHandler::ControllerTypeToDeviceType(ControllerType type)
         {ControllerType_Sega, HidDeviceType_Lager},
         {ControllerType_Nes, HidDeviceType_LarkNesLeft},
         {ControllerType_Famicom, HidDeviceType_LarkHvcLeft},
+        {ControllerType_JoyLeft, HidDeviceType_JoyLeft2},
+        {ControllerType_JoyRight, HidDeviceType_JoyRight1},
     };
 
     for (const auto &entry : DeviceTypes)

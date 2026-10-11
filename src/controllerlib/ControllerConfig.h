@@ -41,8 +41,16 @@ namespace controllerlib
         ControllerType_N64,
         ControllerType_Sega,
         ControllerType_Nes,
-        ControllerType_Famicom
+        ControllerType_Famicom,
+        // Never read from the config: a pad becomes one when re-attached with Left/Right held, then L+R or ZL+ZR.
+        ControllerType_JoyLeft,
+        ControllerType_JoyRight
     };
+
+    inline bool IsJoyCon(ControllerType type)
+    {
+        return type == ControllerType_JoyLeft || type == ControllerType_JoyRight;
+    }
 
     struct ControllerAnalogConfig
     {

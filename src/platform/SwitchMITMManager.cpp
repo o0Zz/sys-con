@@ -353,6 +353,8 @@ void HidSharedMemoryManager::ClearVibration(uint8_t player_idx)
 
 void HidSharedMemoryManager::OnSupportedNpadStyleSet(u64 program_id, u32 style_set)
 {
+    ::syscon::logger::LogInfo("HidSharedMemoryManager program 0x%016" PRIx64 " supports npad styles 0x%08X", program_id, style_set);
+
     if (ViewForProgram(program_id) == HidFakeView::Application)
         m_application_styles.store(style_set, std::memory_order_relaxed);
 }

@@ -10,6 +10,8 @@ class SwitchVirtualGamepadHandlerData
 public:
     bool m_reattach_controller = false;
     bool m_is_connected = false;
+    // What the next attach creates: the configured type, or a Joy-Con picked by the re-attach chord.
+    controllerlib::ControllerType m_attach_type = controllerlib::ControllerType_Pro;
 };
 
 // Base class for SwitchHDLHandler (hiddbg) and SwitchMITMHandler (mitm).
@@ -29,9 +31,10 @@ protected:
     Thread m_Thread;
     bool m_ThreadIsRunning = false;
 
-    // Describes the pad to hiddbg. Both handlers create their devices through it, so the
-    // description is built once here from the controller's config.
-    void BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo);
+    // Describes the pad to hiddbg as whatever the input is about to be attached as. Both
+    // handlers create their devices through it.
+    void BuildHdlsDeviceInfo(HiddbgHdlsDeviceInfo *deviceInfo, uint16_t input_idx);
+    bool IsAttachingAsJoyCon(uint16_t input_idx) const { return controllerlib::IsJoyCon(m_controllerData[input_idx].m_attach_type); }
 
     virtual bool IsControllerAttached(uint16_t input_idx) = 0;
     virtual Result UpdateControllerState(const SwitchPadState &state, uint16_t input_idx) = 0;

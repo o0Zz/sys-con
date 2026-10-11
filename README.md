@@ -58,6 +58,7 @@ Reboot the Nintendo Switch.
 - [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
 - [x] Motion controls (for drivers that report it: Switch Pro, SInput, Steam Controller 2026, network controller)
 - [x] USB keyboard / mouse
+- [x] Re-attach a dropped controller with L+R or ZL+ZR, or as a sideways single Joy-Con for games that only accept those (see [Single Joy-Con mode](#single-joy-con-mode))
 
 ## Supported controller
 - [x] All PC Controllers
@@ -294,6 +295,57 @@ Capture a rumble report from the PC driver with Wireshark
 not in `config.ini` yet.
 
 Rumble is only delivered to the pad in `mode=mitm`.
+
+## Single Joy-Con mode
+Some games only accept single Joy-Cons held sideways, at least in some modes. The one this was
+written for is SEGA AGES Virtua Racing, whose local multiplayer takes up to 8 single Joy-Cons
+and no Pro Controller. When a game like that starts, the console drops every controller it
+did not ask for, sys-con's included.
+
+### Re-attaching a controller
+Once the console has dropped a controller, sys-con watches it for a re-attach chord:
+
+| Chord                                             | Re-attaches the controller as         |
+|---------------------------------------------------|---------------------------------------|
+| `L+R` or `ZL+ZR`                                  | its configured `controller_type`      |
+| hold `Left`, then press `L+R` or `ZL+ZR`          | a sideways left Joy-Con               |
+| hold `Right`, then press `L+R` or `ZL+ZR`         | a sideways right Joy-Con              |
+
+`ZL+ZR` works as well as `L+R` because which physical buttons send L/R depends on the
+controller's mapping in `config.ini`. Layouts for fighting games or retro pads often put
+other buttons on L/R and move the shoulder buttons to ZL/ZR. With both pairs accepted,
+pressing the controller's two shoulder buttons together works either way, as long as they
+are mapped as a pair (L/R or ZL/ZR, not L/ZR).
+
+`Left`/`Right` is the D-pad or the left stick pushed past halfway, and it has to be held
+before the shoulder buttons: the type is settled the moment both are down. The chords are
+only read while the controller is dropped, so they never get in the way in a game. A Joy-Con
+stays a Joy-Con until the console drops it again; the plain chord, or unplugging the
+controller, brings back the configured type.
+
+Games read a sideways Joy-Con turned a quarter, so sys-con turns it back: the face buttons
+keep their positions, and the stick and D-pad (a single Joy-Con has one stick and no D-pad)
+both drive the Joy-Con's stick. Plus and Minus become the side's own button.
+
+To see which controllers a game accepts, look for this line in the log:
+```
+HidSharedMemoryManager program 0x010054400d2e6000 supports npad styles 0x0000001A
+```
+Bit `0x1` is the Pro Controller. Virtua Racing's multiplayer declares `0x1A` (handheld and
+single left/right Joy-Cons), which is why a Pro Controller gets dropped there.
+
+### Limitations
+- **No SL/SR, so no Change Grip/Order pairing.** sys-con creates its controllers through
+  hiddbg's virtual devices (HDLS), and the console clears bits 20-27 of a virtual device's
+  buttons ([HdlsState](https://switchbrew.org/wiki/HID_services#HdlsState),
+  [libnx#489](https://github.com/switchbrew/libnx/issues/489)) - which includes SL and SR.
+  The Change Grip/Order screen only accepts a single Joy-Con on SL+SR: the chord creates the
+  Joy-Con there, and the screen then waits for a press that can never arrive. Use the chord
+  in the game instead: a game that asks for single Joy-Cons, through its own controller
+  screen or directly, takes the Joy-Con as it is. Games never see SL/SR either.
+- **Home only works on a right Joy-Con**: the console accepts only the buttons that side
+  physically has, and a left Joy-Con has Capture instead.
+- **No rumble or motion.** A Joy-Con is a plain hiddbg device even in `mode=mitm`.
 
 ## Keyboard and mouse (experimental)
 A USB keyboard or mouse whose interface advertises the HID boot subclass is read in the HID
