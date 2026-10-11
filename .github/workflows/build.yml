@@ -54,14 +54,11 @@ jobs:
       - name: Build and assemble release tree
         run: make all
 
-      - name: Compute version (same logic as the Makefile)
+      # A fork carries no tags, which made the inline `git describe` fail the job; the
+      # Makefile target yields an empty tag instead.
+      - name: Compute version
         id: version
-        run: |
-          GIT_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
-          COUNT=$(git rev-list "$(git rev-list --tags --no-walk --max-count=1)"..HEAD --count)
-          VERSION="$GIT_TAG"
-          [ "$COUNT" != "0" ] && VERSION="$GIT_TAG+$COUNT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(make -s print-version)" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
