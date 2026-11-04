@@ -40,10 +40,10 @@ AMS_SF_DEFINE_INTERFACE(ams::syscon::hid::mitm, IHidMitmActiveVibrationDeviceLis
 namespace ams::syscon::hid::mitm
 {
     /*
-     * A game activates every vibration device before sending it a value, and the real hid
-     * has no npad in the slots sys-con drives - so activating one of ours has to be answered
-     * here. The real list object is kept because a handle naming a real controller still has
-     * to reach it.
+     * A game activates every vibration device before sending it a value, and behind the
+     * slots sys-con drives is a hiddbg device hid reports as not mounted - so activating one
+     * of ours has to be answered here. The real list object is kept because a handle naming a
+     * real controller still has to reach it.
      */
     class HidMitmActiveVibrationDeviceList : public sf::IServiceObject
     {

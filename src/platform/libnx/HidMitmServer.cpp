@@ -42,18 +42,6 @@ namespace syscon::hid::mitm
         constexpr u64 MitmProcessIdTag = 0xFFFE000000000000ul;
         constexpr u64 ProcessIdMask = 0x0000FFFFFFFFFFFFul;
 
-        // System program-id range (ncm). The three Atmosphere program ids (Mitm/LogManager/
-        // Memlet = 0x..10/0x..420/0x..421) all fall inside this range, so it alone suffices.
-        constexpr u64 SystemProgramIdStart = 0x0100000000000000ul;
-        constexpr u64 SystemProgramIdEnd = 0x01000000000007FFul;
-
-        // Everything Nintendo signs - system modules, applets, applications - lives under
-        // 0x01. A program id outside it is a homebrew sysmodule (sys-con itself is 0x69...,
-        // sys-ftpd and the overlay loader 0x42...): none of them shows a controller, and
-        // handing one a fake HID shared memory has taken the console down.
-        constexpr u64 NintendoProgramIdStart = 0x0100000000000000ul;
-        constexpr u64 NintendoProgramIdEnd = 0x01FFFFFFFFFFFFFFul;
-
         constexpr size_t MaxHandles = 0x40; // port + query + sessions/sub-sessions
         constexpr int ThreadPriority = 0x20;
         constexpr int ThreadCpuId = 3;
@@ -68,33 +56,11 @@ namespace syscon::hid::mitm
         // The loop copies this into TLS immediately before svcReplyAndReceive.
         alignas(0x10) u8 g_reply[0x100];
 
-        bool IsSystemProgramId(u64 program_id)
-        {
-            return program_id >= SystemProgramIdStart && program_id <= SystemProgramIdEnd;
-        }
-
-        bool IsHomebrewSysmoduleProgramId(u64 program_id)
-        {
-            return program_id < NintendoProgramIdStart || program_id > NintendoProgramIdEnd;
-        }
-
-        // Port of HidMitmService::ShouldMitm (src/platform/ams/HidMitmService.cpp).
         bool ShouldMitm(const SysconMitmProcessInfo &info)
         {
-            if (IsHomebrewSysmoduleProgramId(info.program_id))
-            {
-                ::syscon::logger::LogDebug("HidMitm ShouldMitm: 0x%016lX (Sysmodule) ? (no)", info.program_id);
-                return false;
-            }
-
-            if (IsSystemProgramId(info.program_id))
-            {
-                ::syscon::logger::LogDebug("HidMitm ShouldMitm: 0x%016lX (System) ? (no)", info.program_id);
-                return false;
-            }
-
-            ::syscon::logger::LogDebug("HidMitm ShouldMitm: 0x%016lX ? (yes)", info.program_id);
-            return true;
+            const bool mitm = HidSharedMemoryManager::ShouldMitm(info.program_id);
+            ::syscon::logger::LogDebug("HidMitm ShouldMitm: 0x%016lX ? (%s)", info.program_id, mitm ? "yes" : "no");
+            return mitm;
         }
 
         /* -------- TLS / CMIF helpers -------- */
@@ -180,8 +146,6 @@ namespace syscon::hid::mitm
 
         /* -------- hid vibration commands (https://switchbrew.org/wiki/HID_services) -------- */
 
-        constexpr u32 HidCmdSetSupportedNpadStyleSet = 100;
-        constexpr u32 HidCmdDisconnectNpad = 107;
         constexpr u32 HidCmdGetVibrationDeviceInfo = 200;
         constexpr u32 HidCmdSendVibrationValue = 201;
         constexpr u32 HidCmdGetActualVibrationValue = 202;
@@ -640,8 +604,8 @@ namespace syscon::hid::mitm
 
         /*
          * The vibration commands a game aims at a pad sys-con owns are answered here rather
-         * than forwarded: the real hid has no npad in that slot, so it would reject them and
-         * the game would stop rumbling. A handle naming a real controller is left alone -
+         * than forwarded: behind that slot is a hiddbg device, which hid reports as not
+         * mounted, so the game would never rumble. A handle naming a real controller is left alone -
          * returning false tells the caller to forward the request untouched.
          */
         bool Server::HookVibration(const HipcParsedRequest &r, u32 command_id, bool domain)
@@ -859,10 +823,6 @@ namespace syscon::hid::mitm
                 return HookCreateVibrationDeviceList(idx, false);
             if (s.kind == SessionKind::Hid && HookVibration(r, command_id, false))
                 return true;
-            if (s.kind == SessionKind::Hid && command_id == HidCmdDisconnectNpad)
-                HidSharedMemoryManager::GetHidSharedMemoryManager().RetireDisconnectedNpad(*static_cast<const u32 *>(GetInData(r, false)));
-            if (s.kind == SessionKind::Hid && command_id == HidCmdSetSupportedNpadStyleSet)
-                HidSharedMemoryManager::GetHidSharedMemoryManager().OnSupportedNpadStyleSet(s.info.program_id, *static_cast<const u32 *>(GetInData(r, false)));
             return ForwardAndReply(r, ForwardSessionFor(s), false);
         }
 
@@ -906,10 +866,6 @@ namespace syscon::hid::mitm
                         return HookCreateVibrationDeviceList(idx, true);
                     if (HookVibration(r, command_id, true))
                         return true;
-                    if (command_id == HidCmdDisconnectNpad)
-                        HidSharedMemoryManager::GetHidSharedMemoryManager().RetireDisconnectedNpad(*static_cast<const u32 *>(GetInData(r, true)));
-                    if (command_id == HidCmdSetSupportedNpadStyleSet)
-                        HidSharedMemoryManager::GetHidSharedMemoryManager().OnSupportedNpadStyleSet(s.info.program_id, *static_cast<const u32 *>(GetInData(r, true)));
                 }
             }
 

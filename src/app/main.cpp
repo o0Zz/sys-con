@@ -113,7 +113,6 @@ namespace syscon
         {
             ::syscon::logger::LogDebug("Initializing HID MITM (mode=mitm) ...");
             AbortStep(::syscon::hid::mitm::Initialize(), 8);
-            AbortStep(idlesysInitialize(), 9); //Report activity to system
         }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
@@ -138,10 +137,7 @@ namespace syscon
         ::syscon::networkpad::Exit();
 
         if (globalConfig.mode == ::syscon::config::VirtualPadMode::MITM)
-        {
-            idlesysExit();
             ::syscon::hid::mitm::Finalize();
-        }
 
         if (hdls_attached)
             hiddbgReleaseHdlsWorkBuffer(::SwitchHDLHandler::GetHdlsSessionId());

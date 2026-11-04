@@ -21,31 +21,53 @@ namespace
     // Everything past console_six_axis_sensor is unused padding, so it is never mirrored.
     constexpr size_t AfterNpadSize = offsetof(HidSharedMemory, unk_x3C220) - AfterNpadOffset;
 
-    u8 *ByteAddr(HidSharedMemory *shmem, size_t offset)
+    constexpr size_t SixAxisOffset = offsetof(HidNpadSharedMemoryEntry, internal_state.full_key_six_axis_sensor_lifo);
+    constexpr size_t AfterSixAxisOffset = SixAxisOffset + sizeof(HidNpadSixAxisSensorLifo);
+
+    constexpr u64 ApplicationProgramIdStart = 0x0100000000010000ul;
+    constexpr u64 ApplicationProgramIdEnd = 0x01FFFFFFFFFFFFFFul;
+    constexpr u64 AlbumProgramId = 0x010000000000100Dul;
+
+    u8 *ByteAddr(void *base, size_t offset)
     {
-        return reinterpret_cast<u8 *>(shmem) + offset;
+        return static_cast<u8 *>(base) + offset;
+    }
+
+    const u8 *ByteAddr(const void *base, size_t offset)
+    {
+        return static_cast<const u8 *>(base) + offset;
     }
 } // namespace
+
+static_assert(NpadOffset % 8 == 0 && AfterNpadOffset % 8 == 0 && AfterNpadSize % 8 == 0);
+static_assert(SixAxisOffset % 8 == 0 && AfterSixAxisOffset % 8 == 0);
+static_assert(sizeof(HidNpadSharedMemoryEntry) % 8 == 0 && HID_SHARED_MEMORY_SIZE % 8 == 0);
+
+/*
+    From the end down, 8 bytes at a time. Every lifo starts with its header and every storage
+    entry with its sampling number, so a reader never meets a tail pointing at a sample not
+    copied yet, and a sample caught half-copied fails the reader's sampling-number check and is
+    read again. Copied upwards, the new tail landed first and libnx walked stale samples whose
+    numbers were not consecutive.
+*/
+static void MirrorCopy(void *dest, const void *src, size_t n)
+{
+    const volatile uint64_t *s = static_cast<const volatile uint64_t *>(src);
+    volatile uint64_t *d = static_cast<volatile uint64_t *>(dest);
+    for (size_t i = n / 8; i > 0; i--)
+        d[i - 1] = s[i - 1];
+}
 
 /*
     One fake shared memory per view, not one per client.
     svcCreateSharedMemory charges 256 KiB against the shared system resource limit - sys-con
     has no reservation of its own (pool_partition 2, system_resource_size 0) - so a
     per-client allocation starts failing with 0x00010801 (LimitReached) as soon as the pool
-    is tight, which leaves the client with no HID shared memory and takes the console down.
-    Both are allocated at Start(), while the pool is still free.
-
-    Two views rather than one because the real hid writes each aruid only the npad styles
-    that client declared through SetSupportedNpadStyleSet. The system applets declare
-    SystemExt, and an application mirrored from one of them sees it on the physical
-    controllers - which aborts nn::hid in a title that never asked for it (SSBU, 2162-0001).
-    Only one application runs at a time, so it gets a fake of its own mirrored from its own
-    real view, and every system applet shares the other.
+    is tight. Both are allocated at Start(), while the pool is still free. Only one
+    application and one Album run at a time, so a view only ever has one live client.
 */
 namespace
 {
-    constexpr u64 ApplicationProgramIdStart = 0x0100000000010000ul;
-
     struct FakeSharedMemory
     {
         ::SharedMemory shmem;
@@ -53,13 +75,13 @@ namespace
     };
 
     std::array<FakeSharedMemory, HidFakeViewCount> g_fake_shared_memory{{
-        {::SharedMemory{}, "system"},
         {::SharedMemory{}, "application"},
+        {::SharedMemory{}, "album"},
     }};
 
     HidFakeView ViewForProgram(u64 program_id)
     {
-        return program_id >= ApplicationProgramIdStart ? HidFakeView::Application : HidFakeView::System;
+        return program_id == AlbumProgramId ? HidFakeView::Album : HidFakeView::Application;
     }
 
     FakeSharedMemory &Fake(HidFakeView view)
@@ -74,10 +96,10 @@ namespace
 
     // Null for a view whose fake could not be allocated; that failure is logged once, at
     // allocation, and no client is ever handed that view.
-    HidNpadInternalState *FakeNpadState(HidFakeView view, uint8_t player_idx)
+    HidNpadSixAxisSensorLifo *FakeSixAxisLifo(HidFakeView view, uint8_t player_idx)
     {
         HidSharedMemory *fake = FakeAddr(view);
-        return fake != nullptr ? &fake->npad.entries[player_idx].internal_state : nullptr;
+        return fake != nullptr ? &fake->npad.entries[player_idx].internal_state.full_key_six_axis_sensor_lifo : nullptr;
     }
 } // namespace
 
@@ -121,40 +143,14 @@ static void DestroyFakeSharedMemories()
     }
 }
 
-static_assert(NpadOffset % 8 == 0 && AfterNpadOffset % 8 == 0 && AfterNpadSize % 8 == 0);
-static_assert(sizeof(HidNpadSharedMemoryEntry) % 8 == 0 && HID_SHARED_MEMORY_SIZE % 8 == 0);
-
-// Every caller copies within page-aligned shared memory, at the offsets asserted above.
-static void memcpy_64(void *dest, const void *src, size_t n)
-{
-    const volatile uint64_t *s = reinterpret_cast<const volatile uint64_t *>(src);
-    volatile uint64_t *d = reinterpret_cast<volatile uint64_t *>(dest);
-    for (size_t i = 0; i < (n / 8); i++)
-        d[i] = s[i];
-}
-
 /*
-    hid keeps one shared memory per aruid, holding only the npad styles that aruid declared and,
-    for touch and the other sections, only what that aruid activated.
-
-    An application must be mirrored from its own: from sys-con's view - which never called
+    hid keeps one shared memory per aruid, holding only the npad styles that aruid declared,
+    only what it activated, and nothing at all while its input is taken away (an overlay).
+    The fake is mirrored from the client's own: from sys-con's view - which never called
     SetSupportedNpadStyleSet, so SystemExt is on every npad - SSBU asserts in
     GetVibrationDeviceHandles. libnx can only send our own pid, so the request is built by hand
     with the client's pid carrying the mitm tag, exactly as a forwarded request does.
-
-    The system applets are the opposite: they share one fake, and the first of them is
-    overlayDisp, which never activates the touch screen and never has focus. Mirrored from
-    overlayDisp's view, qlaunch lost the touch panel. sys-con's own view carries everything.
 */
-static Result _HidCreateOwnAppletResource(Service *srv, Service *out_iappletresource)
-{
-    const u64 aruid = appletGetAppletResourceUserId();
-    return serviceDispatchIn(srv, 0, aruid,
-                             .in_send_pid = true,
-                             .out_num_objects = 1,
-                             .out_objects = out_iappletresource, );
-}
-
 static Result _HidCreateClientAppletResource(Service *srv, u64 aruid, u64 client_pid, Service *out_iappletresource)
 {
     constexpr u64 MitmProcessIdTag = 0xFFFE000000000000ul;
@@ -184,9 +180,7 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 aruid, u6
 {
     Handle sharedMemHandle;
 
-    m_status = m_view == HidFakeView::Application
-                   ? _HidCreateClientAppletResource(hid_service, aruid, processId, &m_appletresource)
-                   : _HidCreateOwnAppletResource(hid_service, &m_appletresource);
+    m_status = _HidCreateClientAppletResource(hid_service, aruid, processId, &m_appletresource);
     if (R_FAILED(m_status))
     {
         ::syscon::logger::LogError("HidSharedMemoryEntry failed to create applet resource (Process id: 0x%016" PRIx64 ")", m_process_id);
@@ -282,26 +276,24 @@ HidSharedMemoryManager &HidSharedMemoryManager::GetHidSharedMemoryManager()
     return g_HidSharedMemoryManager;
 }
 
+/*
+    Everything Nintendo signs lives under 0x01, and applications start at 0x0100000000010000.
+    A program id outside 0x01 is a homebrew sysmodule (sys-con itself is 0x69..., the overlay
+    loader 0x42...), and below the application range sit the system modules and applets -
+    qlaunch, am, overlayDisp, the Controllers applet - none of which takes motion or rumble
+    from a pad, and all of which are best served by the real hid itself.
+*/
+bool HidSharedMemoryManager::ShouldMitm(u64 program_id)
+{
+    if (program_id == AlbumProgramId)
+        return true;
+
+    return program_id >= ApplicationProgramIdStart && program_id <= ApplicationProgramIdEnd;
+}
+
 bool HidSharedMemoryManager::IsPlayerIndexOwned(uint8_t player_idx) const
 {
     return player_idx < m_player_owned.size() && m_player_owned[player_idx].load(std::memory_order_relaxed);
-}
-
-void HidSharedMemoryManager::RetireDisconnectedNpad(u32 npad_id)
-{
-    if (npad_id >= m_player_owned.size() || !IsPlayerIndexOwned(static_cast<uint8_t>(npad_id)))
-        return;
-
-    std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
-    std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-
-    m_player_retired[npad_id].store(true, std::memory_order_relaxed);
-    RestoreRealSlot(static_cast<uint8_t>(npad_id));
-}
-
-bool HidSharedMemoryManager::IsPlayerIndexRetired(uint8_t player_idx) const
-{
-    return player_idx < m_player_retired.size() && m_player_retired[player_idx].load(std::memory_order_relaxed);
 }
 
 void HidSharedMemoryManager::SetVibration(uint8_t player_idx, uint8_t device_idx, const HidVibrationValue &value)
@@ -351,15 +343,7 @@ void HidSharedMemoryManager::ClearVibration(uint8_t player_idx)
         SetVibration(player_idx, device_idx, HidVibrationValue{.amp_low = 0.0f, .freq_low = idle.freq_low, .amp_high = 0.0f, .freq_high = idle.freq_high});
 }
 
-void HidSharedMemoryManager::OnSupportedNpadStyleSet(u64 program_id, u32 style_set)
-{
-    ::syscon::logger::LogInfo("HidSharedMemoryManager program 0x%016" PRIx64 " supports npad styles 0x%08X", program_id, style_set);
-
-    if (ViewForProgram(program_id) == HidFakeView::Application)
-        m_application_styles.store(style_set, std::memory_order_relaxed);
-}
-
-std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControllerAt(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color)
+std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControllerAt(uint8_t player_idx, bool has_motion)
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
 
@@ -375,14 +359,13 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
         return nullptr;
     }
 
-    m_controller_list[player_idx] = std::make_shared<HidSharedMemoryController>(player_idx, device_type, body_color, buttons_color);
+    m_controller_list[player_idx] = std::make_shared<HidSharedMemoryController>(player_idx, has_motion);
     ClearVibration(player_idx);
-    m_player_retired[player_idx].store(false, std::memory_order_relaxed);
     m_player_owned[player_idx].store(true, std::memory_order_relaxed);
 
     {
         std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-        m_controller_list[player_idx]->Clear();
+        m_controller_list[player_idx]->TakeOverSixAxis();
     }
 
     ::syscon::logger::LogDebug("HidSharedMemoryManager attached a controller on player %d", player_idx + 1);
@@ -390,15 +373,11 @@ std::shared_ptr<HidSharedMemoryController> HidSharedMemoryManager::AttachControl
 }
 
 /*
-    Every line logged here is an SD write of several milliseconds, and both of these mutexes
-    are wanted by the mirror thread every 5 ms and by the MITM server thread on any client
-    request - which is every hid client on the console. So the locks cover the state change
-    and nothing else, exactly as the garbage collector does.
+    Once the controller is gone the mirror copies the slot's six-axis lifo from the real hid
+    again, whole, on its next tick.
 */
 void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryController> controller)
 {
-    ::syscon::logger::LogDebug("HidSharedMemoryManager detaching a controller ...");
-
     int player_idx = -1;
 
     {
@@ -411,30 +390,22 @@ void HidSharedMemoryManager::DetachController(std::shared_ptr<HidSharedMemoryCon
 
             m_player_owned[i].store(false, std::memory_order_relaxed);
             ClearVibration(i);
-
-            {
-                std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
-                RestoreRealSlot(static_cast<uint8_t>(i));
-            }
-
             m_controller_list[i] = nullptr;
             player_idx = (int)i;
             break;
         }
     }
 
-    ::syscon::logger::LogDebug("HidSharedMemoryManager detached the controller of player %d", player_idx);
+    ::syscon::logger::LogDebug("HidSharedMemoryManager detached the controller of player %d", player_idx + 1);
 }
 
 std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(::Service *hid_service, u64 aruid, u64 processId, u64 programId)
 {
     /*
         Reclaim before allocating, not after. Every mitm'd process costs an applet resource
-        session and a mapping of its real shared memory, and applets come and go constantly -
-        so without this the list only grows until a later applet can no longer get its HID
-        shared memory at all.
-        Running it from Add() would be too late: the allocation that needs the room
-        happens in the constructor below.
+        session and a mapping of its real shared memory, so without this the list only grows.
+        Running it from Add() would be too late: the allocation that needs the room happens
+        in the constructor below.
     */
     RunGarbageCollector();
 
@@ -465,26 +436,18 @@ Result HidSharedMemoryManager::Add(const std::shared_ptr<HidSharedMemoryEntry> &
         /*
             Seed a view from its first live client only. Once one is running the mirror
             thread keeps the fake current, and copying over it again would hand the clients
-            already reading it a jump in every lifo.
+            already reading it a jump in every lifo. The seed carries the real hid's six-axis
+            samples for our slots, which are not numbered like ours.
         */
         if (FindEntry(entry->GetView()) == nullptr)
         {
-            memcpy_64(entry->GetFakeAddr(), entry->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
+            MirrorCopy(entry->GetFakeAddr(), entry->GetRealAddr(), HID_SHARED_MEMORY_SIZE);
 
-            // A new application has declared nothing yet; the last one's styles are not its.
-            if (entry->GetView() == HidFakeView::Application)
-                m_application_styles.store(0, std::memory_order_relaxed);
-        }
-
-        /*
-            The seed is a byte copy of the real shared memory, so the slots sys-con drives
-            still hold whatever the console had there. Clearing them is what makes Publish()
-            see style_set == 0 and lay the virtual npad out from scratch.
-        */
-        for (const auto &controller : m_controller_list)
-        {
-            if (controller != nullptr)
-                controller->Clear();
+            for (const auto &controller : m_controller_list)
+            {
+                if (controller != nullptr)
+                    controller->EmptySixAxis(entry->GetView());
+            }
         }
 
         m_sharedmemory_entry_list.push_back(entry);
@@ -501,9 +464,9 @@ void HidSharedMemoryManager::RunGarbageCollector()
 
     /*
         The kernel's process list, not pm:dmnt. pm:dmnt takes a single session, and at boot
-        opening it from here - on the MITM thread, with overlayDisp waiting for its
-        CreateAppletResource reply - sometimes never returned, and every hid client on the
-        console hung behind it.
+        opening it from here - on the MITM thread, with a client waiting for its
+        CreateAppletResource reply - sometimes never returned, and every hid client behind it
+        hung.
     */
     u64 live_pids[0x80];
     s32 live_count = 0;
@@ -555,8 +518,8 @@ void HidSharedMemoryManager::RunGarbageCollector()
 
     /*
         `dead` drops the last references here, outside every lock: ~HidSharedMemoryEntry
-        unmaps and closes two shared memories and closes an IAppletResource session, none
-        of which should run with the mirror thread blocked behind it.
+        unmaps a shared memory and closes an IAppletResource session, none of which should
+        run with the mirror thread blocked behind it.
     */
 }
 
@@ -631,52 +594,36 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::FindEntry(HidFakeV
     return nullptr;
 }
 
-/*
-    Clear() alone is not a disconnected npad: it retires style_set and empties the lifos, but the
-    device type, footer, colours and the last samples of our pad stay behind, and the mirror
-    below never rewrites a slot that is empty on both sides. The grip/order screen read those
-    leftovers and kept slot 1 lit for a pad that was gone. So the slot is given the real hid's
-    own entry - exactly what a client would see had sys-con never been there.
-*/
-void HidSharedMemoryManager::RestoreRealSlot(uint8_t player_idx)
-{
-    for (size_t view = 0; view < HidFakeViewCount; view++)
-    {
-        std::shared_ptr<HidSharedMemoryEntry> source = FindEntry(static_cast<HidFakeView>(view));
-        if (source == nullptr)
-        {
-            HidNpadInternalState *internal_state = FakeNpadState(static_cast<HidFakeView>(view), player_idx);
-            if (internal_state != nullptr)
-                __atomic_store_n(&internal_state->style_set, 0u, __ATOMIC_RELEASE);
-            continue;
-        }
-
-        memcpy_64(&source->GetFakeAddr()->npad.entries[player_idx], &source->GetRealAddr()->npad.entries[player_idx], sizeof(HidNpadSharedMemoryEntry));
-    }
-}
-
 void HidSharedMemoryManager::Mirror(HidSharedMemoryEntry &entry)
 {
     HidSharedMemory *real = entry.GetRealAddr();
     HidSharedMemory *fake = entry.GetFakeAddr();
 
-    memcpy_64(fake, real, NpadOffset);
-    memcpy_64(ByteAddr(fake, AfterNpadOffset), ByteAddr(real, AfterNpadOffset), AfterNpadSize);
+    MirrorCopy(ByteAddr(fake, AfterNpadOffset), ByteAddr(real, AfterNpadOffset), AfterNpadSize);
 
-    for (size_t i = 0; i < NpadEntryCount; i++)
+    for (size_t i = NpadEntryCount; i > 0; i--)
     {
-        // A slot sys-con drives is its own: mirroring it would wipe the virtual pad. A retired
-        // one is the real hid's again, even before the pad handler has released it.
-        if (i < m_controller_list.size() && IsPlayerIndexOwned(i) && !IsPlayerIndexRetired(i))
-            continue;
+        const size_t npad = i - 1;
+        HidNpadSharedMemoryEntry *fake_npad = &fake->npad.entries[npad];
+        const HidNpadSharedMemoryEntry *real_npad = &real->npad.entries[npad];
 
         // An npad the console never populated stays zeroed on both sides. Skipping those
         // is what keeps the mirror cheap enough to run at the 200 Hz hid itself ticks at.
-        if (real->npad.entries[i].internal_state.style_set == 0 && fake->npad.entries[i].internal_state.style_set == 0)
+        if (real_npad->internal_state.style_set == 0 && fake_npad->internal_state.style_set == 0)
             continue;
 
-        memcpy_64(&fake->npad.entries[i], &real->npad.entries[i], sizeof(HidNpadSharedMemoryEntry));
+        const bool six_axis_is_ours = npad < m_controller_list.size() && m_controller_list[npad] != nullptr && m_controller_list[npad]->HasMotion();
+        if (!six_axis_is_ours)
+        {
+            MirrorCopy(fake_npad, real_npad, sizeof(HidNpadSharedMemoryEntry));
+            continue;
+        }
+
+        MirrorCopy(ByteAddr(fake_npad, AfterSixAxisOffset), ByteAddr(real_npad, AfterSixAxisOffset), sizeof(HidNpadSharedMemoryEntry) - AfterSixAxisOffset);
+        MirrorCopy(fake_npad, real_npad, SixAxisOffset);
     }
+
+    MirrorCopy(fake, real, NpadOffset);
 }
 
 void HidSharedMemoryManager::OnRun()
@@ -698,10 +645,10 @@ void HidSharedMemoryManager::OnRun()
                     Mirror(*source);
             }
 
-            for (size_t i = 0; i < m_controller_list.size(); i++)
+            for (const auto &controller : m_controller_list)
             {
-                if (m_controller_list[i] != nullptr && !IsPlayerIndexRetired(i))
-                    m_controller_list[i]->Publish();
+                if (controller != nullptr)
+                    controller->PublishSixAxis();
             }
         }
 
@@ -711,94 +658,10 @@ void HidSharedMemoryManager::OnRun()
     }
 }
 
-HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color)
+HidSharedMemoryController::HidSharedMemoryController(uint8_t player_idx, bool has_motion)
     : m_player_idx(player_idx),
-      m_device_type(device_type),
-      m_body_color(body_color),
-      m_buttons_color(buttons_color),
-      m_sampling_number(0),
-      m_state{}
+      m_has_motion(has_motion)
 {
-}
-
-/*
-    What the pad is, as the view's clients are allowed to see it. HidDeviceType_FullKey13 is
-    GcOnGggg - the GameCube controller - and Lagon the N64 one; each is presented as such only
-    to an application that declared the style, and as a Pro Controller to everyone else, the
-    way hid itself filters them.
-*/
-HidSharedMemoryController::NpadIdentity HidSharedMemoryController::IdentityFor(HidFakeView view) const
-{
-    const u32 accepted = view == HidFakeView::Application ? g_HidSharedMemoryManager.GetApplicationSupportedStyles() : 0;
-
-    if (m_device_type == HidDeviceType_FullKey13 && (accepted & HidNpadStyleTag_NpadGc))
-        return NpadIdentity{HidNpadStyleTag_NpadGc, HidDeviceTypeBits_FullKey, HidAppletFooterUiType_SwitchProController};
-    if (m_device_type == HidDeviceType_Lagon && (accepted & HidNpadStyleTag_NpadLagon))
-        return NpadIdentity{HidNpadStyleTag_NpadLagon, HidDeviceTypeBits_Lagon, HidAppletFooterUiType_Lagon};
-    if (m_device_type == HidDeviceType_Lucia && (accepted & HidNpadStyleTag_NpadLucia))
-        return NpadIdentity{HidNpadStyleTag_NpadLucia, HidDeviceTypeBits_Lucia, HidAppletFooterUiType_Lucia};
-    if (m_device_type == HidDeviceType_Lager && (accepted & HidNpadStyleTag_NpadLager))
-        return NpadIdentity{HidNpadStyleTag_NpadLager, HidDeviceTypeBits_Lager, HidAppletFooterUiType_SwitchProController};
-
-    return NpadIdentity{HidNpadStyleTag_NpadFullKey, HidDeviceTypeBits_FullKey, HidAppletFooterUiType_SwitchProController};
-}
-
-/*
-    Only the fields that say what the pad is, style_set last: this also runs on a slot clients
-    are already reading, when an application declares its styles after the pad was published,
-    and a lifo must never be touched underneath a reader.
-*/
-void HidSharedMemoryController::ApplyIdentity(HidNpadInternalState *internal_state, const NpadIdentity &identity)
-{
-    internal_state->gc_trigger_lifo.header.buffer_count = 17;
-    internal_state->device_type = identity.device_type_bits;
-    internal_state->applet_footer_ui_type = identity.footer;
-
-    __atomic_store_n(&internal_state->style_set, identity.style, __ATOMIC_RELEASE);
-}
-
-void HidSharedMemoryController::Initialize(HidNpadInternalState *internal_state, const NpadIdentity &identity)
-{
-    ::syscon::logger::LogDebug("HidSharedMemoryController::Initialize initializing player %d ...", m_player_idx + 1);
-
-    memset(internal_state, 0, sizeof(HidNpadInternalState));
-
-    internal_state->joy_assignment_mode = 0;
-    // The same colours the pad was created with, so a mitm'd applet draws it the way the
-    // Controllers menu - which reads the real hid - already does.
-    internal_state->full_key_color.attribute = HidColorAttribute_Ok;
-    internal_state->full_key_color.full_key.main = m_body_color;
-    internal_state->full_key_color.full_key.sub = m_buttons_color;
-
-    internal_state->full_key_lifo.header.buffer_count = 17;
-    internal_state->system_ext_lifo.header.buffer_count = 17;
-    internal_state->full_key_six_axis_sensor_lifo.header.buffer_count = 17;
-
-    internal_state->system_properties.is_abxy_button_oriented = 1;
-    internal_state->system_properties.is_plus_available = 1;
-    internal_state->system_properties.is_minus_available = 1;
-    internal_state->system_properties.is_directional_buttons_available = 1;
-    internal_state->battery_level[0] = 4; // full
-    internal_state->battery_level[1] = 4;
-    internal_state->battery_level[2] = 4;
-
-    /*
-        Last, and on its own: style_set is what tells a reader the slot holds a pad, and
-        everything it will then walk - the lifo buffer counts above most of all - has to be in
-        place before it does.
-
-        Never SystemExt, even for the applets: the real hid only reports a style the client
-        declared, and nn::hid aborts in a title handed one it never asked for (SSBU). The
-        system applets are served by system_ext_lifo being filled regardless.
-    */
-    ApplyIdentity(internal_state, identity);
-}
-
-template <typename Lifo>
-static void EmptyLifo(Lifo *lifo)
-{
-    __atomic_store_n(&lifo->header.count, 0u, __ATOMIC_RELEASE);
-    __atomic_store_n(&lifo->header.tail, 0u, __ATOMIC_RELEASE);
 }
 
 template <typename Lifo, typename State>
@@ -818,133 +681,74 @@ static void AppendState(Lifo *lifo, const State &state)
 }
 
 /*
-    The real hid reports a stick pushed past half its range as a button too, and the system
-    applets navigate on those bits rather than on the analog value - the Album ignored our left
-    stick while taking its d-pad. In hiddbg mode hid derives them itself from the HDLS sticks;
-    here nobody would, so they are derived the same way.
+    The lifo still holds the real hid's samples, numbered unlike ours, and libnx restarts a read
+    for as long as two neighbouring samples are not numbered consecutively. An empty lifo is the
+    one state every reader copes with.
 */
-static u64 StickPseudoButtons(const HidAnalogStickState &left, const HidAnalogStickState &right)
+void HidSharedMemoryController::EmptySixAxis(HidFakeView view)
 {
-    constexpr s32 Threshold = JOYSTICK_MAX / 2;
+    HidNpadSixAxisSensorLifo *lifo = FakeSixAxisLifo(view, m_player_idx);
+    if (!m_has_motion || lifo == nullptr)
+        return;
 
-    u64 buttons = 0;
-    if (left.x < -Threshold)
-        buttons |= HidNpadButton_StickLLeft;
-    if (left.x > Threshold)
-        buttons |= HidNpadButton_StickLRight;
-    if (left.y > Threshold)
-        buttons |= HidNpadButton_StickLUp;
-    if (left.y < -Threshold)
-        buttons |= HidNpadButton_StickLDown;
-    if (right.x < -Threshold)
-        buttons |= HidNpadButton_StickRLeft;
-    if (right.x > Threshold)
-        buttons |= HidNpadButton_StickRRight;
-    if (right.y > Threshold)
-        buttons |= HidNpadButton_StickRUp;
-    if (right.y < -Threshold)
-        buttons |= HidNpadButton_StickRDown;
-    return buttons;
+    lifo->header.buffer_count = 17;
+    __atomic_store_n(&lifo->header.count, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&lifo->header.tail, 0u, __ATOMIC_RELEASE);
 }
 
 /*
-    Called from the manager thread, once per tick per client, whether or not the pad
-    reported anything new: a real controller keeps sampling at a fixed rate and the
-    console treats a lifo that stops advancing as a pad that went away.
+    Our numbering starts above the highest number any view has shown, so a reader waiting for a
+    newer sample never waits for ours to catch up.
 */
-void HidSharedMemoryController::Publish()
+void HidSharedMemoryController::TakeOverSixAxis()
 {
-    HidNpadCommonState state{};
-    state.sampling_number = m_sampling_number;
-    state.buttons = m_state.buttons | StickPseudoButtons(m_state.analog_stick_l, m_state.analog_stick_r);
-    state.analog_stick_l = m_state.analog_stick_l;
-    state.analog_stick_r = m_state.analog_stick_r;
-    state.attributes = HidNpadAttribute_IsConnected | HidNpadAttribute_IsWired;
-
-    // The GameCube triggers are analog on real hardware; the pad state only carries ZL/ZR.
-    HidNpadGcTriggerState trigger{};
-    trigger.sampling_number = m_sampling_number;
-    trigger.trigger_l = (m_state.buttons & HidNpadButton_ZL) ? JOYSTICK_MAX : 0;
-    trigger.trigger_r = (m_state.buttons & HidNpadButton_ZR) ? JOYSTICK_MAX : 0;
-
-    HidSixAxisSensorState six_axis{};
-    if (m_state.has_motion)
-    {
-        m_motion.Step(m_state.angular_velocity, POLLING_FREQUENCY_US / 1e6f);
-
-        six_axis.delta_time = POLLING_FREQUENCY_US * 1000ULL;
-        six_axis.sampling_number = m_sampling_number;
-        six_axis.acceleration = m_state.acceleration;
-        six_axis.angular_velocity = m_state.angular_velocity;
-        six_axis.angle = m_motion.GetAngle();
-        six_axis.direction = m_motion.GetDirection();
-        six_axis.attributes = HidSixAxisSensorAttribute_IsConnected;
-    }
-
-    // Every view gets the same samples under the same sampling numbers, and Clear() empties
-    // them all at once: one m_sampling_number can then never show a gap in any of them.
     for (size_t view = 0; view < HidFakeViewCount; view++)
     {
-        HidNpadInternalState *internal_state = FakeNpadState(static_cast<HidFakeView>(view), m_player_idx);
-        if (internal_state == nullptr)
-            continue;
+        const HidNpadSixAxisSensorLifo *lifo = FakeSixAxisLifo(static_cast<HidFakeView>(view), m_player_idx);
+        if (lifo != nullptr && lifo->header.count != 0 && lifo->header.tail < lifo->header.buffer_count)
+            m_sampling_number = std::max(m_sampling_number, lifo->storage[lifo->header.tail].sampling_number + 1);
+    }
 
-        const NpadIdentity identity = IdentityFor(static_cast<HidFakeView>(view));
-        if (internal_state->style_set == 0)
-            Initialize(internal_state, identity);
-        else if (internal_state->style_set != identity.style)
-            ApplyIdentity(internal_state, identity);
+    for (size_t view = 0; view < HidFakeViewCount; view++)
+        EmptySixAxis(static_cast<HidFakeView>(view));
+}
 
-        // Every style sys-con presents - FullKey, Gc, Lagon, Lucia, Lager - is read from here.
-        AppendState(&internal_state->full_key_lifo, state);
+/*
+    Every tick, moving or not: a real controller keeps sampling at a fixed rate and the console
+    treats a lifo that stops advancing as a sensor that went away.
+*/
+void HidSharedMemoryController::PublishSixAxis()
+{
+    if (!m_has_motion)
+        return;
 
-        if (identity.style == HidNpadStyleTag_NpadGc)
-            AppendState(&internal_state->gc_trigger_lifo, trigger);
+    m_motion.Step(m_angular_velocity, POLLING_FREQUENCY_US / 1e6f);
 
-        // Filled for a style that is deliberately not announced: qlaunch, the Controllers
-        // applet and profile select read this lifo and nothing else.
-        AppendState(&internal_state->system_ext_lifo, state);
+    HidSixAxisSensorState six_axis{};
+    six_axis.delta_time = POLLING_FREQUENCY_US * 1000ULL;
+    six_axis.sampling_number = m_sampling_number;
+    six_axis.acceleration = m_acceleration;
+    six_axis.angular_velocity = m_angular_velocity;
+    six_axis.angle = m_motion.GetAngle();
+    six_axis.direction = m_motion.GetDirection();
+    six_axis.attributes = HidSixAxisSensorAttribute_IsConnected;
 
-        // The npad and six-axis lifos are only ever filled together, so they share one
-        // sampling number and neither can show the gap that hangs a reader.
-        if (m_state.has_motion)
-            AppendState(&internal_state->full_key_six_axis_sensor_lifo, six_axis);
+    for (size_t view = 0; view < HidFakeViewCount; view++)
+    {
+        HidNpadSixAxisSensorLifo *lifo = FakeSixAxisLifo(static_cast<HidFakeView>(view), m_player_idx);
+        if (lifo != nullptr)
+            AppendState(lifo, six_axis);
     }
 
     m_sampling_number++;
-}
-
-/*
-    Retires the pad in the order a reader walks it: style_set first, so the clients that come
-    after stop at the slot, then the lifos through their count. buffer_count is never unset -
-    a reader already inside the lifo divides by it, and nn::hid restarts its read from the top
-    whenever the sampling numbers it collected are not consecutive, so a header wiped
-    underneath it is a read that need not terminate.
-*/
-void HidSharedMemoryController::Clear()
-{
-    for (size_t view = 0; view < HidFakeViewCount; view++)
-    {
-        HidNpadInternalState *internal_state = FakeNpadState(static_cast<HidFakeView>(view), m_player_idx);
-        if (internal_state == nullptr)
-            continue;
-
-        __atomic_store_n(&internal_state->style_set, 0u, __ATOMIC_RELEASE);
-
-        EmptyLifo(&internal_state->full_key_lifo);
-        EmptyLifo(&internal_state->system_ext_lifo);
-        EmptyLifo(&internal_state->full_key_six_axis_sensor_lifo);
-        EmptyLifo(&internal_state->gc_trigger_lifo);
-    }
-
-    m_sampling_number = 0;
 }
 
 Result HidSharedMemoryController::Update(const SwitchPadState &state)
 {
     std::lock_guard<std::recursive_mutex> lock(g_HidSharedMemoryManager.m_mutex_controller);
 
-    m_state = state;
+    m_acceleration = state.acceleration;
+    m_angular_velocity = state.angular_velocity;
 
     return 0;
 }

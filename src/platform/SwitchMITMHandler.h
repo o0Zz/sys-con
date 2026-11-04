@@ -6,16 +6,13 @@
 class SwitchMITMHandler : public SwitchVirtualGamepadHandler
 {
 private:
+    // Null for a sideways Joy-Con, which has neither motion nor rumble here.
     std::array<std::shared_ptr<HidSharedMemoryController>, CONTROLLER_MAX_INPUTS> m_controllerList;
     std::array<controllerlib::RumbleValue, CONTROLLER_MAX_INPUTS> m_lastRumble{};
 
-    // The hiddbg device behind each input. It exists so the console announces the pad, and it
-    // carries Home and Capture, which the console reads from hid itself and never from the
-    // npad the fake shared memory overrides.
+    // The hiddbg device behind each input: the pad every client sees, through the real hid.
     std::array<HiddbgHdlsHandle, CONTROLLER_MAX_INPUTS> m_hdlsHandle{};
-    std::array<u64, CONTROLLER_MAX_INPUTS> m_hdlsButtons{};
-
-    u64 m_lastActivityTick = 0;
+    std::array<HiddbgHdlsState, CONTROLLER_MAX_INPUTS> m_hdlsState{};
 
 protected:
     bool IsControllerAttached(uint16_t input_idx) override;

@@ -48,23 +48,33 @@
   sys-con gets `0x815` and runs without a MITM. Never wrap `RegisterMitmServer` in
   `R_ABORT_UNLESS` (the abort fatals the console). **Test mitm mode after a reboot, never a
   restart.**
-- **A MITM only catches processes that open `hid` after it installs** (resolved at
-  `sm:GetService`). `boot2.flag` makes it catch qlaunch; otherwise launch something after
-  sys-con is up. A run proves nothing unless the log shows a client intercepted
-  (`HidMitm: session accepted` / `CreateAppletResource hooked for program`, or
-  `HidMitmService creation for program id` at Debug). Good target: the profile-select applet
-  `0x0100000000001007`, reached by starting any game.
-- **Data plane:** the two fake shared memories (system applets / applications) are allocated
-  once at `Start()`. Home and Capture go through the pad's hiddbg device, not npad memory:
-  bits 18/19 are `StickLRight`/`StickLDown` there, and `am` reads them from the real hid.
+- **Only the application and the Album are mitm'd** (`HidSharedMemoryManager::ShouldMitm`).
+  qlaunch, am, the applets and overlays talk to the real hid. A run proves nothing unless the
+  log shows a client intercepted (`HidMitm: session accepted` / `CreateAppletResource hooked
+  for program`, or `HidMitmService creation for program id` at Debug). Targets: the companion
+  NRO (`/switch/sys-con.nro` under hbmenu via the Album, shows buttons, six-axis, and
+  vibration "Permitted"/echo) and any game.
+- **Data plane:** the pad is a plain hiddbg device carrying the whole state, Home and Capture
+  included, exactly as in `mode=hiddbg`. Each view's fake (application / Album, allocated at
+  `Start()`) is a copy of the client's own real view, done top-down so a lifo header is never
+  newer than its storage. sys-con writes only the `full_key_six_axis_sensor_lifo` of a pad
+  with motion (hiddbg's virtual six-axis reaches no client) and answers the vibration
+  commands for its slots (hid reports a hiddbg device as not mounted). Everything else -
+  styles, the grip screen, an overlay taking the input away - is the real hid's doing.
 - **Fatals:** use the `hw-triage` skill. `0xFFE` is `std::abort` with the failing Result in
   X[0].
 
 ## Hardware test rig
 
-- **Drive the UI with the touch panel:** `python tools/devtools touch X Y` / `swipe X0 Y0 X1
-  Y1`, in `devtools screenshot`'s 1280x720 space. It is the only scripted input that reaches
-  an intercepted process (pad presses land in a slot the MITM replaces). Handheld only.
+- **Drive the UI with the UDP pad** (`python tools/networkpad.py --host <console> tap A`),
+  which reaches every process in both modes, including the "press the same button three
+  times" pairing screen. The touch panel (`python tools/devtools touch X Y` / `swipe`, in
+  `devtools screenshot`'s 1280x720 space, handheld only) covers what the pad cannot. Home on
+  the UDP pad does nothing, in either build.
+- **Do not `devtools iterate` in mitm mode on this console.** It stops sys-con to deploy, and
+  stopping a sys-con that holds the `hid` MITM with a live client aborts sm (fatal `0xFFE`
+  in `0x0100000000000004`). Upload `exefs.nsp`, check its hash, then `power/restart`: the
+  boot2 flag starts the new build.
 - **The test console carries sys-con's `boot2.flag` on purpose.** `devtools doctor`'s boot2
   check is red by design; never run `setup-console --write` (it deletes the flag). As a
   consequence sys-autopilot reports `running: false` for sys-con and `/process/start` fails
@@ -74,8 +84,7 @@
   `0xe401`). To get input back with sys-con running, `POST /process/start
   {"titleId":"0100000000001007"}`: it fails in the location resolver and reopens `hid:dbg` (also what wakes scripted
   input on a fresh boot).
-  **Never start/stop Tesla or sys-patch for this — it took the console down.** The
-  "press the same button three times" pairing screen needs a human. Known-good binary:
+  **Never start/stop Tesla or sys-patch for this — it took the console down.** Known-good binary:
   `C:\dev\sys-autopilot\sys-autopilot-1.5.0-known-good.nsp`.
 - **`/process/start` only launches sysmodules under `/atmosphere/contents`;** games are
   launched by driving the Home Menu.

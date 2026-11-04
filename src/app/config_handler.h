@@ -62,8 +62,8 @@ namespace syscon::config
 
     // How USB controllers are published to the console as virtual pads.
     //  - HIDDBG: attach virtual devices through hiddbg/HDLS (SwitchHDLHandler).
-    //  - MITM:   man-in-the-middle the hid service and feed each game a fake HID
-    //            shared memory (SwitchMITMHandler + SwitchMITMManager).
+    //  - MITM:   the same hiddbg devices, plus a hid MITM on the application and the Album
+    //            for rumble and motion (SwitchMITMHandler + SwitchMITMManager).
     //  - DISABLED: sys-con exits right after reading the config.
     // Selected at runtime; both mechanisms are compiled into both build flavours.
     enum class VirtualPadMode

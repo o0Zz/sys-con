@@ -28,7 +28,7 @@ If you want to override a setting for only 1 controller, it's adviced to change 
 ## Mode
 The `mode=` key of the `[global]` section selects how controllers are published to the console:
 - `hiddbg`: virtual controllers are attached through hiddbg (HDLS).
-- `mitm` (set in the shipped `config.ini`): sys-con intercepts the `hid` service and feeds each game a fake HID shared memory. Required for rumble.
+- `mitm` (set in the shipped `config.ini`): the pads are the same hiddbg devices as in `hiddbg` mode, and sys-con additionally intercepts the `hid` service of the running game and of homebrew launched from the Album, to deliver rumble and motion to them. The Home Menu, system applets and overlays talk to the real `hid` directly.
 - `disabled`: sys-con starts, writes its log, then exits without creating any controller.
 
 A `config.ini` without a `mode=` key, with an unknown value, or missing altogether falls back to `hiddbg`.
@@ -56,7 +56,7 @@ Reboot the Nintendo Switch.
 - [x] Configurable controller color (`color_body`, `color_buttons`, `color_leftgrip`, `color_rightgrip`) using `#RRGGBB` or `#RRGGBBAA`
 - [x] Network controller over UDP, for scripted input during testing (off by default)
 - [x] Rumble (mode=mitm only; hiddbg gives no vibration back)
-- [x] Motion controls (for drivers that report it: Switch Pro, SInput, Steam Controller 2026, network controller)
+- [x] Motion controls (mode=mitm only, for drivers that report it: Switch Pro, SInput, Steam Controller 2026, network controller)
 - [x] USB keyboard / mouse
 - [x] Re-attach a dropped controller with L+R or ZL+ZR, or as a sideways single Joy-Con for games that only accept those (see [Single Joy-Con mode](#single-joy-con-mode))
 

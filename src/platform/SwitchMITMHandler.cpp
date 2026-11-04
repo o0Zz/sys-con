@@ -1,7 +1,6 @@
 #include "SwitchMITMHandler.h"
 #include "SwitchLogger.h"
 #include <algorithm>
-#include <cstdlib>
 #include <mutex>
 
 using namespace controllerlib;
@@ -11,38 +10,6 @@ namespace
     // How long the console may take to publish the npad for a device hiddbg just created.
     constexpr int NpadAppearRetries = 100;
     constexpr u64 NpadAppearDelayNs = 10000000ULL; // 10 ms
-
-    /*
-        A rate limit on idle:sys, not the thing that keeps the console awake - that is the pad
-        still not being at rest on the next tick. Without it a pad polling at 125 Hz would
-        issue an IPC every 8 ms.
-    */
-    constexpr u64 ActivityReportPeriodNs = 1000000000ULL; // 1 s
-
-    // ~25% of the +-32767 range: far enough out that only a deliberate push counts.
-    constexpr int32_t ActivityStickThreshold = 8000;
-
-    /*
-        A pad that is not at rest means somebody is there. Reporting on *change* instead would
-        miss the case this exists for: a held direction or button produces byte-identical HID
-        reports for as long as it is held, so the console would dim under the user's thumb.
-
-        The stick threshold is not tidiness. analogDeadzonePercent defaults to 0 and the
-        [network] profile ships with deadzone_x = 0, and outside a deadzone the raw value is
-        passed through - so a resting stick's noise never reads exactly zero, and a bare != 0
-        test would hold the console awake with nothing touching the pad. Motion is left out
-        entirely for the same reason: a pad on a table drifts forever.
-    */
-    bool IsUserActive(const SwitchPadState &state)
-    {
-        if (state.buttons != 0)
-            return true;
-
-        return std::abs(state.analog_stick_l.x) > ActivityStickThreshold ||
-               std::abs(state.analog_stick_l.y) > ActivityStickThreshold ||
-               std::abs(state.analog_stick_r.x) > ActivityStickThreshold ||
-               std::abs(state.analog_stick_r.y) > ActivityStickThreshold;
-    }
 
     /*
         Two handlers attaching at the same time would each diff the npad mask across the
@@ -72,8 +39,8 @@ namespace
     /*
         hiddbg hands back a HiddbgHdlsHandle and nothing that names the npad the console gave
         it, so the slot has to be recovered by watching which one appears. A second npad
-        appearing in the same window makes the answer ambiguous, and guessing would have the
-        fake shared memory override a slot that belongs to somebody else.
+        appearing in the same window makes the answer ambiguous, and guessing would send our
+        motion and rumble to a slot that belongs to somebody else.
     */
     bool WaitForNewNpad(u32 mask_before, uint8_t *player_idx_out)
     {
@@ -124,20 +91,14 @@ Result SwitchMITMHandler::Initialize()
 }
 
 /*
-    The npad slot the fake shared memory overrides is the one hid gave to our hiddbg device,
-    and hid takes it back on its own - the grip/order screen unassigning every controller, a
-    game refusing another pad, a sleep cycle. The fake shared memory is ours and would claim
-    the pad is still there, so the real one is asked: sys-con's own hid view (main.cpp opens it,
-    and it is never mitm'd) empties that npad the moment hid lets go of it.
+    hid takes the npad back on its own - the grip/order screen unassigning every controller, a
+    game refusing another pad, a sleep cycle - without detaching the hiddbg device. sys-con's
+    own hid view (main.cpp opens it, and it is never mitm'd) empties that npad the moment hid
+    lets go of it, a shared memory read rather than an IPC on every poll.
 
-    A shared memory read, where hiddbgIsHdlsVirtualDeviceAttached was an IPC on every poll -
-    and that one was the wrong question anyway: the grip/order screen unassigns the device
-    without detaching it, so hiddbg kept saying attached and the screen showed a controller
-    nobody had confirmed with L+R.
-
-    Answering honestly is also what re-arms the L+R re-attach in
-    SwitchVirtualGamepadHandler::UpdateInput, and the slot is given back here so the manager
-    thread stops publishing a pad the console no longer has.
+    Answering honestly is what re-arms the L+R re-attach in
+    SwitchVirtualGamepadHandler::UpdateInput, and releasing the slot stops our motion and
+    rumble going to a slot the console no longer gives us.
 */
 bool SwitchMITMHandler::IsControllerAttached(uint16_t input_idx)
 {
@@ -149,7 +110,7 @@ bool SwitchMITMHandler::IsControllerAttached(uint16_t input_idx)
         return true;
 
     const uint8_t player_idx = m_controllerList[input_idx]->GetPlayerIndex();
-    if (!HidSharedMemoryManager::GetHidSharedMemoryManager().IsPlayerIndexRetired(player_idx) && hidGetNpadStyleSet(static_cast<HidNpadIdType>(player_idx)) != 0)
+    if (hidGetNpadStyleSet(static_cast<HidNpadIdType>(player_idx)) != 0)
         return true;
 
     syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the device on input: %d, releasing player %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, player_idx + 1);
@@ -169,7 +130,7 @@ void SwitchMITMHandler::ReleaseController(uint16_t input_idx)
     }
 
     m_lastRumble[input_idx] = controllerlib::RumbleValue{};
-    m_hdlsButtons[input_idx] = 0;
+    m_hdlsState[input_idx] = HiddbgHdlsState{};
 
     if (m_hdlsHandle[input_idx].handle != 0)
     {
@@ -188,10 +149,9 @@ Result SwitchMITMHandler::DetachController(uint16_t input_idx)
 }
 
 /*
-    The pad is created through hiddbg first, so hid owns the device and the console announces
-    it - player LED, the Controllers screen, and the grip/order screen, none of which look at
-    the npad shared memory. Only then is the npad it produced claimed here, so the fake shared
-    memory overrides that very slot and the MITM stays the source of the pad's state.
+    The pad is created through hiddbg, so hid owns the device and every client - mitm'd or not
+    - sees it exactly as in mode=hiddbg. The npad it produced is then claimed here, so the MITM
+    knows which slot to fill motion into and which vibration handles are ours.
 */
 Result SwitchMITMHandler::AttachController(uint16_t input_idx)
 {
@@ -204,10 +164,9 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
     std::unique_lock<std::mutex> attach_lock(g_attach_mutex);
 
     /*
-        A sideways Joy-Con stays a plain hiddbg device that hid owns outright: the fake shared
-        memory only ever publishes FullKey, and hid alone can make it the single Joy-Con the
-        game asked for. It still takes the attach lock, or its npad appearing would make a
-        concurrent Pro attach's slot ambiguous.
+        A sideways Joy-Con claims no slot of its own until the console assigns it. It still
+        takes the attach lock, or its npad appearing would make a concurrent Pro attach's slot
+        ambiguous.
     */
     if (IsAttachingAsJoyCon(input_idx))
     {
@@ -245,7 +204,7 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
         return MAKERESULT(Module_Libnx, LibnxError_NotFound);
     }
 
-    m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachControllerAt(player_idx, deviceInfo.deviceType, deviceInfo.singleColorBody, deviceInfo.singleColorButtons);
+    m_controllerList[input_idx] = HidSharedMemoryManager::GetHidSharedMemoryManager().AttachControllerAt(player_idx, m_controller->Support(SUPPORTS_MOTION));
     if (m_controllerList[input_idx] == nullptr)
     {
         ReleaseController(input_idx);
@@ -257,29 +216,22 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
     return 0;
 }
 
+/*
+    The whole pad goes to hiddbg, Home and Capture included: the real hid publishes it to every
+    reader, the mirror copies it into the fake, and am reads the system buttons from it. Only
+    on change, since every call is an IPC and a pad at rest reports the same state over and
+    over.
+*/
 Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uint16_t input_idx)
 {
     if (!IsControllerAttached(input_idx))
         return 0;
 
-    // Read from `state`, before Home and Capture are split off below: pressing either is still
-    // a user being present.
-    if (IsUserActive(state))
+    HiddbgHdlsState &hdls_state = m_hdlsState[input_idx];
+    if (hdls_state.buttons != state.buttons ||
+        hdls_state.analog_stick_l.x != state.analog_stick_l.x || hdls_state.analog_stick_l.y != state.analog_stick_l.y ||
+        hdls_state.analog_stick_r.x != state.analog_stick_r.x || hdls_state.analog_stick_r.y != state.analog_stick_r.y)
     {
-        u64 now = armGetSystemTick();
-        if (armTicksToNs(now - m_lastActivityTick) >= ActivityReportPeriodNs)
-        {
-            m_lastActivityTick = now;
-
-            Result rc = idlesysReportUserIsActive();
-            if (R_FAILED(rc))
-                syscon::logger::LogError("SwitchMITMHandler idlesysReportUserIsActive failed: 0x%X", rc);
-        }
-    }
-
-    if (m_controllerList[input_idx] == nullptr)
-    {
-        HiddbgHdlsState hdls_state{};
         hdls_state.battery_level = 4;
         hdls_state.buttons = state.buttons;
         hdls_state.analog_stick_l = state.analog_stick_l;
@@ -288,37 +240,16 @@ Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uin
         Result rc = hiddbgSetHdlsState(m_hdlsHandle[input_idx], &hdls_state);
         if (R_FAILED(rc))
         {
-            syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the Joy-Con on input: %d (Error: 0x%08X)", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc);
+            syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] The console dropped the device on input: %d (Error: 0x%08X)", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc);
             ReleaseController(input_idx);
+            return 0;
         }
+    }
+
+    if (m_controllerList[input_idx] == nullptr)
         return 0;
-    }
 
-    /*
-        Home and Capture only exist as hiddbg HDLS bits; in npad shared memory the same bits
-        are the StickLRight/StickLDown pseudo-buttons. They go to the hiddbg device instead,
-        so hid raises them through hidsys to am, which the MITM never sees.
-    */
-    constexpr u64 SystemButtons = HiddbgNpadButton_Home | HiddbgNpadButton_Capture;
-
-    const u64 hdls_buttons = state.buttons & SystemButtons;
-    if (hdls_buttons != m_hdlsButtons[input_idx])
-    {
-        HiddbgHdlsState hdls_state{};
-        hdls_state.battery_level = 4;
-        hdls_state.buttons = hdls_buttons;
-
-        Result rc = hiddbgSetHdlsState(m_hdlsHandle[input_idx], &hdls_state);
-        if (R_FAILED(rc))
-            return rc;
-
-        m_hdlsButtons[input_idx] = hdls_buttons;
-    }
-
-    SwitchPadState npad_state = state;
-    npad_state.buttons &= ~SystemButtons;
-
-    return m_controllerList[input_idx]->Update(npad_state);
+    return m_controllerList[input_idx]->Update(state);
 }
 
 /*

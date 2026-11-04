@@ -16,8 +16,8 @@
 
 enum class HidFakeView : u8
 {
-    System,
     Application,
+    Album,
 };
 
 constexpr size_t HidFakeViewCount = 2;
@@ -68,48 +68,41 @@ private:
 
 /* ------------------------------------------------ */
 
+/*
+    A pad sys-con created through hiddbg. The real hid publishes it - buttons, sticks, style,
+    Home and Capture - and the mirror copies that into the fake like any other npad. Only what
+    hid cannot get from hiddbg goes through here: the six-axis samples one way, vibration the
+    other.
+*/
 class HidSharedMemoryController
 {
 public:
     static constexpr uint8_t VibrationDeviceCount = 2;
 
-    // device_type is the HidDeviceType the pad's hiddbg device was created with; it decides
-    // what kind of controller the fake shared memory presents.
-    HidSharedMemoryController(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color);
+    HidSharedMemoryController(uint8_t player_idx, bool has_motion);
 
     uint8_t GetPlayerIndex() const { return m_player_idx; }
+    bool HasMotion() const { return m_has_motion; }
 
-    // Stores the latest pad state; the manager thread is what writes it into every
-    // client's shared memory, at a steady rate the console expects from a real pad.
     Result Update(const SwitchPadState &state);
 
     // Vibration flows the other way: a mitm'd hid command stores it in the manager and the
     // handler's polling thread drains it into the driver.
     controllerlib::RumbleValue GetRumble() const;
 
-    void Publish();
-    void Clear();
-
-    struct NpadIdentity
-    {
-        u32 style;
-        u32 device_type_bits;
-        u8 footer;
-    };
+    // All three are called with m_mutex_sharedmemory held.
+    void PublishSixAxis();
+    void TakeOverSixAxis();
+    void EmptySixAxis(HidFakeView view);
 
 private:
     uint8_t m_player_idx;
-    u8 m_device_type;
-    u32 m_body_color;
-    u32 m_buttons_color;
-    u64 m_sampling_number;
+    bool m_has_motion;
+    u64 m_sampling_number = 0;
 
-    SwitchPadState m_state;
+    HidVector m_acceleration{};
+    HidVector m_angular_velocity{};
     SwitchMotion m_motion;
-
-    NpadIdentity IdentityFor(HidFakeView view) const;
-    void Initialize(HidNpadInternalState *internal_state, const NpadIdentity &identity);
-    static void ApplyIdentity(HidNpadInternalState *internal_state, const NpadIdentity &identity);
 };
 
 /* ------------------------------------------------ */
@@ -125,19 +118,16 @@ public:
 
     static HidSharedMemoryManager &GetHidSharedMemoryManager();
 
-    // The slot is dictated by the caller, not chosen here: the pad has already been created
-    // through hiddbg and the console has given it an npad, and it is that npad the fake
-    // shared memory has to override.
-    std::shared_ptr<HidSharedMemoryController> AttachControllerAt(uint8_t player_idx, u8 device_type, u32 body_color, u32 buttons_color);
-
     /*
-        hid only shows a client the npad styles it declared through SetSupportedNpadStyleSet,
-        and a game handed a style it never asked for asserts. The application's declaration is
-        kept so its view can present a GameCube or N64 pad as one exactly when the game
-        supports it; every system applet shares a view and is shown a Pro Controller.
+        The processes that get a fake shared memory, and the only ones the MITM intercepts:
+        the application, and the Album, which is where hbmenu runs homebrew. Every other
+        process talks to the real hid directly.
     */
-    void OnSupportedNpadStyleSet(u64 program_id, u32 style_set);
-    u32 GetApplicationSupportedStyles() const { return m_application_styles.load(std::memory_order_relaxed); }
+    static bool ShouldMitm(u64 program_id);
+
+    // The slot is dictated by the caller, not chosen here: the pad has already been created
+    // through hiddbg and the console has given it an npad.
+    std::shared_ptr<HidSharedMemoryController> AttachControllerAt(uint8_t player_idx, bool has_motion);
     void DetachController(std::shared_ptr<HidSharedMemoryController> controller);
 
     /*
@@ -145,18 +135,9 @@ public:
         It is called from the MITM server thread, which runs at priority 20 while the pad
         threads run at 41 and the mirror thread at 38 - all three pinned to CPU 3. Blocking
         the MITM thread behind a pad thread that the mirror thread keeps preempting stalls
-        every hid client on the console, which takes am, hid and sm down with it.
+        every hid client it serves.
     */
     bool IsPlayerIndexOwned(uint8_t player_idx) const;
-
-    /*
-        A client disconnecting one of our npads through hid - the grip/order screen does it to
-        every npad the moment it opens. The slot is cleared here, before the request is even
-        forwarded, so the client can never read our pad back after its own disconnect; the pad
-        handler then sees IsPlayerIndexRetired and releases its hiddbg device on its own thread.
-    */
-    void RetireDisconnectedNpad(u32 npad_id);
-    bool IsPlayerIndexRetired(uint8_t player_idx) const;
 
     void SetVibration(uint8_t player_idx, uint8_t device_idx, const HidVibrationValue &value);
     HidVibrationValue GetVibration(uint8_t player_idx, uint8_t device_idx) const;
@@ -173,11 +154,8 @@ public:
 private:
     void OnRun();
 
-    // real -> fake, for everything but the npad slots sys-con owns.
+    // real -> fake, everything but the six-axis lifo of a pad sys-con feeds motion to.
     void Mirror(HidSharedMemoryEntry &entry);
-
-    // Hands an npad slot back to the real hid in every view. Caller holds m_mutex_sharedmemory.
-    void RestoreRealSlot(uint8_t player_idx);
     std::shared_ptr<HidSharedMemoryEntry> FindEntry(HidFakeView view) const;
 
     void RunGarbageCollector();
@@ -189,8 +167,7 @@ private:
     ::Thread m_thread;
 
 protected:
-    // Lock order is always m_mutex_controller then m_mutex_sharedmemory: attaching a
-    // controller has to reach into every client's shared memory to clear its slot.
+    // Lock order is always m_mutex_controller then m_mutex_sharedmemory.
     std::recursive_mutex m_mutex_controller;
     std::array<std::shared_ptr<HidSharedMemoryController>, 8> m_controller_list;
 
@@ -205,8 +182,6 @@ protected:
     };
 
     std::array<std::atomic<bool>, 8> m_player_owned;
-    std::array<std::atomic<bool>, 8> m_player_retired;
-    std::atomic<u32> m_application_styles{0};
     std::array<VibrationSlot, 8 * HidSharedMemoryController::VibrationDeviceCount> m_vibration;
 
     std::recursive_mutex m_mutex_sharedmemory;

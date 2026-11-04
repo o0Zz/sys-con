@@ -155,26 +155,9 @@ namespace ams::syscon::hid::mitm
 
     bool HidMitmService::ShouldMitm(const sm::MitmProcessInfo &client_info)
     {
-        /*
-            Everything Nintendo signs - system modules, applets, applications - lives under
-            0x01. A program id outside it is a homebrew sysmodule (sys-con itself is 0x69...,
-            sys-ftpd and the overlay loader 0x42...): none of them shows a controller, and
-            handing one a fake HID shared memory has taken the console down.
-        */
-        if (client_info.program_id.value < 0x0100000000000000 || client_info.program_id.value > 0x01FFFFFFFFFFFFFF)
-        {
-            ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (Sysmodule) ? (no)", client_info.program_id.value);
-            return false;
-        }
-
-        if (IsSystemProgramId(client_info.program_id))
-        {
-            ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " (System) ? (no)", client_info.program_id.value);
-            return false; // Do not MITM the system modules
-        }
-
-        ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " ? (yes)", client_info.program_id.value);
-        return true;
+        const bool mitm = HidSharedMemoryManager::ShouldMitm(client_info.program_id.value);
+        ::syscon::logger::LogDebug("HidMitmService ShouldMitm: 0x%016" PRIx64 " ? (%s)", client_info.program_id.value, mitm ? "yes" : "no");
+        return mitm;
     }
 
 } // namespace ams::syscon::hid::mitm
