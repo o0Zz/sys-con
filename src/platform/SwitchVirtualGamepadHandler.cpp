@@ -176,10 +176,11 @@ void SwitchVirtualGamepadHandler::OnRun()
     ::syscon::logger::LogDebug("SwitchVirtualGamepadHandler InputThread running ...");
 
     /*
-     Read timeout depends on the polling frequency and number of interfaces
-      - On XBOX360 controllers, we have 4 interfaces, so the read timeout is divided by 4 to make sure we read all interfaces in time.
-      - On most of other controllers, we have 1 interface, so the read timeout is equal to the polling frequency but
-        it don't have a big impact on the performance - It's even better to set a bigger timeout to avoid the thread to be too busy.
+     Every endpoint keeps a transfer posted, so reports are captured on all interfaces at once, but an
+     idle sweep waits on the event of a single endpoint: a report landing on another one is only seen
+     when that wait ends. Splitting the timeout across the interfaces bounds that delay (Xbox 360
+     wireless: 4). UpdateOutput only runs between reads, so on a pad at rest the timeout is also how
+     late a rumble change is applied.
     */
     uint32_t polling_timeout_us = (m_polling_timeout_ms * 1000) / m_controller->GetDevice()->GetInterfaces().size();
 
