@@ -68,6 +68,25 @@ TEST(Configuration, test_load_config_with_profile_xboxone)
     EXPECT_EQ(config.simulateCombos[2].buttonSimulated, GamepadButton::NONE);
 }
 
+TEST(Configuration, test_load_config_xbox_wireless_adapter)
+{
+    for (uint16_t product_id : {0x02e6, 0x02fe})
+    {
+        ControllerConfig config;
+
+        syscon::StdFileManager fileManager;
+        ::syscon::config::Initialize(fileManager);
+        int rc = ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH_PROJECT, &config, 0x045e, product_id, false, "");
+        EXPECT_EQ(rc, 0);
+
+        EXPECT_EQ(config.driver, "xboxadapter");
+        EXPECT_EQ(config.profile, "xboxadapter");
+        EXPECT_EQ(config.buttonsPin[GamepadButton::A][0], 2);
+        EXPECT_EQ(config.buttonsPin[GamepadButton::B][0], 1);
+        EXPECT_EQ(config.buttonsPin[GamepadButton::HOME][0], 12);
+    }
+}
+
 TEST(Configuration, test_load_config_with_profile_wii)
 {
     ControllerConfig config;

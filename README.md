@@ -64,12 +64,34 @@ Reboot the Nintendo Switch.
 - [x] All PC Controllers
 - [x] All Playstation Controllers
 - [x] All Xbox Controllers
+- [x] Xbox One / Series controllers over the Xbox Wireless Adapter for Windows (see [Xbox Wireless Adapter](#xbox-wireless-adapter))
 - [x] Steam Controllers
 - [x] [SInput](https://github.com/HandHeldLegend/SInput-HID) gamepads (Hand Held Legend ProGCC / GC Ultimate, Void Gaming, ...)
 - [x] Wheels
 
 A complete list of tested controller is available 
 [here](https://github.com/o0Zz/sys-con/blob/master/doc/TestedControllers.md)
+
+## Xbox Wireless Adapter
+Microsoft's Xbox Wireless Adapter for Windows (`045e-02e6`, slim `045e-02fe`) connects up to 4
+Xbox One / Series controllers without a cable, including the original Xbox One controller that
+has no Bluetooth. Driver contributed by [hagenbui](https://github.com/hagenbui/sys-con-wireless-adapter-xbox).
+
+The adapter has no permanent firmware: sys-con loads Microsoft's firmware into it every time it is
+plugged in. That file is not distributed with sys-con, get it from Microsoft's driver package:
+
+1. Download [`1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab`](http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab) from Windows Update.
+2. Extract `FW_ACC_00U.bin` from it. Windows: double-click the `.cab`, or `expand -F:FW_ACC_00U.bin <file>.cab .`; Linux/macOS: `cabextract -F FW_ACC_00U.bin <file>.cab`.
+3. Copy it to the SD card as `/config/sys-con/xbox_adapter_firmware.bin`. Its SHA-256 is
+   `48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66`.
+
+To pair: plug the adapter, press its button (the light blinks), then hold the pair button on the
+controller until the Xbox logo flashes fast. Pairing is done once; afterwards the Xbox button
+reconnects the controller. Rumble needs `mode=mitm`. Headsets and chatpads are not supported.
+
+If the adapter does nothing, look for `Xbox Wireless Adapter` / `Mt76` in `/config/sys-con/log.txt`:
+a missing firmware is reported there, and an adapter that failed to start is ignored until it is
+replugged.
 
 ## Configure a controller
 When a new controller is connected, sys-con tries to determine the best profile for this new controller.
@@ -268,7 +290,7 @@ This configuration allows you to trigger specific buttons using combinations of 
 ### Rumble on a controller without a dedicated driver
 
 Controllers sys-con has a driver for (`xbox`, `xbox360`, `xbox360w`, `xboxone`, `dualshock3`,
-`switch`, `wii` — the Wii U GameCube adapter —, `sinput` and `steam2026`) rumble on their own.
+`switch`, `wii` — the Wii U GameCube adapter —, `sinput`, `steam2026` and `xboxadapter`) rumble on their own.
 Any other pad is handled as a generic HID device, and for those you can describe the rumble
 report yourself with `vibration=`:
 
@@ -490,6 +512,7 @@ In order to debug the applicaiton, you can directly refer to the logs available 
 ## Credits
 - **Texita** For contributions to controller testing and mappings.
 - **gingerphoenix10** For implementing the Steam controller driver.
+- **hagenbui** For the Xbox Wireless Adapter driver ([sys-con-wireless-adapter-xbox](https://github.com/hagenbui/sys-con-wireless-adapter-xbox)), a port of [xow](https://github.com/medusalix/xow) by **medusalix**.
 
 ## Support
 If you want to support this work 

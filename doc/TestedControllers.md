@@ -20,6 +20,7 @@
 | Xbox Original | Yes | Yes | No | - | - |
 | Xbox 360 Controller | Yes | Yes | No | - | - |
 | Xbox 360 Wireless adapter (Up to 4 controller) (045e-0291, 045e-0719) | Yes | Yes | No | - | - |
+| Xbox Wireless Adapter for Windows, slim (045e-02fe) + Xbox One controller | Yes | Yes | No | Needs the adapter firmware on the SD card, see the README | hagenbui |
 | Xbox One X/S Controller | Yes | Yes | No | - | - |
 | Xbox One Phantom White DPD | Yes | Yes | No | - | - |
 | Y3 Arcade Fighter Stick (DATA FROG)  | Yes | No | No | - | - |

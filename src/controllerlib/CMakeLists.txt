@@ -109,6 +109,7 @@ set(SRC_FILES
     drivers/BaseController.cpp
     drivers/Dualshock3Controller.cpp
     drivers/GenericHIDController.cpp
+    drivers/Mt76.cpp
     drivers/NetworkController.cpp
     drivers/SInputController.cpp
     drivers/SteamController2026.cpp
@@ -118,6 +119,7 @@ set(SRC_FILES
     drivers/Xbox360WirelessController.cpp
     drivers/XboxController.cpp
     drivers/XboxOneController.cpp
+    drivers/XboxWirelessAdapter.cpp
 )
 
 # Listed only so they show up in IDE project trees.
@@ -139,6 +141,7 @@ set(HEADER_FILES
     drivers/BaseController.h
     drivers/Dualshock3Controller.h
     drivers/GenericHIDController.h
+    drivers/Mt76.h
     drivers/NetworkController.h
     drivers/SInputController.h
     drivers/SteamController2026.h
@@ -148,6 +151,7 @@ set(HEADER_FILES
     drivers/Xbox360WirelessController.h
     drivers/XboxController.h
     drivers/XboxOneController.h
+    drivers/XboxWirelessAdapter.h
 )
 
 add_library(ControllerLib ${SRC_FILES} ${HEADER_FILES})

@@ -76,6 +76,12 @@ Status SwitchUSBEndpoint::Write(const uint8_t *inBuffer, size_t bufferSize)
     if (GetDirection() == USB_ENDPOINT_IN)
         ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Trying to write an INPUT endpoint!", m_descriptor->bEndpointAddress);
 
+    if (bufferSize > sizeof(m_usb_buffer_out))
+    {
+        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Write of %d bytes exceeds the %d-byte transfer buffer", m_descriptor->bEndpointAddress, static_cast<int>(bufferSize), static_cast<int>(sizeof(m_usb_buffer_out)));
+        return Status::InvalidArgument;
+    }
+
     ::syscon::logger::LogTrace("SwitchUSBEndpoint[0x%02X] Write %d bytes", m_descriptor->bEndpointAddress, bufferSize);
     ::syscon::logger::LogBuffer(LogLevel::Trace, inBuffer, bufferSize);
 
