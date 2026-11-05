@@ -72,41 +72,11 @@ Reboot the Nintendo Switch.
 A complete list of tested controller is available 
 [here](https://github.com/o0Zz/sys-con/blob/master/doc/TestedControllers.md)
 
-## Xbox Wireless Adapter
-Microsoft's Xbox Wireless Adapter for Windows (`045e-02e6`, slim `045e-02fe`) connects up to 4
-Xbox One / Series controllers without a cable, including the original Xbox One controller that
-has no Bluetooth. Driver contributed by [hagenbui](https://github.com/hagenbui/sys-con-wireless-adapter-xbox).
-
-The adapter has no permanent firmware: sys-con loads Microsoft's firmware into it every time it is
-plugged in. That file is not distributed with sys-con, get it from Microsoft's driver package. The
-firmware **depends on the adapter model**: the slim adapter's firmware runs on the original one but
-breaks pairing ([#130](https://github.com/o0Zz/sys-con/issues/130)).
-
-| Adapter | Driver package to download | `FW_ACC_00U.bin` SHA-256 |
-|---|---|---|
-| Original, large (`045e-02e6`) | [2017/03 package](http://download.windowsupdate.com/d/msdownload/update/driver/drvs/2017/03/2ea9591b-f751-442c-80ce-8f4692cdc67b_6b555a3a288153cf04aec6e03cba360afe2fce34.cab) | `080ce4091e53a4ef3e5fe29939f51fd91f46d6a88be6d67eb6e99a5723b3a223` |
-| Slim (`045e-02fe`) | [2017/07 package](http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab) | `48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66` |
-
-1. Download the package for your adapter from Windows Update.
-2. Extract `FW_ACC_00U.bin` from it. Windows: double-click the `.cab`, or `expand -F:FW_ACC_00U.bin <file>.cab .`; Linux/macOS: `cabextract -F FW_ACC_00U.bin <file>.cab`.
-3. Check its SHA-256, then copy it as is to the SD card: `/config/sys-con/FW_ACC_00U.bin`.
-
-sys-con checks the file against the adapter that is plugged in: a missing file or the other model's
-firmware is reported in the log, with the package to download, and the adapter is not started.
-
-To pair: plug the adapter, press its button (the light blinks), then hold the pair button on the
-controller until the Xbox logo flashes fast. Pairing is done once; afterwards the Xbox button
-reconnects the controller. Rumble needs `mode=mitm`. Headsets and chatpads are not supported.
-
-If the adapter does nothing or pairing fails, see [Troubleshooting](doc/Troubleshooting.md#xbox-wireless-adapter-for-windows-issues) and look for `Xbox Wireless Adapter` / `Mt76` in `/config/sys-con/log.txt`:
-a missing firmware is reported there, and an adapter that failed to start is ignored until it is
-replugged.
-
 ## Configure a controller
 When a new controller is connected, sys-con tries to determine the best profile for this new controller.
 In most cases the dpad and joystick will work fine, the buttons may not be mapped correctly by default (and in rare cases the right stick may be reversed or not working). If this is the case, you will need to map the buttons yourself using the procedure below:
 
-### Method 1: Configure Directly on the Switch (Recommended)
+### From the Switch directly
 
 1. Connect your controller to the Nintendo Switch.
 
@@ -171,39 +141,6 @@ For example, if you found that 'B' is reversed with 'A', just swap the ButtonID:
 B=2
 A=1
 ```
-
-### Method 2 (From a windows PC)
-__Note:__ Button mapping can differ between windows and the switch
-1. Connect your controller to your PC
-2. Go to 'Control Panel' > 'Device Manager' and find your USB device under 'Human Interface Devices'.
-3. Double click on the device or right click and select Properties.
-4. Go to the 'Details' tab and select 'Hardware IDs' to view its PID and VID. The PID/VID should look like "HID\VID_0810&PID_0001&...", which becomes: `[0810-0001]`.
-5. Open "joy.cpl" (either from Win+R or directly from the Start menu). 
-6. Select your controller and click on "Properties"
-7. Here you should see a panel with ButtonID (1, 2, 3 ...), press the button and make a note of them (which button is assigned to which ID).
-8. Now edit `/config/sys-con/config.ini` on your switch sdcard and edit your controller's vid-pid section:
-
-```
-[0810-0001]
-B=3
-A=2
-Y=4
-X=1
-L=7
-R=8
-ZL=5
-ZR=6
-minus=9
-plus=10
-home=11
-capture=12
-rstick_left=-Z
-rstick_right=+Z
-rstick_up=+Rz
-rstick_down=-Rz
-```
-Where ButtonID (1,2,3,4, ...) is the key ID noted in step 7.
-Note: Depending to the controller, this windows procedure might not works. If the mapping is incorrect, switch to Method 1
 
 ### Button mapping
 
@@ -326,6 +263,24 @@ Capture a rumble report from the PC driver with Wireshark
 not in `config.ini` yet.
 
 Rumble is only delivered to the pad in `mode=mitm`.
+
+## Xbox Wireless Adapter
+Microsoft's Xbox Wireless Adapter for Windows (`045e-02e6`, slim `045e-02fe`) connects up to 4
+Xbox One / Series controllers without a cable, including the original Xbox One controller that
+has no Bluetooth.
+
+The adapter has no permanent firmware and you need to get it from Microsoft's driver package. The
+firmware **depends on the adapter model**: the slim adapter's firmware runs on the original one but
+breaks pairing ([#130](https://github.com/o0Zz/sys-con/issues/130)).
+
+| Adapter | Driver package to download | `FW_ACC_00U.bin` SHA-256 |
+|---|---|---|
+| Original, large (`045e-02e6`) | [2017/03 package](http://download.windowsupdate.com/d/msdownload/update/driver/drvs/2017/03/2ea9591b-f751-442c-80ce-8f4692cdc67b_6b555a3a288153cf04aec6e03cba360afe2fce34.cab) | `080ce4091e53a4ef3e5fe29939f51fd91f46d6a88be6d67eb6e99a5723b3a223` |
+| Slim (`045e-02fe`) | [2017/07 package](http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab) | `48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66` |
+
+1. Download the package for your adapter from the link above.
+2. Extract `FW_ACC_00U.bin` from it.
+3. Copy it as is to the SD card: `/config/sys-con/FW_ACC_00U.bin`.
 
 ## Single Joy-Con mode
 Some games only accept single Joy-Cons held sideways, at least in some modes. The one this was
