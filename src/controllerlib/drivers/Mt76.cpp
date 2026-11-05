@@ -565,9 +565,9 @@ namespace controllerlib
     {
     }
 
-    Status Mt76::Start(IFirmwareSource &firmware)
+    Status Mt76::Start(IFirmwareSource &firmware, const FirmwareInfo &info)
     {
-        Status result = LoadFirmware(firmware);
+        Status result = LoadFirmware(firmware, info);
         if (result != Status::Success)
             return result;
 
@@ -822,19 +822,23 @@ namespace controllerlib
         return event;
     }
 
-    Status Mt76::LoadFirmware(IFirmwareSource &firmware)
+    Status Mt76::ReadFirmwareInfo(IFirmwareSource &firmware, FirmwareInfo *info)
     {
         FirmwareHeader header;
         if (firmware.Read(reinterpret_cast<uint8_t *>(&header), sizeof(header)) != sizeof(header))
-        {
-            m_logger.Log(LogLevel::Error, "Mt76: Firmware image is shorter than its header");
             return Status::UnexpectedData;
-        }
 
-        char buildTime[sizeof(header.buildTime) + 1] = {};
-        std::memcpy(buildTime, header.buildTime, sizeof(header.buildTime));
-        m_logger.Log(LogLevel::Info, "Mt76: Firmware ILM %u bytes, DLM %u bytes, version 0x%04x, build 0x%04x, built %s",
-                     header.ilmLength, header.dlmLength, header.firmwareVersion, header.buildVersion, buildTime);
+        static_assert(sizeof(info->buildTime) == sizeof(header.buildTime) + 1);
+        info->ilmLength = header.ilmLength;
+        info->dlmLength = header.dlmLength;
+        std::memcpy(info->buildTime, header.buildTime, sizeof(header.buildTime));
+        info->buildTime[sizeof(header.buildTime)] = '\0';
+        return Status::Success;
+    }
+
+    Status Mt76::LoadFirmware(IFirmwareSource &firmware, const FirmwareInfo &info)
+    {
+        m_logger.Log(LogLevel::Info, "Mt76: Firmware ILM %u bytes, DLM %u bytes, built %s", info.ilmLength, info.dlmLength, info.buildTime);
 
         uint32_t dmaAddress;
         Status result = ReadRegister(reg::FceDmaAddr, &dmaAddress, VendReadCfg);
@@ -857,13 +861,13 @@ namespace controllerlib
             (result = WriteRegister(reg::FceSkipFs, 0x03)) != Status::Success)
             return result;
 
-        if ((result = UploadFirmwareSegment(firmware, McuIlmOffset, header.ilmLength)) != Status::Success)
+        if ((result = UploadFirmwareSegment(firmware, McuIlmOffset, info.ilmLength)) != Status::Success)
         {
             m_logger.Log(LogLevel::Error, "Mt76: Failed to upload the firmware ILM (%s)", ToString(result));
             return result;
         }
 
-        if ((result = UploadFirmwareSegment(firmware, McuDlmOffset, header.dlmLength)) != Status::Success)
+        if ((result = UploadFirmwareSegment(firmware, McuDlmOffset, info.dlmLength)) != Status::Success)
         {
             m_logger.Log(LogLevel::Error, "Mt76: Failed to upload the firmware DLM (%s)", ToString(result));
             return result;

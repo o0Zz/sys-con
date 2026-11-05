@@ -78,18 +78,27 @@ Xbox One / Series controllers without a cable, including the original Xbox One c
 has no Bluetooth. Driver contributed by [hagenbui](https://github.com/hagenbui/sys-con-wireless-adapter-xbox).
 
 The adapter has no permanent firmware: sys-con loads Microsoft's firmware into it every time it is
-plugged in. That file is not distributed with sys-con, get it from Microsoft's driver package:
+plugged in. That file is not distributed with sys-con, get it from Microsoft's driver package. The
+firmware **depends on the adapter model**: the slim adapter's firmware runs on the original one but
+breaks pairing ([#130](https://github.com/o0Zz/sys-con/issues/130)).
 
-1. Download [`1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab`](http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab) from Windows Update.
+| Adapter | Driver package to download | `FW_ACC_00U.bin` SHA-256 |
+|---|---|---|
+| Original, large (`045e-02e6`) | [2017/03 package](http://download.windowsupdate.com/d/msdownload/update/driver/drvs/2017/03/2ea9591b-f751-442c-80ce-8f4692cdc67b_6b555a3a288153cf04aec6e03cba360afe2fce34.cab) | `080ce4091e53a4ef3e5fe29939f51fd91f46d6a88be6d67eb6e99a5723b3a223` |
+| Slim (`045e-02fe`) | [2017/07 package](http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab) | `48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66` |
+
+1. Download the package for your adapter from Windows Update.
 2. Extract `FW_ACC_00U.bin` from it. Windows: double-click the `.cab`, or `expand -F:FW_ACC_00U.bin <file>.cab .`; Linux/macOS: `cabextract -F FW_ACC_00U.bin <file>.cab`.
-3. Copy it to the SD card as `/config/sys-con/xbox_adapter_firmware.bin`. Its SHA-256 is
-   `48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66`.
+3. Check its SHA-256, then copy it as is to the SD card: `/config/sys-con/FW_ACC_00U.bin`.
+
+sys-con checks the file against the adapter that is plugged in: a missing file or the other model's
+firmware is reported in the log, with the package to download, and the adapter is not started.
 
 To pair: plug the adapter, press its button (the light blinks), then hold the pair button on the
 controller until the Xbox logo flashes fast. Pairing is done once; afterwards the Xbox button
 reconnects the controller. Rumble needs `mode=mitm`. Headsets and chatpads are not supported.
 
-If the adapter does nothing, look for `Xbox Wireless Adapter` / `Mt76` in `/config/sys-con/log.txt`:
+If the adapter does nothing or pairing fails, see [Troubleshooting](doc/Troubleshooting.md#xbox-wireless-adapter-for-windows-issues) and look for `Xbox Wireless Adapter` / `Mt76` in `/config/sys-con/log.txt`:
 a missing firmware is reported there, and an adapter that failed to start is ignored until it is
 replugged.
 

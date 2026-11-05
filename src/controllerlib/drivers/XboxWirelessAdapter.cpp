@@ -31,6 +31,42 @@ namespace controllerlib
         constexpr PinId GuideButtonPin{12};
 
         uint8_t WcidOf(uint16_t slot) { return static_cast<uint8_t>(slot + 1); }
+
+        /*
+            Each adapter model needs the FW_ACC_00U.bin of its own Microsoft driver package, told
+            apart by the build time in its header. The slim model's firmware runs on the original
+            adapter but breaks pairing (#130), with no error anywhere, hence the check.
+        */
+        constexpr struct AdapterModel
+        {
+            uint16_t productId;
+            const char *name;
+            const char *firmwareBuildTime;
+            const char *packageUrl;
+        } AdapterModels[] = {
+            {0x02e6, "original", "201509162123____", "http://download.windowsupdate.com/d/msdownload/update/driver/drvs/2017/03/2ea9591b-f751-442c-80ce-8f4692cdc67b_6b555a3a288153cf04aec6e03cba360afe2fce34.cab"},
+            {0x02fe, "slim", "201703281033____", "http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab"},
+        };
+
+        const AdapterModel *FindModel(uint16_t productId)
+        {
+            for (const AdapterModel &model : AdapterModels)
+            {
+                if (model.productId == productId)
+                    return &model;
+            }
+            return nullptr;
+        }
+
+        const AdapterModel *FindModelByBuildTime(const char *buildTime)
+        {
+            for (const AdapterModel &model : AdapterModels)
+            {
+                if (std::strcmp(model.firmwareBuildTime, buildTime) == 0)
+                    return &model;
+            }
+            return nullptr;
+        }
     } // namespace
 
     XboxWirelessAdapter::XboxWirelessAdapter(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger, std::unique_ptr<IFirmwareSource> &&firmware)
@@ -97,14 +133,21 @@ namespace controllerlib
 
     Status XboxWirelessAdapter::Initialize()
     {
+        FirmwareInfo firmware;
+        Status result = CheckFirmware(&firmware);
+        if (result != Status::Success)
+        {
+            m_firmware.reset();
+            return result;
+        }
+
         m_logger->Log(LogLevel::Info, "XboxWirelessAdapter[%04x-%04x] Starting radio ...", m_device->GetVendor(), m_device->GetProduct());
 
-        Status result = BaseController::Initialize();
-        if (result != Status::Success)
+        if ((result = BaseController::Initialize()) != Status::Success)
             return result;
 
         m_radio = std::make_unique<Mt76>(*m_interfaces[0], *m_writeEndpoint, *m_logger);
-        result = m_radio->Start(*m_firmware);
+        result = m_radio->Start(*m_firmware, firmware);
         m_firmware.reset();
 
         if (result != Status::Success)
@@ -115,6 +158,41 @@ namespace controllerlib
 
         m_logger->Log(LogLevel::Info, "XboxWirelessAdapter[%04x-%04x] Ready - press the button on the adapter, then the pair button on the controller", m_device->GetVendor(), m_device->GetProduct());
         return Status::Success;
+    }
+
+    Status XboxWirelessAdapter::CheckFirmware(FirmwareInfo *firmware)
+    {
+        const uint16_t productId = m_device->GetProduct();
+        const AdapterModel *model = FindModel(productId);
+        if (model == nullptr)
+        {
+            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: no known firmware for adapter %04x-%04x", m_device->GetVendor(), productId);
+            return Status::InvalidArgument;
+        }
+
+        if (Mt76::ReadFirmwareInfo(*m_firmware, firmware) != Status::Success)
+        {
+            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: firmware '%s' not found.", m_firmware->GetName());
+        }
+        else if (std::strcmp(firmware->buildTime, model->firmwareBuildTime) == 0)
+        {
+            return Status::Success;
+        }
+        else if (const AdapterModel *other = FindModelByBuildTime(firmware->buildTime))
+        {
+            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: '%s' is the firmware of the %s adapter (045e-%04x), this adapter is the %s one (045e-%04x).",
+                          m_firmware->GetName(), other->name, other->productId, model->name, model->productId);
+        }
+        else
+        {
+            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: '%s' is not Microsoft's adapter firmware (built '%s').", m_firmware->GetName(), firmware->buildTime);
+        }
+
+        m_logger->Log(LogLevel::Error, "  Microsoft does not allow sys-con to ship it, install it once for the %s adapter (045e-%04x):", model->name, model->productId);
+        m_logger->Log(LogLevel::Error, "  1. On a PC, download Microsoft's driver package: %s", model->packageUrl);
+        m_logger->Log(LogLevel::Error, "  2. Extract FW_ACC_00U.bin from the .cab (Windows: double-click it, or 'expand -F:FW_ACC_00U.bin <file>.cab .'; Linux/macOS: 'cabextract -F FW_ACC_00U.bin <file>.cab')");
+        m_logger->Log(LogLevel::Error, "  3. Copy it as is to '%s', then replug the adapter", m_firmware->GetName());
+        return Status::OpenFailed;
     }
 
     void XboxWirelessAdapter::Exit()

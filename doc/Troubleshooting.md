@@ -92,6 +92,29 @@ Some users reported success with the following workaround:
 Sys-con may successfully initialize the 8BitDo controller afterward.
 This seems to help in cases where the 8BitDo controller is long to discovered, ignored or fails to initialize when plugged in alone.
 
+## Xbox Wireless Adapter for Windows issues
+
+The adapter needs Microsoft's firmware on the SD card as `/config/sys-con/FW_ACC_00U.bin`
+(see [Xbox Wireless Adapter](../README.md#xbox-wireless-adapter)). The firmware **depends on the adapter model**, check
+the VID/PID in the log (`Trying to initialize USB device: [045e-xxxx]`):
+
+| Adapter | Driver package to download | `FW_ACC_00U.bin` SHA-256 |
+|---|---|---|
+| Original, large (`045e-02e6`) | [2017/03 package](http://download.windowsupdate.com/d/msdownload/update/driver/drvs/2017/03/2ea9591b-f751-442c-80ce-8f4692cdc67b_6b555a3a288153cf04aec6e03cba360afe2fce34.cab) | `080ce4091e53a4ef3e5fe29939f51fd91f46d6a88be6d67eb6e99a5723b3a223` |
+| Slim (`045e-02fe`) | [2017/07 package](http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab) | `48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66` |
+
+Extract `FW_ACC_00U.bin` from the `.cab` (Windows: `expand -F:FW_ACC_00U.bin <file>.cab .`, Linux/macOS:
+`cabextract -F FW_ACC_00U.bin <file>.cab`), check its SHA-256, copy it as is to `/config/sys-con/` and replug the adapter.
+
+| Symptom / log | Fix |
+|---|---|
+| `XboxWirelessAdapter: firmware '/config/sys-con/FW_ACC_00U.bin' not found.` | The file is missing, empty or misnamed, see above. The next log lines give the package for your adapter. |
+| `... is the firmware of the slim adapter (045e-02fe), this adapter is the original one (045e-02e6)` (or the other way round) | Each model needs the firmware of its own package: the slim adapter's firmware runs on the original model but breaks pairing ([#130](https://github.com/o0Zz/sys-con/issues/130)). Download the package named in the log. |
+| `... is not Microsoft's adapter firmware` | The file is another file. Extract `FW_ACC_00U.bin` again and check its SHA-256. |
+| `Xbox Wireless Adapter failed to start - ignoring it until it is replugged` | Read the error lines just above it, fix the file, then unplug and replug the adapter. |
+| `Mt76: Radio ready` but the controller never shows up | Press the button on the adapter (its light blinks), then hold the controller's pair button within about 20 seconds. |
+| `All 4 slots taken` | Four controllers are already connected to the adapter, turn one off. |
+
 ## Controller detected as USB Audio (Loss of TV sound)
 
 This happens because of how the Nintendo Switch handles USB HID discovery.

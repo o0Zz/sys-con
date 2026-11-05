@@ -176,6 +176,8 @@ namespace
             return size;
         }
 
+        const char *GetName() const override { return "FW_ACC_00U.bin"; }
+
     private:
         Bytes m_image;
         size_t m_position = 0;
@@ -187,12 +189,16 @@ namespace
             bytes.push_back(static_cast<uint8_t>(word >> (8 * i)));
     }
 
-    Bytes FirmwareImage(uint32_t ilmLength, uint32_t dlmLength)
+    constexpr char SlimFirmwareBuild[] = "201703281033____";
+    constexpr char OriginalFirmwareBuild[] = "201509162123____";
+
+    Bytes FirmwareImage(uint32_t ilmLength, uint32_t dlmLength, const char *buildTime = SlimFirmwareBuild)
     {
         Bytes image;
         AppendWord(image, ilmLength);
         AppendWord(image, dlmLength);
-        image.resize(32, 0);
+        image.resize(16, 0);
+        image.insert(image.end(), buildTime, buildTime + 16);
         for (uint32_t i = 0; i < ilmLength + dlmLength; i++)
             image.push_back(static_cast<uint8_t>(i * 7));
         return image;
@@ -329,6 +335,30 @@ TEST(XboxWirelessAdapter, fails_on_truncated_firmware)
         std::make_unique<MockLogger>(), std::make_unique<MemoryFirmware>(fixture.image));
 
     EXPECT_EQ(fixture.adapter->Initialize(), Status::UnexpectedData);
+}
+
+TEST(XboxWirelessAdapter, fails_without_firmware_before_touching_the_adapter)
+{
+    auto interfacePtr = std::make_unique<FakeAdapterInterface>();
+    FakeAdapterInterface *interface = interfacePtr.get();
+    XboxWirelessAdapter adapter(std::make_unique<FakeDevice>(std::move(interfacePtr)), ControllerConfig{},
+                                std::make_unique<MockLogger>(), std::make_unique<MemoryFirmware>(Bytes{}));
+
+    EXPECT_EQ(adapter.Initialize(), Status::OpenFailed);
+    EXPECT_TRUE(interface->writes.empty());
+    EXPECT_TRUE(interface->Out().writes.empty());
+}
+
+TEST(XboxWirelessAdapter, rejects_the_firmware_of_the_other_model)
+{
+    auto interfacePtr = std::make_unique<FakeAdapterInterface>();
+    FakeAdapterInterface *interface = interfacePtr.get();
+    XboxWirelessAdapter adapter(std::make_unique<FakeDevice>(std::move(interfacePtr)), ControllerConfig{},
+                                std::make_unique<MockLogger>(), std::make_unique<MemoryFirmware>(FirmwareImage(1000, 600, OriginalFirmwareBuild)));
+
+    EXPECT_EQ(adapter.Initialize(), Status::OpenFailed);
+    EXPECT_TRUE(interface->writes.empty());
+    EXPECT_FALSE(interface->firmwareStarted);
 }
 
 TEST(XboxWirelessAdapter, pair_button_enables_pairing_beacon)

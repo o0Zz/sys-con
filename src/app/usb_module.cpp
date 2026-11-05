@@ -91,35 +91,26 @@ namespace syscon::usb
             return std::make_unique<T>(std::move(device), config, std::make_unique<syscon::logger::Logger>());
         }
 
-        constexpr const char *XboxAdapterFirmwarePath = CONFIG_PATH "xbox_adapter_firmware.bin";
-        constexpr const char *XboxAdapterDriverPackageUrl = "http://download.windowsupdate.com/c/msdownload/update/driver/drvs/2017/07/1cd6a87c-623f-4407-a52d-c31be49e925c_e19f60808bdcbfbd3c3df6be3e71ffc52e43261e.cab";
-        constexpr const char *XboxAdapterFirmwareSha256 = "48084d9fa53b9bb04358f3bb127b7495dc8f7bb0b3ca1437bd24ef2b6eabdf66";
+        // Microsoft's own name, so the file goes on the SD card exactly as extracted from the .cab.
+        constexpr const char *XboxAdapterFirmwarePath = CONFIG_PATH "FW_ACC_00U.bin";
 
+        // A missing file reads as an empty image; the driver reports it.
         class FileFirmwareSource final : public IFirmwareSource
         {
         public:
-            explicit FileFirmwareSource(std::unique_ptr<IFile> &&file) : m_file(std::move(file)) {}
+            explicit FileFirmwareSource(const char *path) : m_path(path), m_file(g_file_manager->open(path, OpenFlags_Read)) {}
 
-            size_t Read(uint8_t *buffer, size_t size) override { return m_file->read(buffer, size); }
+            size_t Read(uint8_t *buffer, size_t size) override { return m_file ? m_file->read(buffer, size) : 0; }
+            const char *GetName() const override { return m_path; }
 
         private:
+            const char *m_path;
             std::unique_ptr<IFile> m_file;
         };
 
         std::unique_ptr<IController> MakeXboxWirelessAdapter(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config)
         {
-            std::unique_ptr<IFile> firmware = g_file_manager->open(XboxAdapterFirmwarePath, OpenFlags_Read);
-            if (!firmware)
-            {
-                syscon::logger::LogError("Xbox Wireless Adapter: firmware not found at '%s'. Microsoft does not allow sys-con to ship it, install it once:", XboxAdapterFirmwarePath);
-                syscon::logger::LogError("  1. On a PC, download Microsoft's driver package: %s", XboxAdapterDriverPackageUrl);
-                syscon::logger::LogError("  2. Extract FW_ACC_00U.bin from the .cab (Windows: double-click it, or 'expand -F:FW_ACC_00U.bin <file>.cab .'; Linux/macOS: 'cabextract -F FW_ACC_00U.bin <file>.cab')");
-                syscon::logger::LogError("  3. Copy it to the SD card as '%s' (SHA-256 %s), then replug the adapter", XboxAdapterFirmwarePath, XboxAdapterFirmwareSha256);
-                return nullptr;
-            }
-
-            syscon::logger::LogInfo("Xbox Wireless Adapter: firmware '%s' (%d bytes)", XboxAdapterFirmwarePath, static_cast<int>(g_file_manager->file_size(XboxAdapterFirmwarePath)));
-            return std::make_unique<XboxWirelessAdapter>(std::move(device), config, std::make_unique<syscon::logger::Logger>(), std::make_unique<FileFirmwareSource>(std::move(firmware)));
+            return std::make_unique<XboxWirelessAdapter>(std::move(device), config, std::make_unique<syscon::logger::Logger>(), std::make_unique<FileFirmwareSource>(XboxAdapterFirmwarePath));
         }
 
         bool IsRejected(const UsbHsInterface &interface)
@@ -240,8 +231,7 @@ namespace syscon::usb
                         if (driver != std::end(Drivers))
                         {
                             syscon::logger::LogInfo("Initializing %s controller (Interface count: %d) ...", driver->name, total_entries);
-                            std::unique_ptr<IController> controller = driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config);
-                            Result rc = controller ? controllers::Insert(std::move(controller)) : syscon::ToHorizonResult(Status::OpenFailed);
+                            Result rc = controllers::Insert(driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config));
                             if (R_FAILED(rc) && driver->reject_on_failure)
                             {
                                 syscon::logger::LogError("%s failed to start - ignoring it until it is replugged", driver->name);

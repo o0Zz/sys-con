@@ -24,6 +24,16 @@ namespace controllerlib
 
         // A short read means the end of the image.
         virtual size_t Read(uint8_t *buffer, size_t size) = 0;
+
+        // Where the image comes from, for the log.
+        virtual const char *GetName() const = 0;
+    };
+
+    struct FirmwareInfo
+    {
+        uint32_t ilmLength = 0;
+        uint32_t dlmLength = 0;
+        char buildTime[17] = {};
     };
 
     using MacAddress = std::array<uint8_t, 6>;
@@ -66,7 +76,10 @@ namespace controllerlib
 
         Mt76(IUSBInterface &control, IUSBEndpoint &out, ILogger &logger);
 
-        Status Start(IFirmwareSource &firmware);
+        // Consumes the image header; Start then uploads the rest of the same source.
+        static Status ReadFirmwareInfo(IFirmwareSource &firmware, FirmwareInfo *info);
+
+        Status Start(IFirmwareSource &firmware, const FirmwareInfo &info);
         void Stop();
 
         Status AssociateClient(uint8_t wcid, const MacAddress &address);
@@ -83,7 +96,7 @@ namespace controllerlib
         const MacAddress &GetAddress() const { return m_address; }
 
     private:
-        Status LoadFirmware(IFirmwareSource &firmware);
+        Status LoadFirmware(IFirmwareSource &firmware, const FirmwareInfo &info);
         Status ResetLoadedFirmware();
         Status UploadFirmwareSegment(IFirmwareSource &firmware, uint32_t offset, uint32_t length);
         Status InitRegisters();
