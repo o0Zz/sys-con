@@ -80,7 +80,7 @@ namespace controllerlib
     struct ControllerComboConfig
     {
         GamepadButton buttonSimulated{GamepadButton::NONE};
-        GamepadButton buttons[2];
+        GamepadButton buttons[2]{GamepadButton::NONE, GamepadButton::NONE};
     };
 
     class ControllerConfig

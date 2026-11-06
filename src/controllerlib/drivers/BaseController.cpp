@@ -373,11 +373,13 @@ namespace controllerlib
             if (combo->buttonSimulated == GamepadButton::NONE)
                 break; // Stop at the first empty combo
 
-            if (normalData->buttons[combo->buttons[0]] && normalData->buttons[combo->buttons[1]])
+            const bool single = combo->buttons[1] == GamepadButton::NONE;
+            if (normalData->buttons[combo->buttons[0]] && (single || normalData->buttons[combo->buttons[1]]))
             {
                 normalData->buttons[combo->buttonSimulated] = true;
                 normalData->buttons[combo->buttons[0]] = false;
-                normalData->buttons[combo->buttons[1]] = false;
+                if (!single)
+                    normalData->buttons[combo->buttons[1]] = false;
             }
         }
     }

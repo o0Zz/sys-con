@@ -144,6 +144,25 @@ TEST(BaseController, test_input_simulate_home_capture)
     EXPECT_TRUE(normalizedData.buttons[GamepadButton::CAPTURE]);
 }
 
+TEST(BaseController, test_input_simulate_single_button)
+{
+    NormalizedButtonData normalizedData{};
+
+    ControllerConfig config;
+    config.buttonsPin[GamepadButton::ZL][0] = 1;
+    config.simulateCombos[0].buttonSimulated = GamepadButton::RSTICK_CLICK;
+    config.simulateCombos[0].buttons[0] = GamepadButton::ZL;
+
+    RawInputData inputData;
+    inputData.buttons[1] = true;
+
+    MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
+    controller.MapRawInputToNormalized(inputData, &normalizedData);
+
+    EXPECT_FALSE(normalizedData.buttons[GamepadButton::ZL]);
+    EXPECT_TRUE(normalizedData.buttons[GamepadButton::RSTICK_CLICK]);
+}
+
 TEST(BaseController, test_input_stick_by_buttons)
 {
     NormalizedButtonData normalizedData{};

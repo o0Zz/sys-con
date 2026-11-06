@@ -170,8 +170,11 @@ namespace syscon::config
             return false;
         }
 
-        void parseHotKey(const char *value, GamepadButton hotkeys[2])
+        // One or two buttons; an unused second button stays NONE.
+        bool parseHotKey(const char *value, GamepadButton hotkeys[2])
         {
+            hotkeys[0] = hotkeys[1] = GamepadButton::NONE;
+
             char *context;
             char *tok = strtok_r(const_cast<char *>(value), "+", &context);
 
@@ -181,8 +184,68 @@ namespace syscon::config
                     break;
 
                 hotkeys[i] = stringToButton(tok);
+                if (hotkeys[i] == GamepadButton::NONE)
+                    return false;
+
                 tok = strtok_r(NULL, "+", &context);
             }
+
+            return hotkeys[0] != GamepadButton::NONE && tok == NULL;
+        }
+
+        /*
+            A combo is keyed by the button it simulates, so a later layer ([profile], [vid-pid])
+            replaces the [default] one instead of adding a second, and an empty value removes it.
+            The combos stay packed: the input path stops at the first empty slot.
+        */
+        void setCombo(ControllerConfig *config, GamepadButton simulated, const char *value)
+        {
+            auto &combos = config->simulateCombos;
+            int slot = 0;
+            while (slot < MAX_CONTROLLER_COMBO && combos[slot].buttonSimulated != GamepadButton::NONE && combos[slot].buttonSimulated != simulated)
+                slot++;
+
+            if (value[0] == '\0')
+            {
+                if (slot == MAX_CONTROLLER_COMBO || combos[slot].buttonSimulated == GamepadButton::NONE)
+                    return;
+
+                for (int i = slot; i + 1 < MAX_CONTROLLER_COMBO; i++)
+                    combos[i] = combos[i + 1];
+                combos[MAX_CONTROLLER_COMBO - 1] = ControllerComboConfig{};
+                return;
+            }
+
+            if (slot == MAX_CONTROLLER_COMBO)
+            {
+                syscon::logger::LogError("Too many simulate_ combos (Max: %d) - Ignoring %s", MAX_CONTROLLER_COMBO, value);
+                return;
+            }
+
+            ControllerComboConfig combo{};
+            combo.buttonSimulated = simulated;
+            if (!parseHotKey(value, combo.buttons))
+            {
+                syscon::logger::LogError("Invalid simulate_ combo: '%s' (expected one or two buttons joined by '+') - Ignoring it !", value);
+                return;
+            }
+
+            combos[slot] = combo;
+        }
+
+        // Out-of-range values are refused, not wrapped into the field.
+        bool parseIntInRange(const char *name, const char *value, long min, long max, long *out)
+        {
+            char *end = nullptr;
+            const long parsed = strtol(value, &end, 10);
+            if (end == value || *end != '\0' || parsed < min || parsed > max)
+            {
+                syscon::logger::LogError("Invalid value for %s: '%s' (expected %ld to %ld) - Ignoring it !", name, value, min, max);
+                return false;
+            }
+
+            *out = parsed;
+            return true;
         }
 
         bool isNumber(const std::string &s)
@@ -273,20 +336,34 @@ namespace syscon::config
 
             ini_data->ini_section_found = true;
 
+            long number = 0;
             if (nameStr == "polling_timeout_ms")
-                ini_data->global_config->polling_timeout_ms = atoi(value);
+            {
+                if (parseIntInRange(name, value, 1, 1000, &number))
+                    ini_data->global_config->polling_timeout_ms = static_cast<uint16_t>(number);
+            }
             else if (nameStr == "polling_thread_priority")
-                ini_data->global_config->polling_thread_priority = atoi(value);
+            {
+                // The range the NPDM allows (sys-con.json); anything else fails every threadCreate.
+                if (parseIntInRange(name, value, 24, 63, &number))
+                    ini_data->global_config->polling_thread_priority = static_cast<int8_t>(number);
+            }
             else if (nameStr == "log_level")
                 ini_data->global_config->log_level = LogLevelFromInt(atoi(value));
             else if (nameStr == "discovery_mode")
-                ini_data->global_config->discovery_mode = static_cast<DiscoveryMode>(atoi(value));
+            {
+                if (parseIntInRange(name, value, DiscoveryMode::HID_AND_XBOX, DiscoveryMode::VIDPID, &number))
+                    ini_data->global_config->discovery_mode = static_cast<DiscoveryMode>(number);
+            }
             else if (nameStr == "auto_add_controller")
                 ini_data->global_config->auto_add_controller = (atoi(value) == 0) ? false : true;
             else if (nameStr == "network_controller")
                 ini_data->global_config->network_controller = (atoi(value) == 0) ? false : true;
             else if (nameStr == "network_controller_port")
-                ini_data->global_config->network_controller_port = static_cast<uint16_t>(atoi(value));
+            {
+                if (parseIntInRange(name, value, 1, 65535, &number))
+                    ini_data->global_config->network_controller_port = static_cast<uint16_t>(number);
+            }
             else if (nameStr == "mode")
             {
                 std::string modeStr = convertToLowercase(value);
@@ -306,7 +383,10 @@ namespace syscon::config
 
                 while (tok != NULL)
                 {
-                    ini_data->global_config->discovery_vidpid.push_back(ControllerVidPid(tok));
+                    if (strchr(tok, '-') == nullptr)
+                        syscon::logger::LogError("Invalid discovery_vidpid entry: '%s' (expected VID-PID or VID-*) - Ignoring it !", tok);
+                    else
+                        ini_data->global_config->discovery_vidpid.push_back(ControllerVidPid(tok));
                     tok = strtok_r(NULL, ",", &context);
                 }
             }
@@ -364,24 +444,23 @@ namespace syscon::config
             {
                 GamepadButton btn = stringToButton(nameStr.substr(9).c_str());
                 if (btn != GamepadButton::NONE && btn < GamepadButton::COUNT)
-                {
-                    for (int i = 0; i < MAX_CONTROLLER_COMBO; i++)
-                    {
-                        if (ini_data->controller_config->simulateCombos[i].buttonSimulated != GamepadButton::NONE)
-                            continue; // Search for a free slot
-
-                        ini_data->controller_config->simulateCombos[i].buttonSimulated = btn;
-                        parseHotKey(value, ini_data->controller_config->simulateCombos[i].buttons);
-                        break; // Found a free slot
-                    }
-                }
+                    setCombo(ini_data->controller_config, btn, value);
                 else
                     syscon::logger::LogError("Unknown key: %s, continue anyway ...", nameStr.c_str());
             }
             else if (AnalogAxis deadzoneAxis = stringToAnalogAxis(nameStr, "deadzone_"); deadzoneAxis != AnalogAxis::Unknown)
-                ini_data->controller_config->analogDeadzonePercent[deadzoneAxis] = atoi(value);
+            {
+                // 100 would divide by zero when the deadzone rescales the rest of the range.
+                long percent = 0;
+                if (parseIntInRange(name, value, 0, 99, &percent))
+                    ini_data->controller_config->analogDeadzonePercent[deadzoneAxis] = static_cast<uint8_t>(percent);
+            }
             else if (AnalogAxis factorAxis = stringToAnalogAxis(nameStr, "factor_"); factorAxis != AnalogAxis::Unknown)
-                ini_data->controller_config->analogFactorPercent[factorAxis] = atoi(value);
+            {
+                long percent = 0;
+                if (parseIntInRange(name, value, 0, 255, &percent))
+                    ini_data->controller_config->analogFactorPercent[factorAxis] = static_cast<uint8_t>(percent);
+            }
             else if (nameStr == "vibration")
             {
                 // Not the previous layer's template: a broken key means this controller has none.
@@ -401,6 +480,22 @@ namespace syscon::config
                 syscon::logger::LogError("Unknown key: %s, continue anyway ...", name);
             }
             return 1; // Success
+        }
+
+        /*
+            inih parses the whole string and returns the number of the first bad line. That line
+            is skipped and everything else applies, so a typo does not take every [vid-pid]
+            section and profile down with it; only a negative result (no memory) is fatal.
+        */
+        int ParseLayer(const std::string &contents, ini_handler handler, ConfigINIData *data)
+        {
+            int rc = ini_parse_string(contents.c_str(), handler, data);
+            if (rc > 0)
+            {
+                syscon::logger::LogError("Syntax error in config.ini at line %d - the line is ignored", rc);
+                rc = 0;
+            }
+            return rc;
         }
 
         // The whole file is parsed from memory: LoadControllerConfig re-parses it once per
@@ -568,7 +663,7 @@ namespace syscon::config
             return -1;
 
         ConfigINIData cfg("global", config);
-        int rc = ini_parse_string(contents.c_str(), ParseGlobalConfigLine, &cfg);
+        int rc = ParseLayer(contents, ParseGlobalConfigLine, &cfg);
         if (rc)
             syscon::logger::LogError("Failed to load global config: '%s' (Error: 0x%08X) !", configFullPath.c_str(), rc);
 
@@ -633,13 +728,13 @@ namespace syscon::config
 
         syscon::logger::LogDebug("Loading controller config: '%s' [default] ...", configFullPath.c_str());
 
-        int rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_default);
+        int rc = ParseLayer(contents, ParseControllerConfigLine, &cfg_default);
         if (rc)
             return rc;
 
         // Override with vendor specific config
         syscon::logger::LogDebug("Loading controller config: '%s' [%s] ...", configFullPath.c_str(), std::string(controllerVidPid).c_str());
-        rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
+        rc = ParseLayer(contents, ParseControllerConfigLine, &cfg_controller);
         if (rc)
             return rc;
 
@@ -654,7 +749,7 @@ namespace syscon::config
             if (!ReadConfigFile(configFullPath, &contents))
                 return -1;
 
-            rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
+            rc = ParseLayer(contents, ParseControllerConfigLine, &cfg_controller);
             if (rc)
                 return rc;
         }
@@ -663,14 +758,17 @@ namespace syscon::config
         {
             syscon::logger::LogDebug("Loading controller config: '%s' (Profile: [%s]) ... ", configFullPath.c_str(), config->profile.c_str());
             ConfigINIData cfg_profile(config->profile, config);
-            rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_profile);
+            rc = ParseLayer(contents, ParseControllerConfigLine, &cfg_profile);
             if (rc)
                 return rc;
+
+            if (!cfg_profile.ini_section_found)
+                syscon::logger::LogError("Profile [%s] of [%04x-%04x] is not in config.ini - only [default] and [%04x-%04x] apply", config->profile.c_str(), vendor_id, product_id, vendor_id, product_id);
 
             // Re-Override with vendor specific config
             // We are doing this to allow the profile to be overrided by the vendor specific config
             // In other words we would like to have [default] overrided by [profile] overrided by [vid-pid]
-            rc = ini_parse_string(contents.c_str(), ParseControllerConfigLine, &cfg_controller);
+            rc = ParseLayer(contents, ParseControllerConfigLine, &cfg_controller);
             if (rc)
                 return rc;
         }
