@@ -72,7 +72,7 @@ void SwitchUSBInterface::Close()
 
 Status SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, void *buffer, u16 *wLength)
 {
-    ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] ControlTransferInput (bmRequestType=0x%02X, bmRequest=0x%02X, wValue=0x%04X, wIndex=0x%04X, wLength=%d)...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, bmRequestType, bmRequest, wValue, wIndex, *wLength);
+    ::syscon::logger::LogTrace("SwitchUSBInterface[%04x-%04x] ControlTransferInput (bmRequestType=0x%02X, bmRequest=0x%02X, wValue=0x%04X, wIndex=0x%04X, wLength=%d)...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, bmRequestType, bmRequest, wValue, wIndex, *wLength);
 
     if (!(bmRequestType & USB_ENDPOINT_IN))
     {
@@ -114,7 +114,7 @@ Status SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, 
 
 Status SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 bmRequest, u16 wValue, u16 wIndex, const void *buffer, u16 wLength)
 {
-    ::syscon::logger::LogDebug("SwitchUSBInterface[%04x-%04x] ControlTransferOutput (bmRequestType=0x%02X, bmRequest=0x%02X, wValue=0x%04X, wIndex=0x%04X, wLength=%d)...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, bmRequestType, bmRequest, wValue, wIndex, wLength);
+    ::syscon::logger::LogTrace("SwitchUSBInterface[%04x-%04x] ControlTransferOutput (bmRequestType=0x%02X, bmRequest=0x%02X, wValue=0x%04X, wIndex=0x%04X, wLength=%d)...", m_interface.device_desc.idVendor, m_interface.device_desc.idProduct, bmRequestType, bmRequest, wValue, wIndex, wLength);
 
     u32 transferredSize = 0;
 

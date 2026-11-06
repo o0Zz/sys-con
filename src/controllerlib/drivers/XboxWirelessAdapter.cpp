@@ -30,6 +30,9 @@ namespace controllerlib
 
         constexpr PinId GuideButtonPin{12};
 
+        // xow waits this long between two rumble frames to work around a firmware bug.
+        constexpr auto RumbleInterval = std::chrono::milliseconds(10);
+
         uint8_t WcidOf(uint16_t slot) { return static_cast<uint8_t>(slot + 1); }
 
         /*
@@ -172,7 +175,7 @@ namespace controllerlib
 
         if (Mt76::ReadFirmwareInfo(*m_firmware, firmware) != Status::Success)
         {
-            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: firmware '%s' not found.", m_firmware->GetName());
+            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: firmware '%s' not found (or shorter than its header).", m_firmware->GetName());
         }
         else if (std::strcmp(firmware->buildTime, model->firmwareBuildTime) == 0)
         {
@@ -185,7 +188,7 @@ namespace controllerlib
         }
         else
         {
-            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: '%s' is not Microsoft's adapter firmware (built '%s').", m_firmware->GetName(), firmware->buildTime);
+            m_logger->Log(LogLevel::Error, "XboxWirelessAdapter: '%s' is not a firmware sys-con knows (built '%s').", m_firmware->GetName(), firmware->buildTime);
         }
 
         m_logger->Log(LogLevel::Error, "  Microsoft does not allow sys-con to ship it, install it once for the %s adapter (045e-%04x):", model->name, model->productId);
@@ -199,16 +202,20 @@ namespace controllerlib
     {
         if (m_radio)
         {
-            for (uint16_t slot = 0; slot < m_clients.size(); slot++)
+            // After an unplug every write fails; one failure is enough to know, and the rest of
+            // the shutdown would only add error lines for an adapter that is gone.
+            bool reachable = true;
+            for (uint16_t slot = 0; slot < m_clients.size() && reachable; slot++)
             {
                 if (m_clients[slot].announced)
                 {
                     const uint8_t mode = GipPowerOff;
-                    (void)SendGip(slot, GipCmdPower, GipOptInternal, &mode, sizeof(mode));
+                    reachable = SendGip(slot, GipCmdPower, GipOptInternal, &mode, sizeof(mode)) == Status::Success;
                 }
             }
 
-            m_radio->Stop();
+            if (reachable)
+                m_radio->Stop();
             m_radio.reset();
         }
 
@@ -225,6 +232,9 @@ namespace controllerlib
     Status XboxWirelessAdapter::ReadNextBuffer(uint8_t *buffer, size_t *size, uint16_t *input_idx, uint32_t timeout_us)
     {
         uint8_t transfer[Mt76::MaxTransferSize];
+
+        for (uint16_t slot = 0; slot < m_clients.size(); slot++)
+            (void)FlushRumble(slot);
 
         for (IUSBEndpoint *endpoint : {m_packetEndpoint, m_eventEndpoint})
         {
@@ -312,20 +322,29 @@ namespace controllerlib
 
     Status XboxWirelessAdapter::OnClientAssociating(const MacAddress &address, uint16_t *input_idx)
     {
-        // A controller that reassociates without having been lost keeps its slot.
+        /*
+            A controller that reassociates without having been lost keeps its slot. Its wcid is
+            removed first: the firmware still holds it, and xow never adds a wcid twice.
+        */
         std::optional<uint16_t> slot = FindSlot(address);
+        Status result;
+        if (slot && (result = m_radio->RemoveClient(WcidOf(*slot))) != Status::Success)
+            return result;
+
         if (!slot)
             slot = FindFreeSlot();
 
+        // A refused controller keeps asking; it is logged once, not at every retry.
         if (!slot)
         {
-            m_logger->Log(LogLevel::Warning, "XboxWirelessAdapter: All %d slots taken, ignoring controller %02x:%02x:%02x:%02x:%02x:%02x",
-                          static_cast<int>(m_clients.size()), address[0], address[1], address[2], address[3], address[4], address[5]);
+            if (m_lastRefused != address)
+                m_logger->Log(LogLevel::Warning, "XboxWirelessAdapter: All %d slots taken, ignoring controller %02x:%02x:%02x:%02x:%02x:%02x",
+                              static_cast<int>(m_clients.size()), address[0], address[1], address[2], address[3], address[4], address[5]);
+            m_lastRefused = address;
             return Status::NothingTodo;
         }
 
-        Status result = m_radio->AssociateClient(WcidOf(*slot), address);
-        if (result != Status::Success)
+        if ((result = m_radio->AssociateClient(WcidOf(*slot), address)) != Status::Success)
             return result;
 
         Client &client = m_clients[*slot];
@@ -366,8 +385,9 @@ namespace controllerlib
 
     Status XboxWirelessAdapter::ParseData(uint8_t *buffer, size_t size, RawInputData *rawData, uint16_t *input_idx)
     {
+        // Malformed frames are skipped, as xow does, without holding up the other slots.
         if (size < GipHeaderSize)
-            return Status::UnexpectedData;
+            return Status::NothingTodo;
 
         const uint16_t slot = *input_idx;
         const uint8_t command = buffer[0];
@@ -395,7 +415,7 @@ namespace controllerlib
         if (command == GipCmdInput)
         {
             if (size < sizeof(XboxOneButtonData))
-                return Status::UnexpectedData;
+                return Status::NothingTodo;
 
             XboxOneButtonData report;
             std::memcpy(&report, buffer, sizeof(report));
@@ -444,6 +464,25 @@ namespace controllerlib
         if (input_idx >= m_clients.size() || !m_clients[input_idx].announced)
             return Status::InvalidIndex;
 
+        m_clients[input_idx].pendingRumble = rumble;
+        return FlushRumble(input_idx);
+    }
+
+    // A value that comes too soon is kept and sent by the next read, so the latest one is never lost.
+    Status XboxWirelessAdapter::FlushRumble(uint16_t slot)
+    {
+        Client &client = m_clients[slot];
+        if (!client.pendingRumble || !client.announced)
+            return Status::Success;
+
+        const auto now = std::chrono::steady_clock::now();
+        if (now - client.lastRumble < RumbleInterval)
+            return Status::Success;
+
+        const RumbleValue rumble = *client.pendingRumble;
+        client.pendingRumble.reset();
+        client.lastRumble = now;
+
         // The last byte is the repeat count; with 0 the effect plays once and dies while the
         // game keeps holding the same amplitude.
         const uint8_t payload[] = {
@@ -452,7 +491,7 @@ namespace controllerlib
             static_cast<uint8_t>(ScaleAmplitude(rumble.HighAmplitude(), GipMotorLevelMax)),
             0xff, 0x00, 0xff};
 
-        return SendGip(input_idx, GipCmdRumble, 0x00, payload, sizeof(payload));
+        return SendGip(slot, GipCmdRumble, 0x00, payload, sizeof(payload));
     }
 
     Status XboxWirelessAdapter::SendGip(uint16_t slot, uint8_t command, uint8_t options, const uint8_t *payload, uint8_t payloadSize)

@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <cstring>
 #include <deque>
+#include <chrono>
 #include <map>
+#include <thread>
 #include <vector>
 
 using namespace controllerlib;
@@ -34,6 +36,10 @@ namespace
 
         Status Write(const uint8_t *buffer, size_t size) override
         {
+            writeAttempts++;
+            if (failWrites)
+                return Status::WriteFailed;
+
             writes.emplace_back(buffer, buffer + size);
             return Status::Success;
         }
@@ -59,6 +65,8 @@ namespace
         std::vector<Bytes> writes;
         std::deque<Bytes> reads;
         int blockingReads = 0;
+        int writeAttempts = 0;
+        bool failWrites = false;
 
     private:
         EndpointDescriptor m_descriptor{};
@@ -152,10 +160,10 @@ namespace
     class FakeDevice : public IUSBDevice
     {
     public:
-        explicit FakeDevice(std::unique_ptr<IUSBInterface> &&interface)
+        explicit FakeDevice(std::unique_ptr<IUSBInterface> &&interface, uint16_t productId = 0x02fe)
         {
             m_vendorID = 0x045e;
-            m_productID = 0x02fe;
+            m_productID = productId;
             m_interfaces.push_back(std::move(interface));
         }
 
@@ -269,6 +277,25 @@ namespace
 
             adapter = std::make_unique<XboxWirelessAdapter>(std::make_unique<FakeDevice>(std::move(interfacePtr)), config,
                                                             std::make_unique<MockLogger>(), std::make_unique<MemoryFirmware>(image));
+        }
+
+        int GipFramesSent(uint8_t command) const
+        {
+            int count = 0;
+            for (const Bytes &write : interface->Out().writes)
+            {
+                // A client packet ends with the GIP frame, padding and the 4-byte end marker;
+                // matching its 4-byte header is enough to tell the frames apart here.
+                for (size_t i = 0; i + 4 <= write.size(); i++)
+                {
+                    if (write[i] == command && write[i + 1] == 0x00 && write[i + 3] == 9)
+                    {
+                        count++;
+                        break;
+                    }
+                }
+            }
+            return count;
         }
 
         Status Read(NormalizedButtonData *data, uint16_t *slot)
@@ -497,5 +524,146 @@ TEST(XboxWirelessAdapter, events_are_picked_up_while_idle)
     NormalizedButtonData data;
     uint16_t slot;
     EXPECT_EQ(fixture.adapter->ReadInput(&data, &slot, 10000), Status::NothingTodo);
+    EXPECT_FALSE(fixture.adapter->IsControllerConnected(0));
+}
+
+TEST(XboxWirelessAdapter, accepts_the_original_model_with_its_own_firmware)
+{
+    auto interfacePtr = std::make_unique<FakeAdapterInterface>();
+    XboxWirelessAdapter adapter(std::make_unique<FakeDevice>(std::move(interfacePtr), 0x02e6), ControllerConfig{},
+                                std::make_unique<MockLogger>(), std::make_unique<MemoryFirmware>(FirmwareImage(1000, 600, OriginalFirmwareBuild)));
+
+    EXPECT_EQ(adapter.Initialize(), Status::Success);
+}
+
+TEST(XboxWirelessAdapter, rejects_the_slim_firmware_on_the_original_model)
+{
+    auto interfacePtr = std::make_unique<FakeAdapterInterface>();
+    FakeAdapterInterface *interface = interfacePtr.get();
+    XboxWirelessAdapter adapter(std::make_unique<FakeDevice>(std::move(interfacePtr), 0x02e6), ControllerConfig{},
+                                std::make_unique<MockLogger>(), std::make_unique<MemoryFirmware>(FirmwareImage(1000, 600, SlimFirmwareBuild)));
+
+    EXPECT_EQ(adapter.Initialize(), Status::OpenFailed);
+    EXPECT_FALSE(interface->firmwareStarted);
+}
+
+TEST(XboxWirelessAdapter, odd_firmware_lengths_are_announced_unpadded)
+{
+    Fixture fixture(1001, 603);
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+
+    std::vector<uint32_t> lengths;
+    for (const auto &write : fixture.interface->writes)
+    {
+        if (write.request == VendWriteCfg && write.index == RegFceDmaLen)
+            lengths.push_back(write.value >> 16);
+    }
+
+    const std::vector<uint32_t> expected = {500, 500, 1, 500, 103};
+    EXPECT_EQ(lengths, expected);
+}
+
+TEST(XboxWirelessAdapter, reassociation_removes_the_client_first_and_keeps_its_slot)
+{
+    Fixture fixture;
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+    ASSERT_EQ(Connect(fixture, 1), Status::NothingTodo);
+    fixture.interface->Out().writes.clear();
+
+    NormalizedButtonData data;
+    uint16_t slot;
+    fixture.interface->PacketIn().reads.push_back(WlanTransfer(0x00, 0, AssociationBody));
+    EXPECT_EQ(fixture.Read(&data, &slot), Status::NothingTodo);
+    EXPECT_EQ(slot, 0);
+
+    // FwClientRemove (2) for wcid 1, sent through the firmware command channel.
+    EXPECT_TRUE(AnyWriteContains(fixture.interface->Out(), {0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}));
+    EXPECT_FALSE(fixture.adapter->IsControllerConnected(0));
+}
+
+TEST(XboxWirelessAdapter, rumble_frames_are_spaced_and_the_latest_value_wins)
+{
+    Fixture fixture;
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+    ASSERT_EQ(Connect(fixture, 1), Status::NothingTodo);
+    fixture.interface->Out().writes.clear();
+
+    RumbleValue weak{};
+    weak.left.amp_low = 0.2f;
+    RumbleValue strong{};
+    strong.left.amp_low = 1.0f;
+
+    EXPECT_EQ(fixture.adapter->SetRumble(0, weak), Status::Success);
+    EXPECT_EQ(fixture.adapter->SetRumble(0, strong), Status::Success);
+    EXPECT_EQ(fixture.GipFramesSent(0x09), 1);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+
+    NormalizedButtonData data;
+    uint16_t slot;
+    (void)fixture.Read(&data, &slot);
+    EXPECT_EQ(fixture.GipFramesSent(0x09), 2);
+}
+
+TEST(XboxWirelessAdapter, a_truncated_input_frame_is_skipped)
+{
+    Fixture fixture;
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+    ASSERT_EQ(Connect(fixture, 1), Status::NothingTodo);
+
+    Bytes input = {0x20, 0x00, 0x05, 0x02, 0x10, 0x00};
+    fixture.interface->PacketIn().reads.push_back(GipTransfer(1, input));
+
+    NormalizedButtonData data;
+    uint16_t slot;
+    EXPECT_EQ(fixture.Read(&data, &slot), Status::NothingTodo);
+}
+
+TEST(XboxWirelessAdapter, exit_after_an_unplug_stops_at_the_first_failed_write)
+{
+    Fixture fixture;
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+    ASSERT_EQ(Connect(fixture, 1), Status::NothingTodo);
+
+    fixture.interface->Out().failWrites = true;
+    fixture.interface->Out().writeAttempts = 0;
+    fixture.adapter->Exit();
+
+    EXPECT_EQ(fixture.interface->Out().writeAttempts, 1);
+}
+
+TEST(XboxWirelessAdapter, pair_request_is_answered_and_ends_pairing)
+{
+    Fixture fixture;
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+    fixture.interface->Out().writes.clear();
+
+    // Management frame, reserved subtype (7): the controller asking to pair.
+    constexpr uint8_t ReservedFrame = 0x07 << 4;
+    fixture.interface->PacketIn().reads.push_back(WlanTransfer(ReservedFrame, 0, {0x00, 0x01, 0x00, 0x00}));
+
+    NormalizedButtonData data;
+    uint16_t slot;
+    EXPECT_EQ(fixture.Read(&data, &slot), Status::NothingTodo);
+
+    EXPECT_TRUE(AnyWriteContains(fixture.interface->Out(), {0x70, 0x02, 0x00, 0x45, 0x55, 0x01, 0x0f, 0x8f, 0xff, 0x87, 0x1f}));
+    const Bytes pairingElement = {0xdd, 0x10, 0x00, 0x50, 0xf2, 0x11, 0x01, 0x10, 0x01};
+    EXPECT_FALSE(AnyWriteContains(fixture.interface->Out(), pairingElement));
+}
+
+TEST(XboxWirelessAdapter, disassociation_frees_the_slot)
+{
+    Fixture fixture;
+    ASSERT_EQ(fixture.adapter->Initialize(), Status::Success);
+    ASSERT_EQ(Connect(fixture, 1), Status::NothingTodo);
+
+    // 1537 controllers disassociate during pairing without raising EvtClientLost.
+    constexpr uint8_t Disassociation = 0x0a << 4;
+    fixture.interface->PacketIn().reads.push_back(WlanTransfer(Disassociation, 1, {0x00, 0x00}));
+
+    NormalizedButtonData data;
+    uint16_t slot;
+    EXPECT_EQ(fixture.Read(&data, &slot), Status::NothingTodo);
+    EXPECT_EQ(slot, 0);
     EXPECT_FALSE(fixture.adapter->IsControllerConnected(0));
 }

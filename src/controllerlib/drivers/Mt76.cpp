@@ -945,14 +945,16 @@ namespace controllerlib
             }
 
             Status result;
+            // The length the DMA engine is told and acknowledges is the unpadded one, as in xow;
+            // only the bulk transfer itself is padded to 4 bytes.
             if ((result = WriteRegister(reg::FceDmaAddr, offset + position, VendWriteCfg)) != Status::Success ||
-                (result = WriteRegister(reg::FceDmaLen, alignedSize << 16, VendWriteCfg)) != Status::Success)
+                (result = WriteRegister(reg::FceDmaLen, chunkSize << 16, VendWriteCfg)) != Status::Success)
                 return result;
 
             if ((result = BulkWrite(transfer, sizeof(info) + alignedSize + sizeof(uint32_t))) != Status::Success)
                 return result;
 
-            const uint32_t complete = (alignedSize << 16) | DmaComplete;
+            const uint32_t complete = (chunkSize << 16) | DmaComplete;
             result = PollUntil([this, complete](bool *done) {
                 uint32_t value;
                 Status status = ReadRegister(reg::FceDmaLen, &value, VendReadCfg);

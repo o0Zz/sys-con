@@ -3,6 +3,7 @@
 #include "BaseController.h"
 #include "drivers/Mt76.h"
 #include <array>
+#include <chrono>
 #include <memory>
 #include <optional>
 
@@ -42,9 +43,12 @@ namespace controllerlib
             MacAddress address{};
             uint8_t sequence = 0;
             RawInputData input{};
+            std::optional<RumbleValue> pendingRumble;
+            std::chrono::steady_clock::time_point lastRumble{};
         };
 
         Status CheckFirmware(FirmwareInfo *firmware);
+        Status FlushRumble(uint16_t slot);
         Status HandleTransfer(const uint8_t *transfer, size_t transferSize, uint8_t *buffer, size_t *size, uint16_t *input_idx);
         Status OnClientAssociating(const MacAddress &address, uint16_t *input_idx);
         Status OnClientLost(uint8_t wcid, uint16_t *input_idx);
@@ -66,5 +70,6 @@ namespace controllerlib
         IUSBEndpoint *m_packetEndpoint = nullptr;
         IUSBEndpoint *m_writeEndpoint = nullptr;
         std::array<Client, CONTROLLER_MAX_INPUTS> m_clients;
+        std::optional<MacAddress> m_lastRefused;
     };
 } // namespace controllerlib

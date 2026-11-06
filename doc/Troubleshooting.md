@@ -112,7 +112,7 @@ Extract `FW_ACC_00U.bin` from the `.cab` (Windows: `expand -F:FW_ACC_00U.bin <fi
 | `... is the firmware of the slim adapter (045e-02fe), this adapter is the original one (045e-02e6)` (or the other way round) | Each model needs the firmware of its own package: the slim adapter's firmware runs on the original model but breaks pairing ([#130](https://github.com/o0Zz/sys-con/issues/130)). Download the package named in the log. |
 | `... is not Microsoft's adapter firmware` | The file is another file. Extract `FW_ACC_00U.bin` again and check its SHA-256. |
 | `Xbox Wireless Adapter failed to start - ignoring it until it is replugged` | Read the error lines just above it, fix the file, then unplug and replug the adapter. |
-| `Mt76: Radio ready` but the controller never shows up | Press the button on the adapter (its light blinks), then hold the controller's pair button within about 20 seconds. |
+| `Mt76: Radio ready` but the controller never shows up | Press the button on the adapter: its light blinks until a controller pairs. Then hold the controller's pair button; the controller itself only searches for about 20 seconds, so press it again if its logo stops flashing. |
 | `All 4 slots taken` | Four controllers are already connected to the adapter, turn one off. |
 
 ## Controller detected as USB Audio (Loss of TV sound)
