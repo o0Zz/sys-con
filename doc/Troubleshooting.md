@@ -15,8 +15,8 @@ And especially these values:
 [vid-pid]
 rstick_left=-Z
 rstick_right=+Z
-rstick_up=+Rz
-rstick_down=-Rz
+rstick_up=-Rz
+rstick_down=+Rz
 ```
 Where rstick_xxxx could be: Z, -Z, Rz, -Rz, Rx, -Rx, Ry, -Ry, Slider, -Slider, Dial, -Dial, Brake, -Brake, Accelerator, -Accelerator (try all combinations to find the right one)
 

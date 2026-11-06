@@ -190,8 +190,9 @@ TEST(NetworkProfile, test_sticks_reach_the_normalized_output_undamped)
     // Full up on the left stick, full left on the right stick.
     NormalizedButtonData data = pad.Feed(MakePacket(0, 0, 32767, -32768, 0));
 
+    // Up is negative until the platform flips Y for the Switch.
     EXPECT_FLOAT_EQ(data.sticks[0].axis_x, 0.0f);
-    EXPECT_FLOAT_EQ(data.sticks[0].axis_y, 1.0f);
+    EXPECT_FLOAT_EQ(data.sticks[0].axis_y, -1.0f);
     EXPECT_FLOAT_EQ(data.sticks[1].axis_x, -1.0f);
     EXPECT_FLOAT_EQ(data.sticks[1].axis_y, 0.0f);
 }

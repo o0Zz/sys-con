@@ -32,16 +32,16 @@ TEST(BaseController, test_input_binding_basis)
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = -1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = +1.0f;
 
     RawInputData inputData;
     inputData.buttons[1] = true;
     inputData.buttons[3] = true;
     inputData.buttons[15] = true;
     inputData.analog[AnalogAxis::X] = 0.5f;  // Right
-    inputData.analog[AnalogAxis::Y] = -0.5f; // Down
+    inputData.analog[AnalogAxis::Y] = -0.5f; // Up: drivers report +Y down, as HID does
 
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
@@ -65,9 +65,9 @@ TEST(BaseController, test_input_deadzone)
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = -1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = +1.0f;
 
     config.analogDeadzonePercent[AnalogAxis::X] = 10;
     config.analogDeadzonePercent[AnalogAxis::Y] = 10;
@@ -93,9 +93,9 @@ TEST(BaseController, test_input_factor)
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].bind = AnalogAxis::X;
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = -1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = +1.0f;
 
     config.analogFactorPercent[AnalogAxis::X] = 110;
     config.analogFactorPercent[AnalogAxis::Y] = 120;
@@ -185,11 +185,12 @@ TEST(BaseController, test_input_stick_by_buttons)
     MockBaseController controller(std::make_unique<MockDevice>(), config, std::make_unique<MockLogger>());
     controller.MapRawInputToNormalized(inputData, &normalizedData);
 
+    // axis_y is +Y down until the platform flips it: LSTICK_DOWN is positive, RSTICK_UP negative.
     EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_x, -1.0f);
-    EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_y, -1.0f);
+    EXPECT_FLOAT_EQ(normalizedData.sticks[0].axis_y, 1.0f);
 
     EXPECT_FLOAT_EQ(normalizedData.sticks[1].axis_x, 1.0f);
-    EXPECT_FLOAT_EQ(normalizedData.sticks[1].axis_y, 1.0f);
+    EXPECT_FLOAT_EQ(normalizedData.sticks[1].axis_y, -1.0f);
 }
 
 TEST(BaseController, test_input_multiple_pin)
@@ -246,9 +247,9 @@ TEST(BaseController, test_input_complex_combination)
     config.buttonsAnalog[GamepadButton::LSTICK_RIGHT].sign = +1.0f;
 
     config.buttonsAnalog[GamepadButton::LSTICK_UP].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = +1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_UP].sign = -1.0f;
     config.buttonsAnalog[GamepadButton::LSTICK_DOWN].bind = AnalogAxis::Y;
-    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = -1.0f;
+    config.buttonsAnalog[GamepadButton::LSTICK_DOWN].sign = +1.0f;
 
     RawInputData inputData;
     inputData.analog[AnalogAxis::X] = -0.5f;

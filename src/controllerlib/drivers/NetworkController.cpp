@@ -44,9 +44,9 @@ namespace controllerlib
             rawData->buttons[pin] = ((report.buttons >> pin) & 1u) != 0;
 
         rawData->analog[AnalogAxis::X] = BaseController::Normalize(report.stick_left_x, -32768, 32767);
-        rawData->analog[AnalogAxis::Y] = BaseController::Normalize(report.stick_left_y, -32768, 32767);
+        rawData->analog[AnalogAxis::Y] = -BaseController::Normalize(report.stick_left_y, -32768, 32767);
         rawData->analog[AnalogAxis::Z] = BaseController::Normalize(report.stick_right_x, -32768, 32767);
-        rawData->analog[AnalogAxis::Rz] = BaseController::Normalize(report.stick_right_y, -32768, 32767);
+        rawData->analog[AnalogAxis::Rz] = -BaseController::Normalize(report.stick_right_y, -32768, 32767);
 
         memcpy(rawData->motion.accel, report.accel, sizeof(report.accel));
         memcpy(rawData->motion.gyro, report.gyro, sizeof(report.gyro));

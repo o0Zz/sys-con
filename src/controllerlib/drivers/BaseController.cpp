@@ -333,16 +333,18 @@ namespace controllerlib
         for (AnalogAxis axis : AllAnalogAxes)
             rawData.analog[axis] = BaseController::ApplyDeadzone(GetConfig().analogDeadzonePercent[axis], rawData.analog[axis]);
 
+        // axis_y follows the HID convention every driver reports in, +Y down; the platform
+        // flips it for the Switch. So UP writes a negative value, for a bound axis and a pin alike.
         StickButton sticks_list[] = {
             // button value_addr, sign
             StickButton(GamepadButton::LSTICK_LEFT, &normalData->sticks[0].axis_x, -1.0f),
             StickButton(GamepadButton::LSTICK_RIGHT, &normalData->sticks[0].axis_x, +1.0f),
-            StickButton(GamepadButton::LSTICK_UP, &normalData->sticks[0].axis_y, +1.0f),
-            StickButton(GamepadButton::LSTICK_DOWN, &normalData->sticks[0].axis_y, -1.0f),
+            StickButton(GamepadButton::LSTICK_UP, &normalData->sticks[0].axis_y, -1.0f),
+            StickButton(GamepadButton::LSTICK_DOWN, &normalData->sticks[0].axis_y, +1.0f),
             StickButton(GamepadButton::RSTICK_LEFT, &normalData->sticks[1].axis_x, -1.0f),
             StickButton(GamepadButton::RSTICK_RIGHT, &normalData->sticks[1].axis_x, +1.0f),
-            StickButton(GamepadButton::RSTICK_UP, &normalData->sticks[1].axis_y, +1.0f),
-            StickButton(GamepadButton::RSTICK_DOWN, &normalData->sticks[1].axis_y, -1.0f),
+            StickButton(GamepadButton::RSTICK_UP, &normalData->sticks[1].axis_y, -1.0f),
+            StickButton(GamepadButton::RSTICK_DOWN, &normalData->sticks[1].axis_y, +1.0f),
         };
 
         for (auto &&stick : sticks_list)

@@ -131,8 +131,8 @@ home=11
 capture=12
 rstick_left=-Rz
 rstick_right=+Rz
-rstick_up=+Z
-rstick_down=-Z
+rstick_up=-Z
+rstick_down=+Z
 ``` 
 Where ButtonName (A, B, Y, X ...) need to be assign to a ButtonID (1,2,3,4,5 ...)
 Now, according to what you found in step 2, you need to match ButtonName with ButtonID.

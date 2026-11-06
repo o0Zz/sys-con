@@ -125,9 +125,9 @@ TEST(Controller, test_network_controller_sticks_span_the_full_range)
     // Left stick is X/Y and right stick Z/Rz, matching the lstick_*/rstick_* bindings that
     // [default] already declares in config.ini.
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], -1.0f);
-    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], 1.0f);
+    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], -1.0f); // The wire's up is HID's -Y.
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Z], 0.0f);
-    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Rz], -1.0f);
+    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Rz], 1.0f);
 }
 
 TEST(Controller, test_network_controller_rejects_bad_magic)
@@ -254,7 +254,7 @@ TEST(Controller, test_network_controller_decodes_a_packet_from_networkpad_py)
     EXPECT_TRUE(rawData.buttons[static_cast<uint8_t>(GamepadButton::A)]);
     EXPECT_FALSE(rawData.buttons[static_cast<uint8_t>(GamepadButton::B)]);
     EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::X], 0.0f);
-    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], 1.0f);
+    EXPECT_FLOAT_EQ(rawData.analog[AnalogAxis::Y], -1.0f);
     EXPECT_FLOAT_EQ(rawData.motion.accel[1], 1.0f);
     EXPECT_FLOAT_EQ(rawData.motion.gyro[2], 2.0f);
 }

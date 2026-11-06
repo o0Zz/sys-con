@@ -33,7 +33,7 @@ namespace controllerlib
         uint8_t reserved;   ///< Must be 0.
         uint32_t buttons;   ///< Bit N set means GamepadButton N is pressed. Bit 0 is unused.
         int16_t stick_left_x;   ///< -32768..32767. Positive is right.
-        int16_t stick_left_y;   ///< -32768..32767. Positive is *up* (see [default]'s lstick_up=+Y).
+        int16_t stick_left_y;   ///< -32768..32767. Positive is *up*; flipped on decode to the HID convention (+Y down) every driver reports.
         int16_t stick_right_x;
         int16_t stick_right_y;
         float accel[3];     ///< m/s^2, in NormalizedMotion's frame: a pad lying flat sends {0, 9.8, 0}.
