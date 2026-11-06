@@ -19,6 +19,8 @@ namespace syscon
     {
         bool g_socket_initialized = false;
         NifmRequest g_nifm_request{};
+        bool g_nifm_initialized = false;
+        bool g_nifm_request_created = false;
 
         /*
             UDP only, and as small as it will go.
@@ -83,9 +85,11 @@ namespace syscon
             from an error.
         */
         Result nifm_rc = nifmInitialize(NifmServiceType_User);
+        g_nifm_initialized = R_SUCCEEDED(nifm_rc);
         if (R_SUCCEEDED(nifm_rc))
         {
             nifm_rc = nifmCreateRequest(&g_nifm_request, true);
+            g_nifm_request_created = R_SUCCEEDED(nifm_rc);
             if (R_SUCCEEDED(nifm_rc))
                 nifm_rc = nifmRequestSubmitAndWait(&g_nifm_request);
         }
@@ -108,6 +112,16 @@ namespace syscon
             return;
 
         socketExit();
+
+        if (g_nifm_initialized)
+        {
+            if (g_nifm_request_created)
+                nifmRequestClose(&g_nifm_request);
+            nifmExit();
+            g_nifm_initialized = false;
+            g_nifm_request_created = false;
+        }
+
         g_socket_initialized = false;
     }
 

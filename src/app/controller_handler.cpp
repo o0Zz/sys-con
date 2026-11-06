@@ -22,7 +22,7 @@ namespace syscon::controllers
         std::vector<std::unique_ptr<SwitchDeviceHandler>> controllerHandlers;
         std::mutex controllerMutex;
         int32_t polling_timeout_ms = 0;
-        int8_t polling_thread_priority = 0x30;
+        int8_t polling_thread_priority = 0;
         config::VirtualPadMode virtual_pad_mode = config::VirtualPadMode::HIDDBG;
 
         Result Add(std::unique_ptr<SwitchDeviceHandler> &&handler)
@@ -140,7 +140,13 @@ namespace syscon::controllers
     void Clear()
     {
         syscon::logger::LogDebug("Controllers clear (Release all controllers) !");
-        std::lock_guard<std::mutex> scoped_lock(controllerMutex);
-        controllerHandlers.clear();
+
+        // Destroyed outside controllerMutex for the same reason as in RemoveAllNonPlugged: the
+        // USB thread holds the USB lock while it waits for controllerMutex in Add.
+        std::vector<std::unique_ptr<SwitchDeviceHandler>> handlers;
+        {
+            std::lock_guard<std::mutex> scoped_lock(controllerMutex);
+            handlers.swap(controllerHandlers);
+        }
     }
 } // namespace syscon::controllers

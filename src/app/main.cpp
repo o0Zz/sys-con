@@ -123,13 +123,16 @@ namespace syscon
         ::syscon::networkpad::Initialize(globalConfig);
 
         ::syscon::logger::LogDebug("Initializing power supply management ...");
-        ::syscon::psc::Initialize();
+        const Result psc_rc = ::syscon::psc::Initialize();
+        if (R_FAILED(psc_rc))
+            ::syscon::logger::LogError("Power management failed to start (Error: 0x%08X): controllers are not released on sleep or shutdown", psc_rc);
 
         // newlib's mallinfo() reports nonsense on this toolchain; how far sbrk has moved into the
         // static heap is the high-water mark that actually decides INNER_HEAP_SIZE.
         ::syscon::logger::LogInfo("Heap after startup: %ld bytes claimed", static_cast<long>(static_cast<char *>(sbrk(0)) - fake_heap_start));
 
-        while ((::syscon::psc::IsRunning()))
+        // Without power management nothing ever reports a shutdown; run until the console stops us.
+        while (R_FAILED(psc_rc) || ::syscon::psc::IsRunning())
         {
             svcSleepThread(1e+8L);
         }

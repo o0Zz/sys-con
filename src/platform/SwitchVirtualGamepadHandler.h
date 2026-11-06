@@ -28,7 +28,7 @@ protected:
     int32_t m_polling_timeout_ms;
 
     alignas(0x1000) u8 thread_stack[0x2000];
-    Thread m_Thread;
+    Thread m_Thread{};
     bool m_ThreadIsRunning = false;
 
     // Describes the pad to hiddbg as whatever the input is about to be attached as. Both

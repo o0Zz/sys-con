@@ -20,11 +20,11 @@ public:
         m_lastMotionTick = 0;
     }
 
-    HiddbgHdlsHandle m_hdlHandle;
-    HiddbgHdlsDeviceInfo m_deviceInfo;
-    HiddbgHdlsState m_hdlState;
-    SwitchMotion m_motion;
-    u64 m_lastMotionTick;
+    HiddbgHdlsHandle m_hdlHandle{};
+    HiddbgHdlsDeviceInfo m_deviceInfo{};
+    HiddbgHdlsState m_hdlState{};
+    SwitchMotion m_motion{};
+    u64 m_lastMotionTick = 0;
 };
 
 class SwitchHDLHandler : public SwitchVirtualGamepadHandler

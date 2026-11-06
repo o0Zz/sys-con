@@ -21,9 +21,10 @@ namespace syscon::psc
         // newlib's stack-heavy vsnprintf internals. 0x1000 was observed to overflow (crash report
         // showed SP sitting exactly at the stack region's floor) - sized to match the USB threads.
         alignas(0x1000) u8 psc_thread_stack[0x4000];
-        Thread g_psc_thread;
+        Thread g_psc_thread{};
 
         bool is_psc_thread_running = false;
+        bool is_psc_module_open = false;
 
         void PscThreadFunc(void *arg)
         {
@@ -45,17 +46,19 @@ namespace syscon::psc
                                     ::syscon::networkpad::OnWake();
                                 break;
                             case PscPmState_ReadyShutdown:
-                                ::syscon::logger::LogDebug("Power management: Shutdown");
-                                is_psc_thread_running = false;
-                                [[fallthrough]];
                             case PscPmState_ReadySleep:
-                                ::syscon::logger::LogDebug("Power management: Sleep");
+                                ::syscon::logger::LogDebug(pscState == PscPmState_ReadyShutdown ? "Power management: Shutdown" : "Power management: Sleep");
                                 controllers::Clear();
                                 break;
                             default:
                                 break;
                         }
                         pscPmModuleAcknowledge(&pscModule, pscState);
+
+                        // Only after the acknowledge: the main loop closes the module as soon as
+                        // this flag drops.
+                        if (pscState == PscPmState_ReadyShutdown)
+                            is_psc_thread_running = false;
                     }
                 }
             } while (is_psc_thread_running);
@@ -68,15 +71,21 @@ namespace syscon::psc
         if (R_FAILED(rc))
             return rc;
 
+        is_psc_module_open = true;
         pscModuleWaiter = waiterForEvent(&pscModule.event);
-        is_psc_thread_running = true;
         rc = threadCreate(&g_psc_thread, &PscThreadFunc, nullptr, psc_thread_stack, sizeof(psc_thread_stack), 0x2C, -2);
         if (R_FAILED(rc))
             return rc;
 
+        is_psc_thread_running = true;
         rc = threadStart(&g_psc_thread);
         if (R_FAILED(rc))
+        {
+            is_psc_thread_running = false;
+            threadClose(&g_psc_thread);
+            g_psc_thread = Thread{};
             return rc;
+        }
 
         return 0;
     }
@@ -90,12 +99,20 @@ namespace syscon::psc
     {
         is_psc_thread_running = false;
 
-        pscPmModuleFinalize(&pscModule);
-        pscPmModuleClose(&pscModule);
-        eventClose(&pscModule.event);
+        if (g_psc_thread.handle != INVALID_HANDLE)
+        {
+            svcCancelSynchronization(g_psc_thread.handle);
+            threadWaitForExit(&g_psc_thread);
+            threadClose(&g_psc_thread);
+            g_psc_thread = Thread{};
+        }
 
-        svcCancelSynchronization(g_psc_thread.handle);
-        threadWaitForExit(&g_psc_thread);
-        threadClose(&g_psc_thread);
+        if (is_psc_module_open)
+        {
+            pscPmModuleFinalize(&pscModule);
+            pscPmModuleClose(&pscModule);
+            eventClose(&pscModule.event);
+            is_psc_module_open = false;
+        }
     }
 }; // namespace syscon::psc

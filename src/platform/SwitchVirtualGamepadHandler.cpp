@@ -123,6 +123,29 @@ namespace
 
 
 
+/*
+    Only a transfer that failed means the device may be gone. A report the driver could not use
+    (a status packet, another report id, a short frame) is skipped: backing off for it would
+    freeze the pad for 100 ms each time.
+*/
+static bool IsDeviceFailure(Status status)
+{
+    switch (status)
+    {
+        case Status::ReadFailed:
+        case Status::WriteFailed:
+        case Status::InvalidEndpoint:
+        case Status::OpenFailed:
+        case Status::UsbEndpointOpen:
+        case Status::UsbInterfaceAcquire:
+        case Status::NoInterfaces:
+        case Status::UnknownError:
+            return true;
+        default:
+            return false;
+    }
+}
+
 SwitchVirtualGamepadHandler::SwitchVirtualGamepadHandler(std::unique_ptr<IController> &&controller, int32_t polling_timeout_ms, int8_t thread_priority)
     : m_controller(std::move(controller)),
       m_polling_thread_priority(thread_priority),
@@ -196,7 +219,7 @@ void SwitchVirtualGamepadHandler::OnRun()
         if ((rc != Status::Timeout) && (execution_time_us > 30000)) // 30ms
             ::syscon::logger::LogWarning("SwitchVirtualGamepadHandler UpdateInputOutput took: %d ms !", execution_time_us / 1000);
 
-        if (Failed(rc) && rc != Status::Timeout && rc != Status::NothingTodo)
+        if (IsDeviceFailure(rc))
         {
             /*
             This case is a "normal case" and happen when the controller is disconnected
@@ -218,24 +241,37 @@ void SwitchVirtualGamepadHandlerThreadFunc(void *handler)
 
 Result SwitchVirtualGamepadHandler::InitThread()
 {
-    m_ThreadIsRunning = true;
     Result rc = threadCreate(&m_Thread, &SwitchVirtualGamepadHandlerThreadFunc, this, thread_stack, sizeof(thread_stack), m_polling_thread_priority, 3 /* On CPU 3 responsible for input */);
     if (R_FAILED(rc))
+    {
+        m_Thread = Thread{};
         return rc;
+    }
 
+    m_ThreadIsRunning = true;
     rc = threadStart(&m_Thread);
     if (R_FAILED(rc))
+    {
+        m_ThreadIsRunning = false;
+        threadClose(&m_Thread);
+        m_Thread = Thread{};
         return rc;
+    }
 
     return 0;
 }
 
+// Exit() also runs for a handler whose Initialize() failed, before any thread was created.
 void SwitchVirtualGamepadHandler::ExitThread()
 {
+    if (m_Thread.handle == INVALID_HANDLE)
+        return;
+
     m_ThreadIsRunning = false;
     svcCancelSynchronization(m_Thread.handle);
     threadWaitForExit(&m_Thread);
     threadClose(&m_Thread);
+    m_Thread = Thread{};
 }
 
 Status SwitchVirtualGamepadHandler::UpdateInput(uint32_t timeout_us)
