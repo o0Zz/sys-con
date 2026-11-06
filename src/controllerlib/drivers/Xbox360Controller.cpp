@@ -56,17 +56,12 @@ namespace controllerlib
         (void)input_idx;
         Xbox360ButtonData *buttonData = reinterpret_cast<Xbox360ButtonData *>(buffer);
 
-        if (size < sizeof(Xbox360ButtonData))
-            return Status::UnexpectedData;
+        // The pad also sends 3-byte status packets (LED, rumble, headset): not input.
+        if (size < sizeof(Xbox360ButtonData) || buttonData->type != XBOX360INPUT_BUTTON)
+            return Status::NothingTodo;
 
-        if (buttonData->type == XBOX360INPUT_BUTTON) // Button data
-        {
-            DecodeReport(buttonData, rawData);
-
-            return Status::Success;
-        }
-
-        return Status::UnexpectedData;
+        DecodeReport(buttonData, rawData);
+        return Status::Success;
     }
 
     Status Xbox360Controller::SetRumble(uint16_t input_idx, const RumbleValue &rumble)

@@ -45,7 +45,7 @@ namespace controllerlib
         // The Puck report 5 endpoints but the last seems to be the dongle.
         // The dongle is not a controller and should be ignored.
         if (*input_idx >= STEAMCONTROLLER_MAX_INPUTS)
-            return Status::InvalidIndex;
+            return Status::NothingTodo;
 
         if (report_id == REPORT_INPUT || report_id == REPORT_INPUT_BLE)
         {
@@ -56,42 +56,45 @@ namespace controllerlib
                 return Status::UnexpectedData;
             }
 
-            m_rawInput.buttons[1] = controllerData->buttons.a;
-            m_rawInput.buttons[2] = controllerData->buttons.b;
-            m_rawInput.buttons[3] = controllerData->buttons.y;
-            m_rawInput.buttons[4] = controllerData->buttons.x;
-            m_rawInput.buttons[5] = controllerData->buttons.l1;
-            m_rawInput.buttons[6] = controllerData->buttons.r1;
-            m_rawInput.buttons[7] = controllerData->buttons.l2;
-            m_rawInput.buttons[8] = controllerData->buttons.r2;
-            m_rawInput.buttons[9] = controllerData->buttons.view;
-            m_rawInput.buttons[10] = controllerData->buttons.menu;
-            m_rawInput.buttons[11] = controllerData->buttons.quickaccess;
-            m_rawInput.buttons[12] = controllerData->buttons.steam;
-            m_rawInput.buttons[13] = controllerData->buttons.lstick;
-            m_rawInput.buttons[14] = controllerData->buttons.rstick;
+            RawInputData input{};
+            input.buttons[1] = controllerData->buttons.a;
+            input.buttons[2] = controllerData->buttons.b;
+            input.buttons[3] = controllerData->buttons.y;
+            input.buttons[4] = controllerData->buttons.x;
+            input.buttons[5] = controllerData->buttons.l1;
+            input.buttons[6] = controllerData->buttons.r1;
+            input.buttons[7] = controllerData->buttons.l2;
+            input.buttons[8] = controllerData->buttons.r2;
+            input.buttons[9] = controllerData->buttons.view;
+            input.buttons[10] = controllerData->buttons.menu;
+            input.buttons[11] = controllerData->buttons.quickaccess;
+            input.buttons[12] = controllerData->buttons.steam;
+            input.buttons[13] = controllerData->buttons.lstick;
+            input.buttons[14] = controllerData->buttons.rstick;
 
-            m_rawInput.analog[AnalogAxis::X] = BaseController::Normalize(controllerData->left_stick_x, -32768, 32767);
-            m_rawInput.analog[AnalogAxis::Y] = BaseController::Normalize(-controllerData->left_stick_y, -32768, 32767);
-            m_rawInput.analog[AnalogAxis::Z] = BaseController::Normalize(controllerData->right_stick_x, -32768, 32767);
-            m_rawInput.analog[AnalogAxis::Rz] = BaseController::Normalize(-controllerData->right_stick_y, -32768, 32767);
+            input.analog[AnalogAxis::Rx] = BaseController::Normalize(controllerData->left_trigger, 0, 32767);
+            input.analog[AnalogAxis::Ry] = BaseController::Normalize(controllerData->right_trigger, 0, 32767);
+            input.analog[AnalogAxis::X] = BaseController::Normalize(controllerData->left_stick_x, -32768, 32767);
+            input.analog[AnalogAxis::Y] = BaseController::Normalize(-controllerData->left_stick_y, -32768, 32767);
+            input.analog[AnalogAxis::Z] = BaseController::Normalize(controllerData->right_stick_x, -32768, 32767);
+            input.analog[AnalogAxis::Rz] = BaseController::Normalize(-controllerData->right_stick_y, -32768, 32767);
 
-            m_rawInput.buttons[DPAD_UP_BUTTON_ID] = controllerData->buttons.dpad_up;
-            m_rawInput.buttons[DPAD_RIGHT_BUTTON_ID] = controllerData->buttons.dpad_right;
-            m_rawInput.buttons[DPAD_DOWN_BUTTON_ID] = controllerData->buttons.dpad_down;
-            m_rawInput.buttons[DPAD_LEFT_BUTTON_ID] = controllerData->buttons.dpad_left;
+            input.buttons[DPAD_UP_BUTTON_ID] = controllerData->buttons.dpad_up;
+            input.buttons[DPAD_RIGHT_BUTTON_ID] = controllerData->buttons.dpad_right;
+            input.buttons[DPAD_DOWN_BUTTON_ID] = controllerData->buttons.dpad_down;
+            input.buttons[DPAD_LEFT_BUTTON_ID] = controllerData->buttons.dpad_left;
 
             // +/-2 g and +/-2000 dps full scale, the ranges SDL's steam_triton driver assumes.
             constexpr float AccelScale = 2.0f * StandardGravity / 32768.0f;
             constexpr float GyroScale = 2000.0f * RadiansPerDegree / 32768.0f;
-            m_rawInput.motion.accel[0] = controllerData->imu.sAccelX * AccelScale;
-            m_rawInput.motion.accel[1] = controllerData->imu.sAccelZ * AccelScale;
-            m_rawInput.motion.accel[2] = -controllerData->imu.sAccelY * AccelScale;
-            m_rawInput.motion.gyro[0] = controllerData->imu.sGyroX * GyroScale;
-            m_rawInput.motion.gyro[1] = controllerData->imu.sGyroZ * GyroScale;
-            m_rawInput.motion.gyro[2] = -controllerData->imu.sGyroY * GyroScale;
+            input.motion.accel[0] = controllerData->imu.sAccelX * AccelScale;
+            input.motion.accel[1] = controllerData->imu.sAccelZ * AccelScale;
+            input.motion.accel[2] = -controllerData->imu.sAccelY * AccelScale;
+            input.motion.gyro[0] = controllerData->imu.sGyroX * GyroScale;
+            input.motion.gyro[1] = controllerData->imu.sGyroZ * GyroScale;
+            input.motion.gyro[2] = -controllerData->imu.sGyroY * GyroScale;
 
-            *rawData = m_rawInput;
+            *rawData = input;
             if (!m_controllerInfo[*input_idx].m_is_connected)
                 OnControllerConnect(*input_idx);
 
@@ -99,6 +102,9 @@ namespace controllerlib
         }
         else if (report_id == REPORT_WIRELESS_STATUS_X || report_id == REPORT_WIRELESS_STATUS)
         {
+            if (size < sizeof(TritonWirelessStatus))
+                return Status::NothingTodo;
+
             TritonWirelessStatus *statusData = reinterpret_cast<TritonWirelessStatus *>(buffer);
             bool was_connected = m_controllerInfo[*input_idx].m_is_connected;
             bool is_connected = statusData->state != 0x01;

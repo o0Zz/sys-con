@@ -72,8 +72,9 @@ namespace controllerlib
             if (result != Status::Success)
                 return result;
 
+            // Anything else is the adapter answering a command (rumble, init), not input.
             if (m_buffer[0] != 0x21 || *size < WII_INPUT_BUFFER_SIZE)
-                return Status::UnexpectedData;
+                return Status::NothingTodo;
         }
 
         memcpy(buffer, &m_buffer[1 + (m_current_wii_controller_idx * 9)], 9);
@@ -103,6 +104,11 @@ namespace controllerlib
         // Rumble needs the adapter's extra power lead, and a WaveBird has no motor at all.
         m_rumble_supported[*input_idx] = ((status & STATE_EXTRA_POWER) != 0) && ((status & STATE_WAVEBIRD) == 0);
         m_is_connected[*input_idx] = (status & (STATE_NORMAL | STATE_WAVEBIRD)) != 0;
+
+        // The rumble report covers all four ports: a port left rumbling would start the next
+        // pad plugged into it.
+        if (!m_is_connected[*input_idx] || !m_rumble_supported[*input_idx])
+            rumbleData[1 + *input_idx] = 0;
 
         if (!m_is_connected[*input_idx])
             return Status::NothingTodo;

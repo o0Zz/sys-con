@@ -169,15 +169,15 @@ namespace controllerlib
             return Status::NothingTodo;
 
         /*
-         Drain any further reports that are already queued, keeping only the freshest one.
-         The device (especially wireless ones like the Steam Puck) can deliver reports faster
-         than we poll and in bursts; without draining we would replay stale frames and fall
-         progressively behind. For a gamepad only the latest state matters.
+         Drain any further reports that are already queued, keeping only the freshest one: for a
+         gamepad only the latest state matters. Only a queueing endpoint has any (the UDP pad's
+         socket). A USB endpoint keeps a single transfer posted, so the next read always waits
+         for a new report and this loop ends at once.
         */
         uint8_t drainBuffer[CONTROLLER_INPUT_BUFFER_SIZE];
         for (;;)
         {
-            size_t drainSize = capacity;
+            size_t drainSize = std::min(capacity, sizeof(drainBuffer));
             if (m_inPipe[endpoint_idx]->Read(drainBuffer, &drainSize, 0) != Status::Success || drainSize == 0)
                 break;
 

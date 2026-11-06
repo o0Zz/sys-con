@@ -79,10 +79,12 @@ namespace controllerlib
     {
         HIDJoystickData joystick_data;
 
+        // A report of another collection on the same interface (consumer keys, vendor data) is
+        // not input: skipped, at Debug, since it can arrive on every key press.
         if (!m_joystick->parse_data(buffer, (uint16_t)size, &joystick_data))
         {
-            m_logger->Log(LogLevel::Error, "GenericHIDController[%04x-%04x] Failed to parse input data (size=%d)", m_device->GetVendor(), m_device->GetProduct(), size);
-            return Status::UnexpectedData;
+            m_logger->Log(LogLevel::Debug, "GenericHIDController[%04x-%04x] Report is not joystick input (size=%d)", m_device->GetVendor(), m_device->GetProduct(), size);
+            return Status::NothingTodo;
         }
 
         if (joystick_data.index >= GetInputCount())
@@ -91,12 +93,8 @@ namespace controllerlib
             return Status::UnexpectedData;
         }
 
-        /*
-             Special case for generic HID, input_idx might be bigger than 0 in case of multiple interfaces.
-             If this is the case we expect to have 1 input per interface, thus we don't want to overwrite the input index.
-        */
-        if (input_idx != NULL && *input_idx == 0)
-            *input_idx = joystick_data.index;
+        // The device is opened on a single interface, so the index is the joystick's own.
+        *input_idx = joystick_data.index;
 
         for (int i = 0; i < joystick_data.button_count; i++)
             rawData->buttons[i] = joystick_data.buttons[i];

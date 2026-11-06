@@ -31,6 +31,11 @@ namespace controllerlib
             return Status::InvalidEndpoint;
         }
 
+        // The receiver only announces a pad when it links, so pads linked before sys-con opened
+        // it (a restart, a replugged receiver) are asked for, as xpad does.
+        for (IUSBEndpoint *out : m_outPipe)
+            (void)out->Write(reconnectPacket, sizeof(reconnectPacket));
+
         return Status::Success;
     }
 

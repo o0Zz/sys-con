@@ -156,7 +156,6 @@ namespace controllerlib
     class SteamController2026 : public BaseController
     {
     private:
-        RawInputData m_rawInput;
         SteamControllerInfo m_controllerInfo[STEAMCONTROLLER_MAX_INPUTS];
         SteamControllerRumble m_rumble[STEAMCONTROLLER_MAX_INPUTS]{};
         uint8_t m_controller_count;

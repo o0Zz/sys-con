@@ -10,6 +10,7 @@
 
 #include "drivers/SteamController2026.h"
 #include "drivers/WiiController.h"
+#include "drivers/Xbox360Controller.h"
 #include "drivers/Xbox360WirelessController.h"
 #include "drivers/XboxOneController.h"
 #include "mocks/Device.h"
@@ -91,6 +92,35 @@ TEST(ReportBounds, test_steam2026_rejects_empty_report)
     uint8_t buffer[1] = {0x00};
 
     EXPECT_EQ(controller.ParseData(buffer, 0, &rawData, &input_idx), Status::UnexpectedData);
+}
+
+TEST(ReportBounds, test_steam2026_short_wireless_status_is_skipped)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+
+    SteamController2026 controller = MakeController<SteamController2026>(config);
+
+    // The state byte follows the report id; a 1-byte status used to read it from past the report.
+    uint8_t buffer[2] = {0x79, 0x00};
+
+    EXPECT_EQ(controller.ParseData(buffer, 1, &rawData, &input_idx), Status::NothingTodo);
+    EXPECT_FALSE(controller.IsControllerConnected(input_idx));
+}
+
+TEST(ReportBounds, test_xbox360_status_packets_are_not_input)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+
+    Xbox360Controller controller = MakeController<Xbox360Controller>(config);
+
+    // LED status, the answer to SetLED: three bytes, type 0x01.
+    uint8_t led[20] = {0x01, 0x03, 0x0e};
+    EXPECT_EQ(controller.ParseData(led, 3, &rawData, &input_idx), Status::NothingTodo);
+    EXPECT_EQ(controller.ParseData(led, sizeof(led), &rawData, &input_idx), Status::NothingTodo);
 }
 
 /* ---------- input_idx must be range-checked before indexing per-slot state ---------- */
