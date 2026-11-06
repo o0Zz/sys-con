@@ -38,7 +38,11 @@ namespace syscon::usb
         bool g_auto_add_controller = false;
         IFileManager *g_file_manager = nullptr;
 
-        // Interfaces whose driver failed in a way a retry cannot fix; they stay ignored until replugged.
+        /*
+            Interfaces whose controller failed to start. A failed start releases the interface, so
+            without this it is available again on the next sweep and retried every millisecond.
+            They are forgotten once they are no longer present.
+        */
         std::vector<s32> g_rejected_interface_ids;
 
         Event g_usbEvent[MaxUsbEvents] = {};
@@ -59,24 +63,30 @@ namespace syscon::usb
             Mouse,
         };
 
-        // Probed in order; the first match decides the profile the config falls back to.
-        // Keyboards and mice come before the HID catch-all so it never turns one into a pad.
-        constexpr struct
+        struct Probe
         {
             UsbHsInterfaceFilter filter;
             DeviceKind kind;
             const char *default_profile;
-        } ProbedInterfaces[] = {
-            {{.Flags = InterfaceVidPid, .idVendor = 0x045e, .idProduct = 0x02e6}, DeviceKind::Gamepad, "xboxadapter"},
-            {{.Flags = InterfaceVidPid, .idVendor = 0x045e, .idProduct = 0x02fe}, DeviceKind::Gamepad, "xboxadapter"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x01}, DeviceKind::Gamepad, "xbox360"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, DeviceKind::Gamepad, "xbox360w"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, DeviceKind::Gamepad, "xboxone"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = 0x58, .bInterfaceSubClass = 0x42, .bInterfaceProtocol = 0x00}, DeviceKind::Gamepad, "xbox"},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = HidSubclassBoot, .bInterfaceProtocol = HidProtocolKeyboard}, DeviceKind::Keyboard, ""},
-            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = HidSubclassBoot, .bInterfaceProtocol = HidProtocolMouse}, DeviceKind::Mouse, ""},
-            {{.Flags = UsbHsInterfaceFilterFlags_bInterfaceClass, .bInterfaceClass = USB_CLASS_HID}, DeviceKind::Gamepad, ""},
+            bool is_xbox; // Still probed with discovery_mode=1, which keeps Xbox controllers.
         };
+
+        // Probed in order; the first match decides the profile the config falls back to.
+        // Keyboards and mice come before the HID catch-all so it never turns one into a pad.
+        constexpr Probe BuiltInProbes[] = {
+            {{.Flags = InterfaceVidPid, .idVendor = 0x045e, .idProduct = 0x02e6}, DeviceKind::Gamepad, "xboxadapter", true},
+            {{.Flags = InterfaceVidPid, .idVendor = 0x045e, .idProduct = 0x02fe}, DeviceKind::Gamepad, "xboxadapter", true},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x01}, DeviceKind::Gamepad, "xbox360", true},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x5D, .bInterfaceProtocol = 0x81}, DeviceKind::Gamepad, "xbox360w", true},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_VENDOR_SPEC, .bInterfaceSubClass = 0x47, .bInterfaceProtocol = 0xD0}, DeviceKind::Gamepad, "xboxone", true},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = 0x58, .bInterfaceSubClass = 0x42, .bInterfaceProtocol = 0x00}, DeviceKind::Gamepad, "xbox", true},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = HidSubclassBoot, .bInterfaceProtocol = HidProtocolKeyboard}, DeviceKind::Keyboard, "", false},
+            {{.Flags = InterfaceClassSubClassProtocol, .bInterfaceClass = USB_CLASS_HID, .bInterfaceSubClass = HidSubclassBoot, .bInterfaceProtocol = HidProtocolMouse}, DeviceKind::Mouse, "", false},
+            {{.Flags = UsbHsInterfaceFilterFlags_bInterfaceClass, .bInterfaceClass = USB_CLASS_HID}, DeviceKind::Gamepad, "", false},
+        };
+
+        // The built-in probes discovery_mode allows, then one per discovery_vidpid entry.
+        std::vector<Probe> g_probes;
 
         // A pad with a dedicated driver may expose boot keyboard/mouse interfaces of its own
         // (Steam controllers do); those stay with the pad.
@@ -118,139 +128,199 @@ namespace syscon::usb
             return std::find(g_rejected_interface_ids.begin(), g_rejected_interface_ids.end(), interface.inf.ID) != g_rejected_interface_ids.end();
         }
 
+        void Reject(const UsbHsInterface *interfaces, s32 count)
+        {
+            syscon::logger::LogError("USB device [%04x-%04x] failed to start - ignoring it until it is replugged", interfaces[0].device_desc.idVendor, interfaces[0].device_desc.idProduct);
+            for (s32 i = 0; i < count; i++)
+                g_rejected_interface_ids.push_back(interfaces[i].inf.ID);
+        }
+
+        void ForgetUnpluggedRejections()
+        {
+            if (g_rejected_interface_ids.empty())
+                return;
+
+            static UsbHsInterface present[MaxUsbHsInterfacesSize];
+            const UsbHsInterfaceFilter any{.Flags = UsbHsInterfaceFilterFlags_bcdDevice_Min, .bcdDevice_Min = 0x0000};
+            const s32 count = QueryAvailableInterfaces(present, sizeof(present), any);
+
+            std::erase_if(g_rejected_interface_ids, [count](s32 id)
+                          { return std::none_of(present, present + count, [id](const UsbHsInterface &interface)
+                                                { return interface.inf.ID == id; }); });
+        }
+
+        /*
+            usbHsQueryAvailableInterfaces matches interfaces, not devices: two identical pads give
+            one list. Only the interfaces of the first usable device are kept, so each device
+            becomes its own controller.
+        */
+        s32 SelectDevice(const Probe &probe, UsbHsInterface *interfaces)
+        {
+            static UsbHsInterface found[MaxUsbHsInterfacesSize];
+            const s32 total = QueryAvailableInterfaces(found, sizeof(found), probe.filter);
+
+            s32 count = 0;
+            for (s32 i = 0; i < total; i++)
+            {
+                if (IsRejected(found[i]))
+                    continue;
+
+                if (count == 0)
+                {
+                    if (probe.kind != DeviceKind::Gamepad && BelongsToDedicatedDriver(found[i]))
+                        continue;
+                }
+                else if (found[i].busID != interfaces[0].busID || found[i].deviceID != interfaces[0].deviceID)
+                    continue;
+
+                interfaces[count++] = found[i];
+            }
+
+            return count;
+        }
+
         constexpr struct
         {
             const char *driver;
             const char *name;
             std::unique_ptr<IController> (*Make)(std::unique_ptr<IUSBDevice> &&, const ControllerConfig &);
-            // Set when a failed start cannot succeed on retry and a retry is expensive: the adapter
-            // spends seconds uploading firmware, during which the USB stack is locked.
-            bool reject_on_failure;
         } Drivers[] = {
-            {"dualshock3", "Dualshock 3", MakeController<Dualshock3Controller>, false},
-            {"xbox360w", "Xbox 360 Wireless", MakeController<Xbox360WirelessController>, false},
-            {"xbox360", "Xbox 360", MakeController<Xbox360Controller>, false},
+            {"dualshock3", "Dualshock 3", MakeController<Dualshock3Controller>},
+            {"xbox360w", "Xbox 360 Wireless", MakeController<Xbox360WirelessController>},
+            {"xbox360", "Xbox 360", MakeController<Xbox360Controller>},
             /* One XboxOne controller exposes 2 interfaces, thus we have to take all of them */
-            {"xboxone", "Xbox One", MakeController<XboxOneController>, false},
-            {"xboxadapter", "Xbox Wireless Adapter", MakeXboxWirelessAdapter, true},
-            {"xbox", "Xbox 1st gen", MakeController<XboxController>, false},
-            {"switch", "Switch", MakeController<SwitchController>, false},
-            {"wii", "Wii", MakeController<WiiController>, false},
-            {"sinput", "SInput", MakeController<SInputController>, false},
-            {"steam2026", "Steam Controller 2026", MakeController<SteamController2026>, false},
+            {"xboxone", "Xbox One", MakeController<XboxOneController>},
+            {"xboxadapter", "Xbox Wireless Adapter", MakeXboxWirelessAdapter},
+            {"xbox", "Xbox 1st gen", MakeController<XboxController>},
+            {"switch", "Switch", MakeController<SwitchController>},
+            {"wii", "Wii", MakeController<WiiController>},
+            {"sinput", "SInput", MakeController<SInputController>},
+            {"steam2026", "Steam Controller 2026", MakeController<SteamController2026>},
         };
+
+        // A start that fails rejects the interfaces it was given until they are replugged.
+        void StartDevice(DeviceKind kind, const std::string &default_profile, UsbHsInterface *interfaces, s32 count)
+        {
+            const UsbHsInterface *interface = &interfaces[0];
+
+            syscon::logger::LogInfo("Trying to initialize USB device: [%04x-%04x] (Class: 0x%02X, SubClass: 0x%02X, Protocol: 0x%02X, bcd: 0x%04X)...",
+                                    interface->device_desc.idVendor,
+                                    interface->device_desc.idProduct,
+                                    interface->device_desc.bDeviceClass,
+                                    interface->device_desc.bDeviceSubClass,
+                                    interface->device_desc.bDeviceProtocol,
+                                    interface->device_desc.bcdDevice);
+
+            if (kind == DeviceKind::Keyboard)
+            {
+                syscon::logger::LogInfo("Initializing keyboard ...");
+                if (R_FAILED(controllers::InsertKeyboard(std::make_unique<SwitchUSBDevice>(interfaces, 1))))
+                    Reject(interfaces, 1);
+                return;
+            }
+
+            if (kind == DeviceKind::Mouse)
+            {
+                syscon::logger::LogInfo("Initializing mouse ...");
+                if (R_FAILED(controllers::InsertMouse(std::make_unique<SwitchUSBDevice>(interfaces, 1))))
+                    Reject(interfaces, 1);
+                return;
+            }
+
+            ControllerConfig config;
+            ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, interface->device_desc.idVendor, interface->device_desc.idProduct, g_auto_add_controller, default_profile);
+
+            const auto *driver = std::find_if(std::begin(Drivers), std::end(Drivers), [&config](const auto &candidate)
+                                              { return config.driver == candidate.driver; });
+
+            if (driver != std::end(Drivers))
+            {
+                syscon::logger::LogInfo("Initializing %s controller (Interface count: %d) ...", driver->name, count);
+                if (R_FAILED(controllers::Insert(driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, count), config))))
+                    Reject(interfaces, count);
+                return;
+            }
+
+            // A generic HID device is driven through its first interface only; the others are
+            // probed on their own.
+            syscon::logger::LogInfo("Initializing Generic controller ...");
+            if (R_FAILED(controllers::Insert(std::make_unique<GenericHIDController>(std::make_unique<SwitchUSBDevice>(interfaces, 1), config, std::make_unique<syscon::logger::Logger>()))))
+                Reject(interfaces, 1);
+        }
 
         Result AddEvent(UsbHsInterfaceFilter *filter, const std::string &name);
 
         void UsbEventThreadFunc(void *arg)
         {
-            UsbHsInterface interfaces[MaxUsbHsInterfacesSize] = {};
+            static UsbHsInterface interfaces[MaxUsbHsInterfacesSize];
             u64 timeoutNs = MS_TO_NS(1);
+            bool limit_logged = false;
             (void)arg;
 
             do
             {
-
                 /*
                     Weird issue with this function, This function will never return in some cases (XBOX Serie for example #14)
                     So, we need to use the timeout=1ms to avoid being stuck in this function the first call, and then we can use the UINT64_MAX
                 */
                 s32 idx_out = 0;
                 Result rc = waitObjects(&idx_out, g_usbWaiters, g_usbEventCount, timeoutNs);
-                if (R_SUCCEEDED(rc) || R_VALUE(rc) == KERNELRESULT(TimedOut))
+                if (R_FAILED(rc) && R_VALUE(rc) != KERNELRESULT(TimedOut))
                 {
-                    syscon::logger::LogDebug("New USB device detected (Or polling timeout), checking for controllers ...");
-
-                    /*
-                        For unknown reason we have to keep this lock in order to lock the usb stacks during the controller initialization
-                        If we don't do that, we will have some issue with the USB stack when we have multiple controllers connected at boot time
-                        (Example: Not being able to setLed to the device - On XBOX360 wired controller)
-                    */
-
-                    SwitchUSBLock usbLock;
-
-                    s32 total_entries = 0;
-                    DeviceKind kind = DeviceKind::Gamepad;
-                    std::string default_profile;
-                    for (const auto &probe : ProbedInterfaces)
+                    if (is_usb_event_thread_running)
                     {
-                        total_entries = QueryAvailableInterfaces(interfaces, sizeof(interfaces), probe.filter);
-                        if (total_entries > 0 && IsRejected(interfaces[0]))
-                            total_entries = 0;
-                        if (total_entries > 0 && probe.kind != DeviceKind::Gamepad && BelongsToDedicatedDriver(interfaces[0]))
-                            total_entries = 0;
-
-                        if (total_entries > 0)
-                        {
-                            kind = probe.kind;
-                            default_profile = probe.default_profile;
-                            break;
-                        }
+                        syscon::logger::LogError("Waiting for USB devices failed (Error: 0x%08X)", rc);
+                        svcSleepThread(MS_TO_NS(1000));
                     }
+                    continue;
+                }
 
-                    if (total_entries > 0)
+                syscon::logger::LogDebug("New USB device detected (Or polling timeout), checking for controllers ...");
+
+                /*
+                    For unknown reason we have to keep this lock in order to lock the usb stacks during the controller initialization
+                    If we don't do that, we will have some issue with the USB stack when we have multiple controllers connected at boot time
+                    (Example: Not being able to setLed to the device - On XBOX360 wired controller)
+                */
+                SwitchUSBLock usbLock;
+
+                ForgetUnpluggedRejections();
+
+                s32 count = 0;
+                const Probe *matched = nullptr;
+                for (const Probe &probe : g_probes)
+                {
+                    if ((count = SelectDevice(probe, interfaces)) > 0)
                     {
-                        timeoutNs = MS_TO_NS(1); // Everytime we find a controller we reset the timeout to loop again on next controllers
-
-                        if (controllers::IsAtControllerLimit())
-                        {
-                            syscon::logger::LogError("Reach controller limit - Can't add anymore controller !");
-                            continue;
-                        }
-
-                        UsbHsInterface *interface = &interfaces[0];
-
-                        syscon::logger::LogInfo("Trying to initialize USB device: [%04x-%04x] (Class: 0x%02X, SubClass: 0x%02X, Protocol: 0x%02X, bcd: 0x%04X)...",
-                                                interface->device_desc.idVendor,
-                                                interface->device_desc.idProduct,
-                                                interface->device_desc.bDeviceClass,
-                                                interface->device_desc.bDeviceSubClass,
-                                                interface->device_desc.bDeviceProtocol,
-                                                interface->device_desc.bcdDevice);
-
-                        if (kind == DeviceKind::Keyboard)
-                        {
-                            syscon::logger::LogInfo("Initializing keyboard ...");
-                            controllers::InsertKeyboard(std::make_unique<SwitchUSBDevice>(interfaces, 1));
-                            continue;
-                        }
-
-                        if (kind == DeviceKind::Mouse)
-                        {
-                            syscon::logger::LogInfo("Initializing mouse ...");
-                            controllers::InsertMouse(std::make_unique<SwitchUSBDevice>(interfaces, 1));
-                            continue;
-                        }
-
-                        ControllerConfig config;
-                        ::syscon::config::LoadControllerConfig(CONFIG_FULLPATH, &config, interface->device_desc.idVendor, interface->device_desc.idProduct, g_auto_add_controller, default_profile);
-
-                        const auto *driver = std::find_if(std::begin(Drivers), std::end(Drivers), [&config](const auto &candidate)
-                                                          { return config.driver == candidate.driver; });
-
-                        if (driver != std::end(Drivers))
-                        {
-                            syscon::logger::LogInfo("Initializing %s controller (Interface count: %d) ...", driver->name, total_entries);
-                            Result rc = controllers::Insert(driver->Make(std::make_unique<SwitchUSBDevice>(interfaces, total_entries), config));
-                            if (R_FAILED(rc) && driver->reject_on_failure)
-                            {
-                                syscon::logger::LogError("%s failed to start - ignoring it until it is replugged", driver->name);
-                                g_rejected_interface_ids.push_back(interface->inf.ID);
-                            }
-                        }
-                        else
-                        {
-                            // A generic HID device is driven through its first interface only.
-                            syscon::logger::LogInfo("Initializing Generic controller (Interface count: %d) ...", total_entries);
-                            controllers::Insert(std::make_unique<GenericHIDController>(std::make_unique<SwitchUSBDevice>(interfaces, 1), config, std::make_unique<syscon::logger::Logger>()));
-                        }
-                    }
-                    else
-                    {
-                        syscon::logger::LogDebug("No HID or XBOX interfaces found !");
-                        timeoutNs = UINT64_MAX; // As soon as no controller is found, we wait for the next event
+                        matched = &probe;
+                        break;
                     }
                 }
+
+                if (matched == nullptr)
+                {
+                    syscon::logger::LogDebug("No HID or XBOX interfaces found !");
+                    timeoutNs = UINT64_MAX; // As soon as no controller is found, we wait for the next event
+                    continue;
+                }
+
+                /*
+                    The device stays available, so it is seen again on every sweep: one log, and a
+                    slow retry that picks it up once another controller is unplugged.
+                */
+                if (controllers::IsAtControllerLimit())
+                {
+                    if (!limit_logged)
+                        syscon::logger::LogError("Reach controller limit - Can't add anymore controller !");
+                    limit_logged = true;
+                    timeoutNs = MS_TO_NS(1000);
+                    continue;
+                }
+
+                limit_logged = false;
+                timeoutNs = MS_TO_NS(1); // Everytime we find a controller we reset the timeout to loop again on next controllers
+
+                StartDevice(matched->kind, matched->default_profile, interfaces, count);
             } while (is_usb_event_thread_running);
         }
 
@@ -322,8 +392,13 @@ namespace syscon::usb
 
             syscon::logger::LogDebug("Adding event with filter: %s (%d/%d)...", name.c_str(), g_usbEventCount + 1, MaxUsbEvents);
             Result ret = usbHsCreateInterfaceAvailableEvent(&g_usbEvent[g_usbEventCount], true, g_usbEventCount, filter);
-            g_usbWaiters[g_usbEventCount] = waiterForEvent(&g_usbEvent[g_usbEventCount]);
+            if (R_FAILED(ret))
+            {
+                syscon::logger::LogError("Unable to create the USB event for filter %s (Error: 0x%08X)", name.c_str(), ret);
+                return ret;
+            }
 
+            g_usbWaiters[g_usbEventCount] = waiterForEvent(&g_usbEvent[g_usbEventCount]);
             g_usbEventCount++;
             return ret;
         }
@@ -376,6 +451,45 @@ namespace syscon::usb
                 }
 
                 AddEvent(&filterKnownDevice, std::string(vidpid));
+            }
+        }
+
+        if (g_usbEventCount == 0)
+            syscon::logger::LogError("No USB event could be created (discovery_mode=%d, %d discovery_vidpid entries): only devices plugged at boot will be detected", discovery_mode, static_cast<int>(discovery_vidpid.size()));
+
+        // The events only decide when to look; these decide what is taken.
+        for (const Probe &probe : BuiltInProbes)
+        {
+            if (discovery_mode == syscon::config::DiscoveryMode::HID_AND_XBOX ||
+                (discovery_mode == syscon::config::DiscoveryMode::VIDPID_AND_XBOX && probe.is_xbox))
+                g_probes.push_back(probe);
+        }
+
+        // A listed device is still told apart by its interfaces: a keyboard or mouse it exposes
+        // is not taken for a pad.
+        if (discovery_mode != syscon::config::DiscoveryMode::HID_AND_XBOX)
+        {
+            for (const syscon::config::ControllerVidPid &vidpid : discovery_vidpid)
+            {
+                UsbHsInterfaceFilter device{.Flags = UsbHsInterfaceFilterFlags_idVendor, .idVendor = vidpid.vid};
+                if (vidpid.pid != 0)
+                {
+                    device.Flags |= UsbHsInterfaceFilterFlags_idProduct;
+                    device.idProduct = vidpid.pid;
+                }
+
+                UsbHsInterfaceFilter keyboard = device;
+                keyboard.Flags |= InterfaceClassSubClassProtocol;
+                keyboard.bInterfaceClass = USB_CLASS_HID;
+                keyboard.bInterfaceSubClass = HidSubclassBoot;
+                keyboard.bInterfaceProtocol = HidProtocolKeyboard;
+
+                UsbHsInterfaceFilter mouse = keyboard;
+                mouse.bInterfaceProtocol = HidProtocolMouse;
+
+                g_probes.push_back({keyboard, DeviceKind::Keyboard, "", false});
+                g_probes.push_back({mouse, DeviceKind::Mouse, "", false});
+                g_probes.push_back({device, DeviceKind::Gamepad, "", false});
             }
         }
 
