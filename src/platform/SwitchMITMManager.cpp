@@ -94,8 +94,8 @@ namespace
         return static_cast<HidSharedMemory *>(shmemGetAddr(&Fake(view).shmem));
     }
 
-    // Null for a view whose fake could not be allocated; that failure is logged once, at
-    // allocation, and no client is ever handed that view.
+    // Null for a view whose fake could not be allocated; that failure is logged at Start(),
+    // and an entry for that view fails to build, so no client is ever handed it.
     HidNpadSixAxisSensorLifo *FakeSixAxisLifo(HidFakeView view, uint8_t player_idx)
     {
         HidSharedMemory *fake = FakeAddr(view);
@@ -176,7 +176,7 @@ static Result _HidGetSharedMemoryHandle(Service *srv, Handle *handle_out)
 }
 
 HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 aruid, u64 processId, u64 programId)
-    : m_process_id(processId), m_program_id(programId), m_view(ViewForProgram(programId))
+    : m_aruid(aruid), m_process_id(processId), m_program_id(programId), m_view(ViewForProgram(programId))
 {
     Handle sharedMemHandle;
 
@@ -202,10 +202,12 @@ HidSharedMemoryEntry::HidSharedMemoryEntry(::Service *hid_service, u64 aruid, u6
         return;
     }
 
-    // Normally already created by Start(); this only has to do anything if that failed.
-    m_status = CreateFakeSharedMemory(m_view);
-    if (R_FAILED(m_status))
+    if (Fake(m_view).shmem.handle == INVALID_HANDLE)
+    {
+        ::syscon::logger::LogError("HidSharedMemoryEntry has no %s fake memory: it could not be allocated at start (Process id: 0x%016" PRIx64 ")", Fake(m_view).name, m_process_id);
+        m_status = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
         return;
+    }
 
     ::syscon::logger::LogInfo("HidSharedMemoryEntry created successfully (Process id: 0x%016" PRIx64 ", View: %s, RealAddr: %p, FakeAddr: %p)", m_process_id, Fake(m_view).name, GetRealAddr(), GetFakeAddr());
 }
@@ -278,10 +280,11 @@ HidSharedMemoryManager &HidSharedMemoryManager::GetHidSharedMemoryManager()
 
 /*
     Everything Nintendo signs lives under 0x01, and applications start at 0x0100000000010000.
-    A program id outside 0x01 is a homebrew sysmodule (sys-con itself is 0x69..., the overlay
-    loader 0x42...), and below the application range sit the system modules and applets -
-    qlaunch, am, overlayDisp, the Controllers applet - none of which takes motion or rumble
-    from a pad, and all of which are best served by the real hid itself.
+    Below that range sit the system modules and applets - qlaunch, am, overlayDisp, the
+    Controllers applet - none of which takes motion or rumble from a pad, and all of which
+    are best served by the real hid itself. The range is all that is checked: a homebrew
+    sysmodule given an id inside it (most pick 0x42... or 0x69..., outside) would be treated
+    as the application.
 */
 bool HidSharedMemoryManager::ShouldMitm(u64 program_id)
 {
@@ -408,6 +411,28 @@ std::shared_ptr<HidSharedMemoryEntry> HidSharedMemoryManager::CreateIfNotExists(
         in the constructor below.
     */
     RunGarbageCollector();
+
+    /*
+        A process asks again whenever it reinitializes hid - hbloader runs every homebrew inside
+        the hbmenu process. The old entry is replaced, not reused: its real view came from the
+        hid session the previous program closed, and hid no longer updates it.
+    */
+    std::vector<std::shared_ptr<HidSharedMemoryEntry>> replaced;
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex_controller);
+        std::lock_guard<std::recursive_mutex> shmem_lock(m_mutex_sharedmemory);
+        for (auto it = m_sharedmemory_entry_list.begin(); it != m_sharedmemory_entry_list.end();)
+        {
+            if ((*it)->GetProcessId() == processId && (*it)->GetAruid() == aruid)
+            {
+                replaced.push_back(*it);
+                it = m_sharedmemory_entry_list.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+    replaced.clear();
 
     std::shared_ptr<HidSharedMemoryEntry> entry = std::make_shared<HidSharedMemoryEntry>(hid_service, aruid, processId, programId);
 
@@ -552,20 +577,34 @@ int HidSharedMemoryManager::Start()
         a client arrives means asking once an applet has already taken the slack, which is
         when svcCreateSharedMemory starts returning 0x00010801 (LimitReached).
     */
+    Result rc = 0;
     for (size_t view = 0; view < HidFakeViewCount; view++)
-        CreateFakeSharedMemory(static_cast<HidFakeView>(view));
+    {
+        const Result view_rc = CreateFakeSharedMemory(static_cast<HidFakeView>(view));
+        if (R_FAILED(view_rc))
+            rc = view_rc;
+    }
 
     m_running = true;
 
-    Result rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 38, 3 /* On CPU 3 responsible for input */);
-    if (R_FAILED(rc))
-        return rc;
+    const Result thread_rc = threadCreate(&m_thread, &HidSharedMemoryManagerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), 38, 3 /* On CPU 3 responsible for input */);
+    if (R_FAILED(thread_rc))
+    {
+        m_running = false;
+        m_thread = Thread{};
+        return thread_rc;
+    }
 
-    rc = threadStart(&m_thread);
-    if (R_FAILED(rc))
-        return rc;
+    const Result start_rc = threadStart(&m_thread);
+    if (R_FAILED(start_rc))
+    {
+        m_running = false;
+        threadClose(&m_thread);
+        m_thread = Thread{};
+        return start_rc;
+    }
 
-    return 0;
+    return rc;
 }
 
 void HidSharedMemoryManager::Stop()

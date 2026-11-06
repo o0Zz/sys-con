@@ -31,4 +31,5 @@ public:
 
 private:
     void ReleaseController(uint16_t input_idx);
+    Result PublishInitialState(uint16_t input_idx);
 };

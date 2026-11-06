@@ -179,7 +179,7 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
         }
 
         syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] Created a sideways Joy-Con for input: %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
-        return 0;
+        return PublishInitialState(input_idx);
     }
 
     const u32 npad_mask_before = GetRealNpadMask();
@@ -213,7 +213,26 @@ Result SwitchMITMHandler::AttachController(uint16_t input_idx)
 
     syscon::logger::LogInfo("SwitchMITMHandler[%04x-%04x] Created the device for input: %d, the console gave it player %d", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, player_idx + 1);
 
-    return 0;
+    return PublishInitialState(input_idx);
+}
+
+/*
+    The state is otherwise only sent when the input changes, so a pad attached at rest would
+    show an empty battery until it is first touched.
+*/
+Result SwitchMITMHandler::PublishInitialState(uint16_t input_idx)
+{
+    m_hdlsState[input_idx] = HiddbgHdlsState{};
+    m_hdlsState[input_idx].battery_level = 4;
+
+    Result rc = hiddbgSetHdlsState(m_hdlsHandle[input_idx], &m_hdlsState[input_idx]);
+    if (R_FAILED(rc))
+    {
+        syscon::logger::LogError("SwitchMITMHandler[%04x-%04x] The console dropped the device on input: %d right after creating it (Error: 0x%08X)", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx, rc);
+        ReleaseController(input_idx);
+    }
+
+    return rc;
 }
 
 /*
@@ -232,7 +251,6 @@ Result SwitchMITMHandler::UpdateControllerState(const SwitchPadState &state, uin
         hdls_state.analog_stick_l.x != state.analog_stick_l.x || hdls_state.analog_stick_l.y != state.analog_stick_l.y ||
         hdls_state.analog_stick_r.x != state.analog_stick_r.x || hdls_state.analog_stick_r.y != state.analog_stick_r.y)
     {
-        hdls_state.battery_level = 4;
         hdls_state.buttons = state.buttons;
         hdls_state.analog_stick_l = state.analog_stick_l;
         hdls_state.analog_stick_r = state.analog_stick_r;

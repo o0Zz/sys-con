@@ -10,6 +10,8 @@
  *     handle, and every accepted session (+ the IAppletResource sub-sessions we hand out),
  *   - hook `hid` cmd 0 CreateAppletResource (return our own IAppletResource sub-session) and
  *     IAppletResource cmd 0 GetSharedMemoryHandle (return the fake HID shared memory),
+ *   - answer the vibration commands (200-208, 211 and IActiveVibrationDeviceList::Activate)
+ *     for the slots sys-con drives, forwarding them for every other handle,
  *   - answer ConvertCurrentObjectToDomain ourselves so the session and its forward become
  *     domains together and share one object-id space (see HookConvertToDomain),
  *   - forward every other command to the real service, tagging the PID like Atmosphere does.
@@ -254,7 +256,7 @@ namespace syscon::hid::mitm
             bool ProcessDomainRequest(s32 idx, const HipcParsedRequest &r);
             bool ForwardAndReply(const HipcParsedRequest &r, Handle forward_session, bool domain_reply);
             bool HookConvertToDomain(s32 idx);
-            bool HookCreateAppletResource(s32 idx, u64 aruid);
+            bool HookCreateAppletResource(s32 idx, const HipcParsedRequest &r, u64 aruid);
             bool HookGetSharedMemoryHandle(const std::shared_ptr<HidSharedMemoryEntry> &entry, bool domain);
             bool HookVibration(const HipcParsedRequest &r, u32 command_id, bool domain);
             bool HookSendVibrationValues(const HipcParsedRequest &r, bool domain);
@@ -477,8 +479,9 @@ namespace syscon::hid::mitm
          * (HipcManager::ConvertCurrentObjectToDomain): convert the forward service too, and
          * adopt the object id the real service reserved for it instead of allocating our own.
          * Both domains then name the same objects by the same ids, which is what makes every
-         * unhooked domain request forwardable verbatim - and forwarding this command instead,
-         * leaving our side a plain session, is what used to wedge the console.
+         * unhooked domain request forwardable verbatim. Forwarding this command instead would
+         * leave our side a plain session answering domain requests it cannot parse.
+         * (The ams flavour runs with MaxDomains = 0, so there a conversion is refused.)
          */
         bool Server::HookConvertToDomain(s32 idx)
         {
@@ -512,7 +515,7 @@ namespace syscon::hid::mitm
             return true;
         }
 
-        bool Server::HookCreateAppletResource(s32 idx, u64 aruid)
+        bool Server::HookCreateAppletResource(s32 idx, const HipcParsedRequest &r, u64 aruid)
         {
             // Copy what we need before AddSession() below, which may reallocate m_sessions
             // and invalidate any reference into it.
@@ -525,11 +528,15 @@ namespace syscon::hid::mitm
 
             std::shared_ptr<HidSharedMemoryEntry> entry =
                 HidSharedMemoryManager::GetHidSharedMemoryManager().CreateIfNotExists(&forward, aruid, process_id, program_id);
+            /*
+                Same answer as the ams flavour: the request goes on to the real hid, so the
+                client gets a genuine IAppletResource and only misses sys-con's motion. Failing
+                the command leaves it with no HID shared memory at all, which breaks it.
+            */
             if (!entry)
             {
-                ::syscon::logger::LogError("HidMitm: CreateIfNotExists failed (aruid=0x%lX)", aruid);
-                BuildCmifReplyResult(MAKERESULT(11, 403), domain);
-                return true;
+                ::syscon::logger::LogError("HidMitm: no shared memory entry, forwarding to the real hid (program 0x%016lX, aruid=0x%lX)", program_id, aruid);
+                return ForwardAndReply(r, ForwardSessionFor(m_sessions[idx - 2]), domain);
             }
 
             if (domain)
@@ -814,7 +821,7 @@ namespace syscon::hid::mitm
             TraceRequest("request", s.kind, r, command_id);
 
             if (s.kind == SessionKind::Hid && command_id == 0)
-                return HookCreateAppletResource(idx, aruid);
+                return HookCreateAppletResource(idx, r, aruid);
             if (s.kind == SessionKind::AppletResource && command_id == 0)
                 return HookGetSharedMemoryHandle(s.entry, false);
             if (s.kind == SessionKind::VibrationDeviceList && command_id == ActiveVibrationDeviceListCmdActivate)
@@ -861,7 +868,7 @@ namespace syscon::hid::mitm
                 if (object->kind == SessionKind::Hid)
                 {
                     if (command_id == 0)
-                        return HookCreateAppletResource(idx, aruid);
+                        return HookCreateAppletResource(idx, r, aruid);
                     if (command_id == HidCmdCreateActiveVibrationDeviceList)
                         return HookCreateVibrationDeviceList(idx, true);
                     if (HookVibration(r, command_id, true))
@@ -1005,9 +1012,14 @@ namespace syscon::hid::mitm
                     if (serviceIsActive(&s.forward))
                         serviceClose(&s.forward);
                 }
+                if (s.kind == SessionKind::VibrationDeviceList && serviceIsActive(&s.forward_sub))
+                    serviceClose(&s.forward_sub);
                 svcCloseHandle(s.handle);
             }
             m_sessions.clear();
+            for (Handle h : m_pending_close)
+                svcCloseHandle(h);
+            m_pending_close.clear();
             if (m_query != INVALID_HANDLE)
                 svcCloseHandle(m_query);
             if (m_port != INVALID_HANDLE)
@@ -1041,7 +1053,9 @@ namespace syscon::hid::mitm
             return rc;
         }
 
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
+        const Result manager_rc = HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
+        if (R_FAILED(manager_rc))
+            ::syscon::logger::LogError("HidMitm: HidSharedMemoryManager failed to start (0x%08X): motion and the mirror are unavailable for the views it reports", manager_rc);
 
         rc = threadCreate(&g_thread, ServerThreadFunc, nullptr, g_thread_stack, sizeof(g_thread_stack), ThreadPriority, ThreadCpuId);
         if (R_FAILED(rc))

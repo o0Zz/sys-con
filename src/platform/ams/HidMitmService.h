@@ -68,6 +68,8 @@ namespace ams::syscon::hid::mitm
     AMS_SF_METHOD_INFO(C, H, 202, Result, GetActualVibrationValue, (sf::Out<::HidVibrationValue> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, vibration_device_handle, applet_resource_user_id))                                   \
     AMS_SF_METHOD_INFO(C, H, 203, Result, CreateActiveVibrationDeviceList, (sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmActiveVibrationDeviceListInterface>> out), (out))                                                                                                                                               \
     AMS_SF_METHOD_INFO(C, H, 206, Result, SendVibrationValues, (u64 applet_resource_user_id, const sf::InPointerArray<::HidVibrationDeviceHandle> &handles, const sf::InPointerArray<::HidVibrationValue> &values), (applet_resource_user_id, handles, values))                                        \
+    AMS_SF_METHOD_INFO(C, H, 207, Result, SendVibrationGcErmCommand, (u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id, u64 command), (vibration_device_handle, applet_resource_user_id, command))                                                                                                \
+    AMS_SF_METHOD_INFO(C, H, 208, Result, GetActualVibrationGcErmCommand, (sf::Out<u64> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, vibration_device_handle, applet_resource_user_id))                                                                              \
     AMS_SF_METHOD_INFO(C, H, 211, Result, IsVibrationDeviceMounted, (sf::Out<bool> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id), (out, vibration_device_handle, applet_resource_user_id))
 
 AMS_SF_DEFINE_MITM_INTERFACE(ams::syscon::hid::mitm, IHidMitmInterface, AMS_HID_MITM_INTERFACE_INFO, 0x48494444)
@@ -90,6 +92,8 @@ namespace ams::syscon::hid::mitm
         Result GetActualVibrationValue(sf::Out<::HidVibrationValue> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
         Result CreateActiveVibrationDeviceList(sf::Out<sf::SharedPointer<ams::syscon::hid::mitm::IHidMitmActiveVibrationDeviceListInterface>> out);
         Result SendVibrationValues(u64 applet_resource_user_id, const sf::InPointerArray<::HidVibrationDeviceHandle> &handles, const sf::InPointerArray<::HidVibrationValue> &values);
+        Result SendVibrationGcErmCommand(u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id, u64 command);
+        Result GetActualVibrationGcErmCommand(sf::Out<u64> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
         Result IsVibrationDeviceMounted(sf::Out<bool> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id);
     };
 

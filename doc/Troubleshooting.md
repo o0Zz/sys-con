@@ -264,6 +264,8 @@ This leads to the following side effects:
 
 To resolve this issue, you must restart the Switch after three attempts to restore functionality.
 
+With `mode=mitm` (the default), do not stop or restart sys-con from an overlay at all: stopping it while a game or the Album uses its `hid` MITM crashes the console (fatal `0xFFE`), and a restarted sys-con runs without the MITM until the next reboot. sys-con therefore declares `requires_reboot` to ovl-sysmodules: change it, then reboot.
+
 ## My Controller isn't detected — What should I do?
 1. **Try a direct USB-C OTG connection**
    Connect the controller directly to your Switch using a USB-C OTG adapter, bypassing the Dock. Some controllers may not work properly through the Dock for various compatibility or power-related reasons.

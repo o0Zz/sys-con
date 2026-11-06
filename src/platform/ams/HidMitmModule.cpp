@@ -75,6 +75,10 @@ namespace ams::syscon::hid::mitm
         alignas(ams::os::ThreadStackAlignment) constinit u8 g_mitm_thread_stack[0x4000];
         ams::os::ThreadType g_mitm_thread;
 
+        // Kernel priority 0x20, the same as the libnx flavour's server thread: os::CreateThread
+        // takes a user priority and adds UserThreadPriorityOffset (28) to it.
+        constexpr s32 MitmThreadPriority = 0x20 - 28;
+
         bool g_initialized = false;
     } // namespace
 
@@ -112,7 +116,7 @@ namespace ams::syscon::hid::mitm
             return;
         }
 
-        R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), 20));
+        R_ABORT_UNLESS(ams::os::CreateThread(&g_mitm_thread, HidMitmModule::ThreadFunction, nullptr, g_mitm_thread_stack, sizeof(g_mitm_thread_stack), MitmThreadPriority));
 
         ams::os::SetThreadNamePointer(&g_mitm_thread, "HidMitmThread");
 
@@ -129,6 +133,8 @@ namespace ams::syscon::hid::mitm
             return;
         }
 
+        // LoopProcess only returns once asked to; without this the wait below never ends.
+        g_server_manager.RequestStopProcessing();
         ams::os::WaitThread(std::addressof(g_mitm_thread));
         ams::os::DestroyThread(std::addressof(g_mitm_thread));
 
@@ -142,14 +148,17 @@ namespace syscon::hid::mitm
 {
     Result Initialize()
     {
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
+        const Result rc = HidSharedMemoryManager::GetHidSharedMemoryManager().Start();
+        if (R_FAILED(rc))
+            ::syscon::logger::LogError("HidSharedMemoryManager failed to start (0x%08X): motion and the mirror are unavailable for the views it reports", rc);
         ams::syscon::hid::mitm::InitializeHidMitm();
         return 0;
     }
 
+    // The server first, so no client can still be handed a fake memory being torn down.
     void Finalize()
     {
-        HidSharedMemoryManager::GetHidSharedMemoryManager().Stop();
         ams::syscon::hid::mitm::FinalizeHidMitm();
+        HidSharedMemoryManager::GetHidSharedMemoryManager().Stop();
     }
 } // namespace syscon::hid::mitm

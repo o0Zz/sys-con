@@ -128,6 +128,31 @@ namespace ams::syscon::hid::mitm
         R_SUCCEED();
     }
 
+    Result HidMitmService::SendVibrationGcErmCommand(u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id, u64 command)
+    {
+        AMS_UNUSED(applet_resource_user_id);
+
+        const ::HidVibrationDeviceHandle handle = ToVibrationDeviceHandle(vibration_device_handle);
+
+        if (!::syscon::hid::mitm::vibration::IsOwned(handle))
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+
+        ::syscon::hid::mitm::vibration::StoreGcErm(handle, command);
+        R_SUCCEED();
+    }
+
+    Result HidMitmService::GetActualVibrationGcErmCommand(sf::Out<u64> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
+    {
+        AMS_UNUSED(applet_resource_user_id);
+
+        u64 command;
+        if (!::syscon::hid::mitm::vibration::LoadGcErm(ToVibrationDeviceHandle(vibration_device_handle), &command))
+            R_THROW(sm::mitm::ResultShouldForwardToSession());
+
+        out.SetValue(command);
+        R_SUCCEED();
+    }
+
     Result HidMitmService::IsVibrationDeviceMounted(sf::Out<bool> out, u32 vibration_device_handle, ams::sf::ClientAppletResourceUserId applet_resource_user_id)
     {
         AMS_UNUSED(applet_resource_user_id);

@@ -49,9 +49,11 @@ public:
 
     inline u64 GetProcessId() const;
     inline u64 GetProgramId() const;
+    u64 GetAruid() const { return m_aruid; }
     HidFakeView GetView() const { return m_view; }
 
 private:
+    u64 m_aruid;
     u64 m_process_id;
     u64 m_program_id;
     HidFakeView m_view;
@@ -132,8 +134,9 @@ public:
 
     /*
         The vibration side of the manager takes no lock, and nothing below may be made to.
-        It is called from the MITM server thread, which runs at priority 20 while the pad
-        threads run at 41 and the mirror thread at 38 - all three pinned to CPU 3. Blocking
+        It is called from the MITM server thread, which runs at kernel priority 0x20 (32) in
+        both flavours while the pad threads run at 41 and the mirror thread at 38 - all three
+        pinned to CPU 3. Blocking
         the MITM thread behind a pad thread that the mirror thread keeps preempting stalls
         every hid client it serves.
     */
@@ -164,7 +167,7 @@ private:
     alignas(0x1000) u8 m_thread_stack[0x4000];
 
     bool m_running;
-    ::Thread m_thread;
+    ::Thread m_thread{};
 
 protected:
     // Lock order is always m_mutex_controller then m_mutex_sharedmemory.
