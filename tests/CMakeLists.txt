@@ -34,6 +34,7 @@ set(TEST_FILES
     drivers/test_xbox_wireless_adapter.cpp
     app/test_config_store.cpp
     app/test_config_rules.cpp
+    app/test_logger_size.cpp
     app/test_network_profile.cpp
     app/test_ini_reader.cpp
 )

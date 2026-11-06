@@ -6,6 +6,10 @@
 
 #define LOG_FILE_SIZE_MAX (128 * 1024)
 
+// Checked on every write, against a count kept in memory: a busy session (log_level=0, a device
+// that keeps failing) must not fill the SD card before the next boot trims the file.
+#define LOG_FILE_RUNTIME_SIZE_MAX (1024 * 1024)
+
 using namespace controllerlib;
 
 namespace syscon::logger
@@ -17,6 +21,7 @@ namespace syscon::logger
         static std::string sLogPath;
         static LogLevel sLogLevel = LogLevel::Trace;
         static IFileManager *sFileManager = nullptr;
+        static size_t sLogSize = 0;
 
         constexpr size_t LogLineMax = 512;
 
@@ -64,6 +69,8 @@ namespace syscon::logger
 
         if (sFileManager->file_size(sLogPath) >= LOG_FILE_SIZE_MAX)
             sFileManager->remove(sLogPath);
+
+        sLogSize = sFileManager->file_size(sLogPath);
     }
 
     void Exit()
@@ -82,9 +89,15 @@ namespace syscon::logger
         if (sFileManager == nullptr)
             return;
 
+        if (sLogSize + length > LOG_FILE_RUNTIME_SIZE_MAX)
+        {
+            sFileManager->remove(sLogPath);
+            sLogSize = 0;
+        }
+
         auto file = sFileManager->open(sLogPath, (OpenFlags)(OpenFlags_Write | OpenFlags_Append));
         if (file && file->is_open())
-            file->write(logBuffer, length);
+            sLogSize += file->write(logBuffer, length);
     }
 
     void SetLogLevel(LogLevel level)
