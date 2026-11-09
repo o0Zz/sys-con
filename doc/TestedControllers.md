@@ -43,6 +43,7 @@
 | Chinese wired SNES Controller | Yes | No | No | - | - |
 | Xinmotek XM-10 (Arcade controller) | Yes | No | No | - | - |
 | Logitech Driving Force GT (Wheel) | Yes | No | No | - | - |
+| Logitech RumblePad 2 (963325-0403, 046d-c218) | Yes | No | No | - | [#12](https://github.com/o0Zz/sys-con/discussions/12#discussioncomment-19483608) |
 | BSP-D9 Mobile Phone Stretch Game Controller | Yes | No | No | - | - |
 | Qanba Drone 1 | Yes | No | No | - | https://www.amazon.com/Qanba-Drone-PlayStation-4/dp/B01I0GEDEY |
 | PowerA Nintendo Switch Wired Controller | Yes | No | No | - | https://www.amazon.com/PowerA-Wired-Controller-Nintendo-Switch-Black/dp/B07PDJ45BT |
