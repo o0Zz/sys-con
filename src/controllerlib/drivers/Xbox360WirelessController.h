@@ -10,6 +10,7 @@ namespace controllerlib
 // Every report from the wireless receiver is prefixed with a 4-byte receiver header;
 // the controller payload starts after it.
 #define XBOX360_WIRELESS_HEADER_SIZE 4
+#define XBOX360_WIRELESS_STATUS_SIZE 2
 
     class Xbox360WirelessController : public BaseController
     {

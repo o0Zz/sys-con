@@ -55,8 +55,8 @@ namespace controllerlib
         // https://github.com/xboxdrv/xboxdrv/blob/stable/src/xbox360_controller.cpp
         // https://github.com/felis/USB_Host_Shield_2.0/blob/master/XBOXRECV.cpp
 
-        // The 4-byte receiver header is read below, so it has to be there before we look at it.
-        if (size < XBOX360_WIRELESS_HEADER_SIZE)
+        // A link status report is only 2 bytes (08 80 / 08 00); everything else carries the 4-byte header.
+        if (size < XBOX360_WIRELESS_STATUS_SIZE)
             return Status::UnexpectedData;
 
         /*
@@ -81,6 +81,9 @@ namespace controllerlib
 
             return Status::NothingTodo;
         }
+
+        if (size < XBOX360_WIRELESS_HEADER_SIZE)
+            return Status::UnexpectedData;
 
         if (buffer[0] == 0x00 && buffer[1] == 0x01 && buffer[2] == 0x00 && buffer[3] == 0xf0) // Controller Data
         {

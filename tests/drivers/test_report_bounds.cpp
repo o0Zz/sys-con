@@ -46,6 +46,25 @@ TEST(ReportBounds, test_xbox360w_rejects_report_shorter_than_receiver_header)
         EXPECT_EQ(controller.ParseData(buffer, size, &rawData, &input_idx), Status::UnexpectedData) << "size=" << size;
 }
 
+TEST(ReportBounds, test_xbox360w_two_byte_link_status_connects_and_disconnects)
+{
+    ControllerConfig config;
+    RawInputData rawData;
+    uint16_t input_idx = 0;
+
+    Xbox360WirelessController controller = MakeController<Xbox360WirelessController>(config);
+
+    // The receiver reports a pad linking or leaving with a bare 2-byte packet (#133).
+    uint8_t connected[2] = {0x08, 0x80};
+    uint8_t disconnected[2] = {0x08, 0x00};
+
+    EXPECT_EQ(controller.ParseData(connected, sizeof(connected), &rawData, &input_idx), Status::NothingTodo);
+    EXPECT_TRUE(controller.IsControllerConnected(input_idx));
+
+    EXPECT_EQ(controller.ParseData(disconnected, sizeof(disconnected), &rawData, &input_idx), Status::NothingTodo);
+    EXPECT_FALSE(controller.IsControllerConnected(input_idx));
+}
+
 TEST(ReportBounds, test_xbox360w_payload_size_accounts_for_receiver_header)
 {
     ControllerConfig config;
