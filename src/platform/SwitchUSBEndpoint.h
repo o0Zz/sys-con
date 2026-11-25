@@ -1,6 +1,7 @@
 #pragma once
 #include <switch.h>
 #include "IUSBEndpoint.h"
+#include "PageAligned.h"
 #include <memory>
 
 class SwitchUSBEndpoint : public controllerlib::IUSBEndpoint
@@ -11,8 +12,8 @@ private:
     usb_endpoint_descriptor *m_descriptor;
     u32 m_xferIdRead = 0;
     u32 m_readSize = 0;
-    alignas(0x1000) u8 m_usb_buffer_in[512];
-    alignas(0x1000) u8 m_usb_buffer_out[512];
+    // IN endpoints only: a posted read stays in flight outside the USB lock.
+    std::unique_ptr<PageAligned<0x1000>> m_readBuffer;
 
     controllerlib::Status PostRead();
 

@@ -12,7 +12,6 @@ private:
     UsbHsInterface m_interface;
     std::unique_ptr<controllerlib::IUSBEndpoint> m_inEndpoints[SWITCH_USB_MAX_ENDPOINTS];
     std::unique_ptr<controllerlib::IUSBEndpoint> m_outEndpoints[SWITCH_USB_MAX_ENDPOINTS];
-    alignas(0x1000) u8 m_usb_buffer[0x1000];
 
 public:
     SwitchUSBInterface(UsbHsInterface &interface);

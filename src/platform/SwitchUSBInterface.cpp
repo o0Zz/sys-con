@@ -6,6 +6,9 @@
 
 using namespace controllerlib;
 
+// usb:hs wants a 0x1000-aligned transfer buffer; both control transfers copy into it under the USB lock.
+alignas(0x1000) static u8 controlTransferBuffer[0x1000];
+
 SwitchUSBInterface::SwitchUSBInterface(UsbHsInterface &interface)
     : m_interface(interface)
 {
@@ -87,10 +90,10 @@ Status SwitchUSBInterface::ControlTransferInput(u8 bmRequestType, u8 bmRequest, 
     {
         SwitchUSBLock usbLock;
 
-        rc = usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, *wLength, m_usb_buffer, &transferredSize);
+        rc = usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, *wLength, controlTransferBuffer, &transferredSize);
         if (R_SUCCEEDED(rc) && buffer != NULL && *wLength >= transferredSize)
         {
-            memcpy(buffer, m_usb_buffer, transferredSize);
+            memcpy(buffer, controlTransferBuffer, transferredSize);
             copied = true;
         }
     }
@@ -130,9 +133,9 @@ Status SwitchUSBInterface::ControlTransferOutput(u8 bmRequestType, u8 bmRequest,
         SwitchUSBLock usbLock;
 
         if (buffer != NULL && wLength > 0)
-            memcpy(m_usb_buffer, buffer, wLength);
+            memcpy(controlTransferBuffer, buffer, wLength);
 
-        rc = usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, wLength, m_usb_buffer, &transferredSize);
+        rc = usbHsIfCtrlXfer(&m_session, bmRequestType, bmRequest, wValue, wIndex, wLength, controlTransferBuffer, &transferredSize);
     }
 
     if (R_FAILED(rc))

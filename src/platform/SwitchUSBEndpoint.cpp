@@ -10,6 +10,8 @@ SwitchUSBEndpoint::SwitchUSBEndpoint(UsbHsClientIfSession &if_session, usb_endpo
     : m_ifSession(&if_session),
       m_descriptor(&desc)
 {
+    if (desc.bEndpointAddress & USB_ENDPOINT_IN)
+        m_readBuffer = std::make_unique<PageAligned<0x1000>>();
 }
 
 SwitchUSBEndpoint::~SwitchUSBEndpoint()
@@ -39,7 +41,7 @@ Status SwitchUSBEndpoint::Open(int maxPacketSize)
     if (GetDirection() == USB_ENDPOINT_OUT)
         return Status::Success;
 
-    m_readSize = std::min<u32>(maxPacketSize, sizeof(m_usb_buffer_in));
+    m_readSize = std::min<u32>(maxPacketSize, sizeof(m_readBuffer->buffer));
 
     /* usb:hs must already hold a transfer on an interrupt IN endpoint when the device first
        talks on it, otherwise its first report (an Xbox 360 LED ack, the GC adapter's first
@@ -52,7 +54,7 @@ Status SwitchUSBEndpoint::PostRead()
     Result rc;
     {
         SwitchUSBLock usbLock;
-        rc = usbHsEpPostBufferAsync(&m_epSession, m_usb_buffer_in, m_readSize, 0, &m_xferIdRead);
+        rc = usbHsEpPostBufferAsync(&m_epSession, m_readBuffer->buffer, m_readSize, 0, &m_xferIdRead);
     }
 
     if (R_FAILED(rc))
@@ -73,12 +75,15 @@ void SwitchUSBEndpoint::Close()
 
 Status SwitchUSBEndpoint::Write(const uint8_t *inBuffer, size_t bufferSize)
 {
+    // usb:hs wants a 0x1000-aligned transfer buffer; every write copies into it under the USB lock.
+    alignas(0x1000) static u8 transferBuffer[0x1000];
+
     if (GetDirection() == USB_ENDPOINT_IN)
         ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Trying to write an INPUT endpoint!", m_descriptor->bEndpointAddress);
 
-    if (bufferSize > sizeof(m_usb_buffer_out))
+    if (bufferSize > sizeof(transferBuffer))
     {
-        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Write of %d bytes exceeds the %d-byte transfer buffer", m_descriptor->bEndpointAddress, static_cast<int>(bufferSize), static_cast<int>(sizeof(m_usb_buffer_out)));
+        ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Write of %d bytes exceeds the %d-byte transfer buffer", m_descriptor->bEndpointAddress, static_cast<int>(bufferSize), static_cast<int>(sizeof(transferBuffer)));
         return Status::InvalidArgument;
     }
 
@@ -90,8 +95,8 @@ Status SwitchUSBEndpoint::Write(const uint8_t *inBuffer, size_t bufferSize)
         SwitchUSBLock usbLock;
         u32 transferredSize = 0;
 
-        memcpy(m_usb_buffer_out, inBuffer, bufferSize);
-        rc = usbHsEpPostBuffer(&m_epSession, m_usb_buffer_out, bufferSize, &transferredSize);
+        memcpy(transferBuffer, inBuffer, bufferSize);
+        rc = usbHsEpPostBuffer(&m_epSession, transferBuffer, bufferSize, &transferredSize);
     }
 
     if (R_FAILED(rc))
@@ -110,7 +115,10 @@ Status SwitchUSBEndpoint::Write(const uint8_t *inBuffer, size_t bufferSize)
 Status SwitchUSBEndpoint::Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 aTimeoutUs)
 {
     if (GetDirection() == USB_ENDPOINT_OUT)
+    {
         ::syscon::logger::LogError("SwitchUSBEndpoint[0x%02X] Trying to read an OUTPUT endpoint!", m_descriptor->bEndpointAddress);
+        return Status::InvalidArgument;
+    }
 
     u32 count = 0;
     UsbHsXferReport report;
@@ -143,7 +151,7 @@ Status SwitchUSBEndpoint::Read(uint8_t *outBuffer, size_t *bufferSizeInOut, u64 
         if (R_SUCCEEDED(rc) && (count > 0) && (tmpXcferId == report.xferId) && R_SUCCEEDED(report.res))
         {
             copySize = std::min<size_t>(report.transferredSize, *bufferSizeInOut);
-            memcpy(outBuffer, m_usb_buffer_in, copySize);
+            memcpy(outBuffer, m_readBuffer->buffer, copySize);
         }
     }
 

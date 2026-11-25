@@ -3,6 +3,7 @@
 #include <switch.h>
 #include "SwitchDeviceHandler.h"
 #include "HidKeyboardMouse.h"
+#include "PageAligned.h"
 #include <memory>
 
 /*
@@ -20,7 +21,7 @@ class SwitchKeyboardMouseHandler : public SwitchDeviceHandler
     int32_t m_polling_timeout_ms;
     int8_t m_thread_priority;
 
-    alignas(0x1000) u8 m_thread_stack[0x2000];
+    std::unique_ptr<PageAligned<0x2000>> m_thread_stack = std::make_unique<PageAligned<0x2000>>();
     Thread m_thread{};
     bool m_thread_running = false;
 

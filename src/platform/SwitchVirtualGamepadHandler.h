@@ -3,6 +3,8 @@
 #include "IController.h"
 #include "SwitchPadState.h"
 #include "SwitchDeviceHandler.h"
+#include "PageAligned.h"
+#include <memory>
 
 class SwitchVirtualGamepadHandlerData
 {
@@ -27,7 +29,7 @@ protected:
     int32_t m_polling_thread_priority;
     int32_t m_polling_timeout_ms;
 
-    alignas(0x1000) u8 thread_stack[0x2000];
+    std::unique_ptr<PageAligned<0x2000>> m_thread_stack = std::make_unique<PageAligned<0x2000>>();
     Thread m_Thread{};
     bool m_ThreadIsRunning = false;
 

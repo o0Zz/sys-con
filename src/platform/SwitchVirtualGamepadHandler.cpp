@@ -241,7 +241,7 @@ void SwitchVirtualGamepadHandlerThreadFunc(void *handler)
 
 Result SwitchVirtualGamepadHandler::InitThread()
 {
-    Result rc = threadCreate(&m_Thread, &SwitchVirtualGamepadHandlerThreadFunc, this, thread_stack, sizeof(thread_stack), m_polling_thread_priority, 3 /* On CPU 3 responsible for input */);
+    Result rc = threadCreate(&m_Thread, &SwitchVirtualGamepadHandlerThreadFunc, this, m_thread_stack->buffer, sizeof(m_thread_stack->buffer), m_polling_thread_priority, 3 /* On CPU 3 responsible for input */);
     if (R_FAILED(rc))
     {
         m_Thread = Thread{};

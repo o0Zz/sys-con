@@ -122,7 +122,7 @@ Result SwitchKeyboardMouseHandler::Initialize()
         return syscon::ToHorizonResult(status);
 
     m_thread_running = true;
-    Result rc = threadCreate(&m_thread, &SwitchKeyboardMouseHandlerThreadFunc, this, m_thread_stack, sizeof(m_thread_stack), m_thread_priority, 3 /* On CPU 3 responsible for input */);
+    Result rc = threadCreate(&m_thread, &SwitchKeyboardMouseHandlerThreadFunc, this, m_thread_stack->buffer, sizeof(m_thread_stack->buffer), m_thread_priority, 3 /* On CPU 3 responsible for input */);
     if (R_FAILED(rc))
         return rc;
 
