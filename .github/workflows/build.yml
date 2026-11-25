@@ -49,10 +49,10 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install libnx
-        run: make -C external/libnx install
+        run: make -j"$(nproc)" -C external/libnx install
 
       - name: Build and assemble release tree
-        run: make all
+        run: make all -j"$(nproc)"
 
       - name: Compute version (same logic as the Makefile)
         id: version
