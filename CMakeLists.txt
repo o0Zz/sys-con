@@ -40,6 +40,7 @@ else()
         -Wundef             # Catches `#if ATMOSPHERE` where ATMOSPHERE is never defined.
         -Wformat=2          # Catches the printf/arg mismatches in the ILogger call sites.
         -Wno-unused-parameter
+        -Wno-missing-field-initializers  # g++ reports what a designated initializer leaves out.
     )
     if(SYSCON_WERROR)
         target_compile_options(syscon_warnings INTERFACE -Werror)

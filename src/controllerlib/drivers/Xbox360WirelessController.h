@@ -19,8 +19,8 @@ namespace controllerlib
 
         Status SetLED(uint16_t input_idx, Xbox360LEDValue value);
 
-        Status OnControllerConnect(uint16_t input_idx);
-        Status OnControllerDisconnect(uint16_t input_idx);
+        void OnControllerConnect(uint16_t input_idx);
+        void OnControllerDisconnect(uint16_t input_idx);
 
     public:
         Xbox360WirelessController(std::unique_ptr<IUSBDevice> &&device, const ControllerConfig &config, std::unique_ptr<ILogger> &&logger);

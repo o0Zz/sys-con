@@ -140,32 +140,28 @@ namespace controllerlib
         return m_outPipe[input_idx]->Write(ledPacket, sizeof(ledPacket));
     }
 
-    Status Xbox360WirelessController::OnControllerConnect(uint16_t input_idx)
+    void Xbox360WirelessController::OnControllerConnect(uint16_t input_idx)
     {
         m_logger->Log(LogLevel::Info, "Xbox360WirelessController Wireless controller connected (Idx: %d) ...", input_idx);
 
         if (m_outPipe.size() > input_idx)
         {
-            m_outPipe[input_idx]->Write(reconnectPacket, sizeof(reconnectPacket));
-            m_outPipe[input_idx]->Write(initDriverPacket, sizeof(initDriverPacket));
+            (void)m_outPipe[input_idx]->Write(reconnectPacket, sizeof(reconnectPacket));
+            (void)m_outPipe[input_idx]->Write(initDriverPacket, sizeof(initDriverPacket));
         }
 
-        SetLED(input_idx, (Xbox360LEDValue)((int)XBOX360LED_TOPLEFT + input_idx));
+        (void)SetLED(input_idx, (Xbox360LEDValue)((int)XBOX360LED_TOPLEFT + input_idx));
 
         m_is_connected[input_idx] = true;
-
-        return Status::Success;
     }
 
-    Status Xbox360WirelessController::OnControllerDisconnect(uint16_t input_idx)
+    void Xbox360WirelessController::OnControllerDisconnect(uint16_t input_idx)
     {
         m_logger->Log(LogLevel::Info, "Xbox360WirelessController Wireless controller disconnected (Idx: %d) ...", input_idx);
 
         if (m_outPipe.size() > input_idx)
-            m_outPipe[input_idx]->Write(poweroffPacket, sizeof(poweroffPacket));
+            (void)m_outPipe[input_idx]->Write(poweroffPacket, sizeof(poweroffPacket));
 
         m_is_connected[input_idx] = false;
-
-        return Status::Success;
     }
 } // namespace controllerlib

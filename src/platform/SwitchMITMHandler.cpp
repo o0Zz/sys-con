@@ -292,7 +292,8 @@ Result SwitchMITMHandler::UpdateOutput()
 
         m_lastRumble[input_idx] = rumble;
 
-        m_controller->SetRumble(input_idx, rumble);
+        if (m_controller->SetRumble(input_idx, rumble) != controllerlib::Status::Success)
+            syscon::logger::LogWarning("SwitchMITMHandler[%04x-%04x] Failed to send rumble to input: %d !", m_controller->GetDevice()->GetVendor(), m_controller->GetDevice()->GetProduct(), input_idx);
     }
 
     return 0;

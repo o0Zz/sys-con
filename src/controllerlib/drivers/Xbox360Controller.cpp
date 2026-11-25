@@ -19,7 +19,7 @@ namespace controllerlib
         if (result != Status::Success)
             return result;
 
-        SetLED(0, XBOX360LED_TOPLEFT);
+        (void)SetLED(0, XBOX360LED_TOPLEFT);
 
         return Status::Success;
     }

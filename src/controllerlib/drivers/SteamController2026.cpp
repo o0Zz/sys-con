@@ -130,22 +130,23 @@ namespace controllerlib
         return m_controllerInfo[input_idx].m_is_connected;
     }
 
-    Status SteamController2026::OnControllerConnect(uint16_t input_idx)
+    void SteamController2026::OnControllerConnect(uint16_t input_idx)
     {
         m_logger->Log(LogLevel::Info, "SteamController2026 controller connected (Idx: %d) ...", input_idx);
         m_controllerInfo[input_idx].m_is_connected = true;
-        return UpdateLizard(input_idx);
+
+        const Status result = UpdateLizard(input_idx);
+        if (result != Status::Success && result != Status::NothingTodo)
+            m_logger->Log(LogLevel::Warning, "SteamController2026 failed to turn lizard mode off (Idx: %d, Status: %d)", input_idx, static_cast<int>(result));
     }
 
-    Status SteamController2026::OnControllerDisconnect(uint16_t input_idx)
+    void SteamController2026::OnControllerDisconnect(uint16_t input_idx)
     {
         m_logger->Log(LogLevel::Info, "SteamController2026 controller disconnected (Idx: %d) ...", input_idx);
         m_controllerInfo[input_idx].m_is_connected = false;
 
         // Otherwise the resend would hand the effect back to whoever connects into this slot.
         m_rumble[input_idx] = SteamControllerRumble{};
-
-        return Status::Success;
     }
 
     Status SteamController2026::UpdateLizard(uint16_t input_idx)

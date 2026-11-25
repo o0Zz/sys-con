@@ -56,7 +56,9 @@ else
 SOURCES		+=	../platform/libnx
 endif
 DATA		:=	data
-INCLUDES	:=	. ../controllerlib ../platform ../../external/ini ../../external/HIDDataInterpreter/inc
+INCLUDES	:=	. ../controllerlib ../platform
+# Code we do not own: -isystem, so its headers do not flood the build with our warning set.
+THIRDPARTY_INCLUDES	:=	../../external/ini ../../external/HIDDataInterpreter/inc
 ifeq ($(ATMOSPHERE),1)
 INCLUDES	+=	../platform/ams
 else
@@ -81,7 +83,8 @@ ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 # device builds agree.
 # -Wundef in particular catches `#if ATMOSPHERE` in a build where ATMOSPHERE is undefined,
 # and -Wformat=2 the printf/argument mismatches in the logger call sites.
-WARNFLAGS	:=	-Wall -Wextra -Wshadow -Wundef -Wformat=2 -Wno-unused-parameter
+# g++ reports every member a designated initializer leaves out; zero is what those mean.
+WARNFLAGS	:=	-Wall -Wextra -Wshadow -Wundef -Wformat=2 -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS	:=	-g $(WARNFLAGS) -O2 -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fno-unwind-tables $(ARCH) $(DEFINES)
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 # gnu++23 is not an arbitrary choice: external/Atmosphere-libs/config/common.mk pins the
@@ -174,9 +177,10 @@ export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
 export HFILES_BIN	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+					$(foreach dir,$(THIRDPARTY_INCLUDES),-isystem $(CURDIR)/$(dir)) \
+					$(foreach dir,$(LIBDIRS),-isystem $(dir)/include) \
 					-I$(CURDIR)/$(BUILD) \
-					$(foreach dir,$(AMS_LIBDIRS),-I$(dir)/include)
+					$(foreach dir,$(AMS_LIBDIRS),-isystem $(dir)/include)
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)  \
 					$(foreach dir,$(AMS_LIBDIRS),-L$(dir)/$(ATMOSPHERE_LIBRARY_DIR))

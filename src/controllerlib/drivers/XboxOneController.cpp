@@ -252,7 +252,7 @@ namespace controllerlib
             */
             uint8_t bufferIn[256];
             size_t size = sizeof(bufferIn);
-            m_inPipe[input_idx]->Read(bufferIn, &size, 250 * 1000); // 250ms timeout
+            (void)m_inPipe[input_idx]->Read(bufferIn, &size, 250 * 1000); // 250ms timeout
         }
 
         return Status::Success;

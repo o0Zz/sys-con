@@ -11,7 +11,7 @@ namespace syscon
             : m_file(std::move(file)), m_fileoffset(0)
         {
             if ((flags & ams::fs::OpenMode_AllowAppend))
-                ams::fs::GetFileSize(&m_fileoffset, m_file);
+                (void)ams::fs::GetFileSize(&m_fileoffset, m_file);
         }
 
         ~AMSFile() override
@@ -82,8 +82,9 @@ namespace syscon
             if (flags & OpenFlags_Append)
                 mode |= ams::fs::OpenMode_AllowAppend;
 
+            // Fails when the file already exists; OpenFile below reports any real failure.
             if ((mode & ams::fs::OpenMode_Write) || (mode & ams::fs::OpenMode_AllowAppend))
-                ams::fs::CreateFile(to_ams_path(path).c_str(), 0);
+                (void)ams::fs::CreateFile(to_ams_path(path).c_str(), 0);
 
             ams::fs::FileHandle file;
             if (R_FAILED(ams::fs::OpenFile(std::addressof(file), to_ams_path(path).c_str(), mode)))
@@ -113,7 +114,7 @@ namespace syscon
 
             if (R_SUCCEEDED(ams::fs::OpenFile(std::addressof(file), to_ams_path(path).c_str(), ams::fs::OpenMode_Read)))
             {
-                ams::fs::GetFileSize(&fileOffset, file);
+                (void)ams::fs::GetFileSize(&fileOffset, file);
                 ams::fs::CloseFile(file);
             }
 

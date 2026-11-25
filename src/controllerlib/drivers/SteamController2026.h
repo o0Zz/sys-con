@@ -160,8 +160,8 @@ namespace controllerlib
         SteamControllerRumble m_rumble[STEAMCONTROLLER_MAX_INPUTS]{};
         uint8_t m_controller_count;
 
-        Status OnControllerConnect(uint16_t input_idx);
-        Status OnControllerDisconnect(uint16_t input_idx);
+        void OnControllerConnect(uint16_t input_idx);
+        void OnControllerDisconnect(uint16_t input_idx);
         Status UpdateLizard(uint16_t input_idx);
         Status SendFeatureReport(uint16_t input_idx, const uint8_t *buffer, uint16_t size);
         Status SendRumble(uint16_t input_idx);
