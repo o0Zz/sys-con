@@ -166,3 +166,52 @@ TEST(ConfigRules, test_discovery_vidpid_without_a_dash_is_skipped)
     EXPECT_EQ(config.discovery_vidpid[1].vid, 0x054c);
     EXPECT_EQ(config.discovery_vidpid[1].pid, 0x0000);
 }
+
+TEST(ConfigRules, test_discovery_exclude_vidpid_is_parsed_apart_from_discovery_vidpid)
+{
+    syscon::config::GlobalConfig config = LoadGlobal("[global]\ndiscovery_vidpid=054c-*\ndiscovery_exclude_vidpid=057e-2009,057e,0f0d-*\n");
+
+    ASSERT_EQ(config.discovery_vidpid.size(), 1u);
+    ASSERT_EQ(config.discovery_exclude_vidpid.size(), 2u);
+    EXPECT_EQ(config.discovery_exclude_vidpid[0], syscon::config::ControllerVidPid(0x057e, 0x2009));
+    EXPECT_EQ(config.discovery_exclude_vidpid[1], syscon::config::ControllerVidPid(0x0f0d, 0x0000));
+}
+
+TEST(ConfigRules, test_discovery_exclude_vidpid_defaults_to_every_nintendo_device)
+{
+    syscon::config::GlobalConfig config = LoadGlobal("[global]\ndiscovery_mode=0\n");
+
+    ASSERT_EQ(config.discovery_exclude_vidpid.size(), 1u);
+    EXPECT_TRUE(config.discovery_exclude_vidpid[0].Matches(0x057e, 0x2009));
+    EXPECT_TRUE(config.discovery_exclude_vidpid[0].Matches(0x057e, 0x0337));
+    EXPECT_FALSE(config.discovery_exclude_vidpid[0].Matches(0x054c, 0x05c4));
+}
+
+TEST(ConfigRules, test_discovery_exclude_vidpid_replaces_the_default)
+{
+    syscon::config::GlobalConfig config = LoadGlobal("[global]\ndiscovery_exclude_vidpid=057e-2009\n");
+
+    ASSERT_EQ(config.discovery_exclude_vidpid.size(), 1u);
+    EXPECT_EQ(config.discovery_exclude_vidpid[0], syscon::config::ControllerVidPid(0x057e, 0x2009));
+}
+
+TEST(ConfigRules, test_discovery_exclude_vidpid_empty_excludes_nothing)
+{
+    syscon::config::GlobalConfig config = LoadGlobal("[global]\ndiscovery_exclude_vidpid=\n");
+
+    EXPECT_TRUE(config.discovery_exclude_vidpid.empty());
+}
+
+TEST(ConfigRules, test_vidpid_wildcard_matches_every_product_of_the_vendor)
+{
+    const syscon::config::ControllerVidPid exact("057e-2009");
+    const syscon::config::ControllerVidPid vendor("057e-*");
+
+    EXPECT_TRUE(exact.Matches(0x057e, 0x2009));
+    EXPECT_FALSE(exact.Matches(0x057e, 0x2069));
+    EXPECT_FALSE(exact.Matches(0x045e, 0x2009));
+
+    EXPECT_TRUE(vendor.Matches(0x057e, 0x2009));
+    EXPECT_TRUE(vendor.Matches(0x057e, 0x2069));
+    EXPECT_FALSE(vendor.Matches(0x045e, 0x2009));
+}

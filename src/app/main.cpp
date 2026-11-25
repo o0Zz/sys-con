@@ -116,7 +116,7 @@ namespace syscon
         }
 
         ::syscon::logger::LogDebug("Initializing USB stack ...");
-        Result rc = ::syscon::usb::Initialize(fileManager, globalConfig.discovery_mode, globalConfig.discovery_vidpid, globalConfig.auto_add_controller);
+        Result rc = ::syscon::usb::Initialize(fileManager, globalConfig);
         if (R_FAILED(rc))
             ::syscon::logger::LogError("USB detection failed to start (Error: 0x%08X): no USB controller will be detected", rc);
 

@@ -129,14 +129,14 @@ discovery_vidpid=XXXX-YYYY
 Replace XXXX-YYYY with your controller VID/PID. This prevents the Switch from selecting the controller's audio profile.
 
 ## I got error: "Failed to acquire USB interface - Error: 0x25A8C ..."
-This error occur when two drivers try to acquire the controller.
-Most of the time, this issue occured when you plug an official switch controller and the switch itself try to open it.
-To fix the problem:
+This error occur when two drivers try to acquire the controller: sys-con and the console itself.
+By default sys-con leaves every Nintendo device (`057e-*`) to the console, so with an official controller this only happens on an older `config.ini`.
+To fix the problem, leave that controller to the console:
 
-1. Edit the `/config/sys-con/config.ini` and change `discovery_mode=0` to `discovery_mode=2`
+1. Edit the `/config/sys-con/config.ini` and add the controller's VID-PID, shown in the error line, to `discovery_exclude_vidpid=` (default: `discovery_exclude_vidpid=057e-*`)
 2. Reboot the switch.
 
-(This should solve your issue, but it will only detect controllers listed in `discovery_vidpid=` - Xbox controllers are no longer auto-detected in this mode, use `discovery_mode=1` to keep them)
+Every other controller is still detected. If the controller is not recognized even with sys-con disabled, enable "Pro Controller Wired Communication" in System Settings > Controllers and Sensors.
 
 ## I got error: "Failed to initialize controller: Error: 0x6B ..."
 This error happens when your USB device is not an HID controller. 
@@ -201,12 +201,11 @@ Most of the time it's one of below reasons:
 4) All other cases - Open a ticket
 
 ## My official Switch controller don't works when sys-con is enabled
-This problem occurs because sys-con detects all connected USB devices and try to map them.
-So you need to configure sys-con to detect only specific controllers.
+This problem occurs when sys-con takes the controller before the console does.
+sys-con leaves every Nintendo device to the console through `discovery_exclude_vidpid=057e-*`.
 
-1. Edit the `/config/sys-con/config.ini` and change `discovery_mode=0` to `discovery_mode=1`.
-2. Update `discovery_vidpid=` to add the controllers you want to discover (Other than the official switch ones). 
-3. Reboot the switch.
+1. Edit the `/config/sys-con/config.ini` and make sure `discovery_exclude_vidpid=` contains `057e-*` (or your controller's VID-PID).
+2. Reboot the switch.
 
 ## I want to bind a button to multiple controller buttons 
 It's possible to bind a button (Example: X) to multiple controller button (Example: 13 and 2):

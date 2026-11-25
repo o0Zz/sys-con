@@ -4,6 +4,6 @@
 #include "IFileManager.h"
 namespace syscon::usb
 {
-    int Initialize(IFileManager &fileManager, syscon::config::DiscoveryMode discovery_mode, std::vector<syscon::config::ControllerVidPid> &discovery_vidpid, bool auto_add_controller);
+    int Initialize(IFileManager &fileManager, const syscon::config::GlobalConfig &config);
     void Exit();
 } // namespace syscon::usb

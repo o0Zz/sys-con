@@ -49,6 +49,12 @@ namespace syscon::config
             return vid == other.vid && pid == other.pid;
         }
 
+        // "VID-*" parses to pid 0, which matches every product of that vendor.
+        bool Matches(uint16_t vendorId, uint16_t productId) const
+        {
+            return vid == vendorId && (pid == 0 || pid == productId);
+        }
+
         uint16_t vid;
         uint16_t pid;
     };
@@ -81,6 +87,7 @@ namespace syscon::config
         controllerlib::LogLevel log_level{controllerlib::LogLevel::Info};
         DiscoveryMode discovery_mode{DiscoveryMode::HID_AND_XBOX};
         std::vector<ControllerVidPid> discovery_vidpid;
+        std::vector<ControllerVidPid> discovery_exclude_vidpid{ControllerVidPid(0x057e, 0x0000)};
         bool auto_add_controller{true};
         VirtualPadMode mode{VirtualPadMode::HIDDBG};
 

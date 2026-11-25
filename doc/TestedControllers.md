@@ -33,13 +33,13 @@
 | Activbb X6-34U Controller | Yes | No | No | - | - |
 | Foyu Controller | Yes | No | No | - | - |
 | Gamecube adapter (HS-WU025, BX-W201C) - PC Mode | Yes | BX-W201C only | No | - | - |
-| Gamecube adapter (HS-WU025, BX-W201C, [057e-0337] ...) - Switch Mode | Yes | Yes | No | - | - |
-| Gamecube adapter (WUP-028) | Yes | Yes | No | Might need up to 30s to be detected | - |
+| Gamecube adapter (HS-WU025, BX-W201C, [057e-0337] ...) - Switch Mode | Yes | Yes | No | Left to the console by default; clear `discovery_exclude_vidpid` to use sys-con | - |
+| Gamecube adapter (WUP-028) | Yes | Yes | No | Left to the console by default; clear `discovery_exclude_vidpid` to use sys-con. Might need up to 30s to be detected | - |
 | N64 Hyperkin Adapter | Yes | No | No | - | https://www.amazon.com.au/Hyperkin-Controller-Adapter-Compatible-Nintendo/dp/B082N7K8QS |
 | N64 MayFlash Controller Adapter| Yes | No | No | - | https://www.amazon.com/dp/B002B9FIUU |
 | N64 KIWITATA USB Mini Controller | Yes | No | No | Edit config.ini and replace [0f0d-00c1] by the commented entry | https://www.amazon.ca/dp/B08P8CWBC1 |
 | N64 Adaptoid Adpater | Yes | No | No | - | - |
-| HS-N6420, [057e-0337] | Yes | Yes | No | Switch mode (Need 30s to receive first input) | https://french.alibaba.com/product-detail/HS-N6420-For-N64-Controller-Converter-1600893705131.html |
+| HS-N6420, [057e-0337] | Yes | Yes | No | Switch mode (Need 30s to receive first input). Left to the console by default; clear `discovery_exclude_vidpid` to use sys-con | https://french.alibaba.com/product-detail/HS-N6420-For-N64-Controller-Converter-1600893705131.html |
 | Chinese wired SNES Controller | Yes | No | No | - | - |
 | Xinmotek XM-10 (Arcade controller) | Yes | No | No | - | - |
 | Logitech Driving Force GT (Wheel) | Yes | No | No | - | - |

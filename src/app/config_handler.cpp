@@ -256,6 +256,23 @@ namespace syscon::config
             return !s.empty() && it == s.end();
         }
 
+        void parseVidPidList(const char *name, const char *value, std::vector<ControllerVidPid> *out)
+        {
+            out->clear();
+
+            char *context;
+            char *tok = strtok_r(const_cast<char *>(value), ",", &context);
+
+            while (tok != NULL)
+            {
+                if (strchr(tok, '-') == nullptr)
+                    syscon::logger::LogError("Invalid %s entry: '%s' (expected VID-PID or VID-*) - Ignoring it !", name, tok);
+                else
+                    out->push_back(ControllerVidPid(tok));
+                tok = strtok_r(NULL, ",", &context);
+            }
+        }
+
         void parseBinding(const char *value, std::array<PinId, MAX_PIN_BY_BUTTONS> &button_pin, ControllerAnalogConfig *analogCfg)
         {
             int button_pin_idx = 0;
@@ -377,19 +394,9 @@ namespace syscon::config
                     syscon::logger::LogError("Unknown mode: %s (expected 'mitm', 'hiddbg' or 'disabled') - Ignoring it !", value);
             }
             else if (nameStr == "discovery_vidpid")
-            {
-                char *context;
-                char *tok = strtok_r(const_cast<char *>(value), ",", &context);
-
-                while (tok != NULL)
-                {
-                    if (strchr(tok, '-') == nullptr)
-                        syscon::logger::LogError("Invalid discovery_vidpid entry: '%s' (expected VID-PID or VID-*) - Ignoring it !", tok);
-                    else
-                        ini_data->global_config->discovery_vidpid.push_back(ControllerVidPid(tok));
-                    tok = strtok_r(NULL, ",", &context);
-                }
-            }
+                parseVidPidList(name, value, &ini_data->global_config->discovery_vidpid);
+            else if (nameStr == "discovery_exclude_vidpid")
+                parseVidPidList(name, value, &ini_data->global_config->discovery_exclude_vidpid);
             else
             {
                 syscon::logger::LogError("Unknown key: %s, continue anyway ...", name);

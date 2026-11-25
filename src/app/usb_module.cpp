@@ -45,6 +45,8 @@ namespace syscon::usb
         */
         std::vector<s32> g_rejected_interface_ids;
 
+        std::vector<syscon::config::ControllerVidPid> g_excluded_vidpid;
+
         Event g_usbEvent[MaxUsbEvents] = {};
         Waiter g_usbWaiters[MaxUsbEvents] = {};
         size_t g_usbEventCount = 0;
@@ -128,6 +130,12 @@ namespace syscon::usb
             return std::find(g_rejected_interface_ids.begin(), g_rejected_interface_ids.end(), interface.inf.ID) != g_rejected_interface_ids.end();
         }
 
+        bool IsExcluded(const UsbHsInterface &interface)
+        {
+            return std::any_of(g_excluded_vidpid.begin(), g_excluded_vidpid.end(), [&interface](const syscon::config::ControllerVidPid &vidpid)
+                               { return vidpid.Matches(interface.device_desc.idVendor, interface.device_desc.idProduct); });
+        }
+
         void Reject(const UsbHsInterface *interfaces, s32 count)
         {
             syscon::logger::LogError("USB device [%04x-%04x] failed to start - ignoring it until it is replugged", interfaces[0].device_desc.idVendor, interfaces[0].device_desc.idProduct);
@@ -162,7 +170,7 @@ namespace syscon::usb
             s32 count = 0;
             for (s32 i = 0; i < total; i++)
             {
-                if (IsRejected(found[i]))
+                if (IsRejected(found[i]) || IsExcluded(found[i]))
                     continue;
 
                 if (count == 0)
@@ -405,12 +413,18 @@ namespace syscon::usb
 
     } // namespace
 
-    int Initialize(IFileManager &fileManager, syscon::config::DiscoveryMode discovery_mode, std::vector<syscon::config::ControllerVidPid> &discovery_vidpid, bool auto_add_controller)
+    int Initialize(IFileManager &fileManager, const syscon::config::GlobalConfig &config)
     {
-        g_file_manager = &fileManager;
-        g_auto_add_controller = auto_add_controller;
+        const syscon::config::DiscoveryMode discovery_mode = config.discovery_mode;
+        const std::vector<syscon::config::ControllerVidPid> &discovery_vidpid = config.discovery_vidpid;
 
-        syscon::logger::LogInfo("USB configuration: Discovery mode(%d), Auto add controller(%s)", discovery_mode, auto_add_controller ? "true" : "false");
+        g_file_manager = &fileManager;
+        g_auto_add_controller = config.auto_add_controller;
+        g_excluded_vidpid = config.discovery_exclude_vidpid;
+
+        syscon::logger::LogInfo("USB configuration: Discovery mode(%d), Auto add controller(%s)", discovery_mode, g_auto_add_controller ? "true" : "false");
+        for (const syscon::config::ControllerVidPid &vidpid : g_excluded_vidpid)
+            syscon::logger::LogInfo("USB exclusion: %s is never taken", std::string(vidpid).c_str());
 
         if (discovery_mode == syscon::config::DiscoveryMode::HID_AND_XBOX || discovery_mode == syscon::config::DiscoveryMode::VIDPID_AND_XBOX)
         {
@@ -437,7 +451,7 @@ namespace syscon::usb
         if (discovery_mode == syscon::config::DiscoveryMode::VIDPID || discovery_mode == syscon::config::DiscoveryMode::VIDPID_AND_XBOX)
         {
             // Filter known VID/PID
-            for (syscon::config::ControllerVidPid &vidpid : discovery_vidpid)
+            for (const syscon::config::ControllerVidPid &vidpid : discovery_vidpid)
             {
                 UsbHsInterfaceFilter filterKnownDevice{
                     .Flags = UsbHsInterfaceFilterFlags_idVendor,
