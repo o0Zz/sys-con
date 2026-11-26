@@ -19,19 +19,19 @@ jobs:
           submodules: recursive
 
       - name: Configure (host build)
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build tests
-        run: cmake --build build --target SysConTests -j
+        run: cmake --build build --target SysConTests
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
       - name: Configure ControllerLib standalone
-        run: cmake -S src/controllerlib -B build-controllerlib
+        run: cmake -S src/controllerlib -B build-controllerlib -G Ninja
 
       - name: Build ControllerLib standalone
-        run: cmake --build build-controllerlib -j
+        run: cmake --build build-controllerlib
 
   build:
     needs: test
@@ -48,8 +48,15 @@ jobs:
       - name: Mark workspace as a safe git directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # Only the release libnx.a: sys-con links -lnx, and `make install` would also build the
+      # unused debug libnxd.a (half the time). The copies are libnx's own `install` recipe.
       - name: Install libnx
-        run: make -j"$(nproc)" -C external/libnx install
+        working-directory: external/libnx/nx
+        run: |
+          make -j"$(nproc)" lib/libnx.a
+          cp default_icon.jpg switch_rules switch.ld switch.specs "$DEVKITPRO/libnx/"
+          cp -r include lib "$DEVKITPRO/libnx/"
+          cp -r external/bsd/include "$DEVKITPRO/libnx/"
 
       - name: Build and assemble release tree
         run: make all -j"$(nproc)"

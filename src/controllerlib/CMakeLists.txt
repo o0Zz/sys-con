@@ -91,6 +91,13 @@ if(NOT TARGET HIDDataInterpreterLib)
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
+
+    # Its headers reach our translation units as system headers, so our warning set
+    # (-Wshadow in HIDReportDescriptor.h) stays on our own code.
+    get_target_property(_controllerlib_hdi_includes HIDDataInterpreterLib INTERFACE_INCLUDE_DIRECTORIES)
+    set_target_properties(HIDDataInterpreterLib PROPERTIES
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_controllerlib_hdi_includes}")
+    unset(_controllerlib_hdi_includes)
 endif()
 
 unset(_controllerlib_hdi_candidates)

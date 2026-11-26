@@ -704,7 +704,7 @@ namespace syscon::config
             return -1;
         }
 
-        char stamp[32];
+        char stamp[80];
         SYSCON_SNPRINTF(stamp, sizeof(stamp), "%04d-%02d-%02d %02d:%02d:%02d UTC",
                         timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
                         timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
